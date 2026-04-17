@@ -43,6 +43,9 @@ body { font-family: 'Segoe UI', Arial, sans-serif; }
 .toggle-btn.active-old { background: #8B4513; color: white; border-color: #8B4513; }
 .toggle-btn.active-rev { background: #253494; color: white; border-color: #253494; }
 .toggle-btn:hover { opacity: 0.85; }
+.co-chip { padding: 4px 10px; font-size: 11px; border-width: 1.5px; }
+.co-chip.active { background: #0B3D91; color: white; border-color: #0B3D91; }
+.co-label { font-size: 10px; color: #888; margin: 6px 0 2px; text-transform: uppercase; letter-spacing: 0.5px; }
 
 .leaflet-popup-content { max-height: 70vh; overflow-y: auto; }
 .city-popup .popup-title { font-weight: 700; font-size: 14px; color: #1a1a2e; }
@@ -819,6 +822,12 @@ const newWeekLabels = {};
 const contractInfo = {};
 let contractFilter = 'all'; // 'all', 'closed', 'open'
 
+// Company bucket filter — matches buckets defined in process_cmmc.py.
+// All on by default. Unclassified rows ("Other") are always included as a
+// safety net for new store codes before Mark classifies them.
+const ALL_COMPANIES = ['GTA Rentals', 'GTA Tents', 'East', 'West'];
+const companyFilter = new Set(ALL_COMPANIES);
+
 // City-level pricing lookup (for non-FSA locations outside Toronto)
 const cityPricing = {"ACTON":{"o":704,"n":400,"k":88,"b":"75-100km"},"AJAX":{"o":225,"n":100,"k":25,"b":"0-25km"},"ALLISTON":{"o":864,"n":540,"k":108,"b":"100km+"},"ALTON":{"o":760,"n":400,"k":95,"b":"75-100km"},"AURORA":{"o":215,"n":150,"k":45,"b":"25-50km"},"BALA":{"o":1696,"n":1060,"k":212,"b":"100km+"},"BARRIE":{"o":840,"n":525,"k":105,"b":"100km+"},"BELFOUNTAIN":{"o":704,"n":400,"k":88,"b":"75-100km"},"BELLEVILLE":{"o":1504,"n":940,"k":188,"b":"100km+"},"BLUE MOUNTAINS":{"o":1424,"n":890,"k":178,"b":"100km+"},"BOLTON":{"o":215,"n":250,"k":62,"b":"50-75km"},"BOWMANVILLE":{"o":520,"n":250,"k":65,"b":"50-75km"},"BRACEBRIDGE":{"o":1640,"n":1025,"k":205,"b":"100km+"},"BRAMPTON":{"o":215,"n":250,"k":55,"b":"50-75km"},"BURLINGTON":{"o":624,"n":400,"k":78,"b":"75-100km"},"CALEDON":{"o":275,"n":400,"k":78,"b":"75-100km"},"CALEDON EAST":{"o":576,"n":250,"k":72,"b":"50-75km"},"CALEDON VILLAGE":{"o":704,"n":400,"k":88,"b":"75-100km"},"CAMBRIDGE":{"o":864,"n":540,"k":108,"b":"100km+"},"CAMPBELLCROFT":{"o":784,"n":400,"k":98,"b":"75-100km"},"CAMPBELLVILLE":{"o":624,"n":400,"k":78,"b":"75-100km"},"CHELTENHAM":{"o":624,"n":400,"k":78,"b":"75-100km"},"COBOURG":{"o":1024,"n":640,"k":128,"b":"100km+"},"COLLINGWOOD":{"o":1296,"n":810,"k":162,"b":"100km+"},"CONCORD":{"o":304,"n":150,"k":38,"b":"25-50km"},"ELORA":{"o":944,"n":590,"k":118,"b":"100km+"},"GEORGETOWN":{"o":624,"n":400,"k":78,"b":"75-100km"},"GORMLEY":{"o":200,"n":100,"k":25,"b":"0-25km"},"GRAVENHURST":{"o":1504,"n":940,"k":188,"b":"100km+"},"GRIMSBY":{"o":864,"n":540,"k":108,"b":"100km+"},"GUELPH":{"o":784,"n":400,"k":98,"b":"75-100km"},"HAMILTON":{"o":704,"n":400,"k":88,"b":"75-100km"},"HILLSBURGH":{"o":656,"n":400,"k":82,"b":"75-100km"},"HUNTSVILLE":{"o":1856,"n":1160,"k":232,"b":"100km+"},"INNISFIL":{"o":760,"n":400,"k":95,"b":"75-100km"},"KETTLEBY":{"o":464,"n":250,"k":58,"b":"50-75km"},"KING CITY":{"o":215,"n":150,"k":50,"b":"25-50km"},"KINGSTON":{"o":2120,"n":2120,"k":265,"b":"100km+"},"KITCHENER":{"o":944,"n":590,"k":118,"b":"100km+"},"KLEINBURG":{"o":195,"n":250,"k":55,"b":"50-75km"},"LAKEFIELD":{"o":1264,"n":790,"k":158,"b":"100km+"},"LINDSAY":{"o":944,"n":590,"k":118,"b":"100km+"},"LONDON":{"o":1616,"n":1010,"k":202,"b":"100km+"},"MAPLE":{"o":215,"n":150,"k":40,"b":"25-50km"},"MARKHAM":{"o":275,"n":100,"k":12,"b":"0-25km"},"MIDLAND":{"o":1240,"n":775,"k":155,"b":"100km+"},"MILTON":{"o":275,"n":250,"k":72,"b":"50-75km"},"MISSISSAUGA":{"o":215,"n":150,"k":45,"b":"25-50km"},"MONO":{"o":704,"n":400,"k":88,"b":"75-100km"},"MOUNT ALBERT":{"o":440,"n":250,"k":55,"b":"50-75km"},"NEWCASTLE":{"o":624,"n":400,"k":78,"b":"75-100km"},"NEWMARKET":{"o":225,"n":250,"k":55,"b":"50-75km"},"NIAGARA FALLS":{"o":1104,"n":690,"k":138,"b":"100km+"},"NIAGARA-ON-THE-LAKE":{"o":1104,"n":690,"k":138,"b":"100km+"},"NOBLETON":{"o":215,"n":250,"k":62,"b":"50-75km"},"OAKVILLE":{"o":275,"n":250,"k":58,"b":"50-75km"},"ORANGEVILLE":{"o":656,"n":400,"k":82,"b":"75-100km"},"ORILLIA":{"o":1104,"n":690,"k":138,"b":"100km+"},"OSHAWA":{"o":275,"n":150,"k":45,"b":"25-50km"},"OTTAWA":{"o":3400,"n":3400,"k":425,"b":"100km+"},"PETERBOROUGH":{"o":1136,"n":710,"k":142,"b":"100km+"},"PICKERING":{"o":215,"n":100,"k":18,"b":"0-25km"},"PICTON":{"o":1744,"n":1090,"k":218,"b":"100km+"},"PORT CARLING":{"o":1776,"n":1110,"k":222,"b":"100km+"},"PORT HOPE":{"o":944,"n":590,"k":118,"b":"100km+"},"PORT PERRY":{"o":544,"n":250,"k":68,"b":"50-75km"},"RICHMOND HILL":{"o":175,"n":150,"k":30,"b":"25-50km"},"SCHOMBERG":{"o":560,"n":250,"k":70,"b":"50-75km"},"ST. CATHARINES":{"o":1024,"n":640,"k":128,"b":"100km+"},"STONEY CREEK":{"o":736,"n":400,"k":92,"b":"75-100km"},"STOUFFVILLE":{"o":215,"n":150,"k":30,"b":"25-50km"},"STRATFORD":{"o":1344,"n":840,"k":168,"b":"100km+"},"THORNBURY":{"o":1504,"n":940,"k":188,"b":"100km+"},"THORNHILL":{"o":175,"n":150,"k":28,"b":"25-50km"},"UNIONVILLE":{"o":175,"n":100,"k":15,"b":"0-25km"},"UXBRIDGE":{"o":275,"n":250,"k":55,"b":"50-75km"},"VAUGHAN":{"o":195,"n":150,"k":42,"b":"25-50km"},"WATERLOO":{"o":976,"n":610,"k":122,"b":"100km+"},"WELLAND":{"o":1184,"n":740,"k":148,"b":"100km+"},"WELLINGTON":{"o":1584,"n":990,"k":198,"b":"100km+"},"WHITBY":{"o":275,"n":150,"k":35,"b":"25-50km"},"WOODBRIDGE":{"o":215,"n":150,"k":45,"b":"25-50km"},"ANCASTER":{"o":704,"n":400,"k":88,"b":"75-100km"},"VINELAND":{"o":920,"n":575,"k":115,"b":"100km+"},"COLDWATER":{"o":1104,"n":690,"k":138,"b":"100km+"},"LEFROY":{"o":760,"n":400,"k":95,"b":"75-100km"},"MULMUR":{"o":704,"n":400,"k":88,"b":"75-100km"},"BRANTFORD":{"o":1040,"n":650,"k":130,"b":"100km+"},"JERSEYVILLE":{"o":840,"n":525,"k":105,"b":"100km+"},"REXDALE":{"o":240,"n":150,"k":30,"b":"25-50km"}};
 
@@ -850,7 +859,15 @@ infoControl.onAdd = function() {
     '<div class="toggle-btn active-new" id="btn-new" onclick="toggleLayer(\'new\')">&#10004; New Pricing (99)</div>' +
     '<div class="toggle-btn" id="btn-old" onclick="toggleLayer(\'old\')">Old Pricing (101)</div>' +
     '<div class="toggle-btn" id="btn-rev" onclick="toggleLayer(\'rev\')">Revenue Heatmap</div>' +
-        '</div>';
+    '</div>' +
+    '<div class="co-label">Company</div>' +
+    '<div class="toggle-row" style="flex-wrap:wrap;gap:6px;">' +
+    '<div class="toggle-btn co-chip active" id="co-all" onclick="toggleCompany(\'__ALL__\')">All</div>' +
+    '<div class="toggle-btn co-chip active" id="co-gta-rentals" onclick="toggleCompany(\'GTA Rentals\')">GTA Rentals</div>' +
+    '<div class="toggle-btn co-chip active" id="co-gta-tents" onclick="toggleCompany(\'GTA Tents\')">Tents</div>' +
+    '<div class="toggle-btn co-chip active" id="co-east" onclick="toggleCompany(\'East\')">East</div>' +
+    '<div class="toggle-btn co-chip active" id="co-west" onclick="toggleCompany(\'West\')">West</div>' +
+    '</div>';
   L.DomEvent.disableClickPropagation(div);
   return div;
 };
@@ -965,10 +982,14 @@ window.getContractEvents = function(cityKey, customerName) {
   }
   if (!custEvents || custEvents.length === 0) return '<div style="padding:8px;font-size:11px;color:#888;text-align:center;background:#f8f8f8;border-radius:4px;margin:4px 0;">No contract data available for this customer</div>';
   
-  // Filter by date range and status
+  // Filter by date range, company, and status
   const filtered = custEvents.filter(e => {
     const inRange = e[0] >= startDate && e[0] <= endDate;
     if (!inRange) return false;
+    // Company filter — "Other" always included as safety net
+    const _info = contractInfo[e[1]];
+    const _co = _info && _info.co ? _info.co : 'Other';
+    if (_co !== 'Other' && !companyFilter.has(_co)) return false;
     if (contractFilter === 'closed') return e[5] === 'C';
     if (contractFilter === 'open') return e[5] === 'O';
     return true;
@@ -1129,14 +1150,31 @@ function updateTimeline() {
     for (const [locKey, statuses] of Object.entries(cdata)) {
       if (!contractCityData[locKey]) contractCityData[locKey] = {closed:{r:0,f:0,d:0,p:0,e:0,v:{}}, open:{r:0,f:0,d:0,p:0,e:0,v:{}}};
       for (const status of ['closed','open']) {
-        const sd = statuses[status];
-        if (!sd) continue;
+        const raw = statuses[status];
+        if (!raw) continue;
         const cd = contractCityData[locKey][status];
-        cd.r += sd.r; cd.f += sd.f; cd.d += sd.d; cd.p += sd.p; cd.e += sd.e;
-        if (sd.v) sd.v.forEach(v => {
-          if (!cd.v[v[0]]) cd.v[v[0]] = [0,0,0];
-          cd.v[v[0]][0] += v[1]; cd.v[v[0]][1] += v[2]; cd.v[v[0]][2] += v[3];
-        });
+        // Dual-schema support:
+        //   OLD shape: raw = { r, f, d, p, e, v }  (no company filter possible)
+        //   NEW shape: raw = { "GTA Rentals": {r,f,d,p,e,v}, "West": {...}, ... }
+        // Detect by checking whether raw.r is a number (old shape).
+        const isOldShape = (typeof raw.r === 'number');
+        const addOne = (sd) => {
+          cd.r += sd.r; cd.f += sd.f; cd.d += sd.d; cd.p += sd.p; cd.e += sd.e;
+          if (sd.v) sd.v.forEach(v => {
+            if (!cd.v[v[0]]) cd.v[v[0]] = [0,0,0];
+            cd.v[v[0]][0] += v[1]; cd.v[v[0]][1] += v[2]; cd.v[v[0]][2] += v[3];
+          });
+        };
+        if (isOldShape) {
+          // Old JSON — company filter is a no-op, treat as "all"
+          addOne(raw);
+        } else {
+          // New JSON — iterate companies, filter in. "Other" always included.
+          for (const co in raw) {
+            if (co !== 'Other' && !companyFilter.has(co)) continue;
+            addOne(raw[co]);
+          }
+        }
       }
     }
   }
@@ -1463,6 +1501,12 @@ function buildPickupLayer() {
         // row = [date, contract#, rent, delFee, type(D/CP), status(C/O)]
         if (row[4] !== 'CP') continue; // Only customer pickups
 
+        // Company filter — look up via contractInfo. "Other" (unclassified)
+        // is always included as a safety net.
+        const _info = contractInfo[row[1]];
+        const _co = _info && _info.co ? _info.co : 'Other';
+        if (_co !== 'Other' && !companyFilter.has(_co)) continue;
+
         // Check date is in slider range
         const wk = (function(dateStr) {
           const d = new Date(dateStr + 'T00:00:00');
@@ -1637,6 +1681,55 @@ window.setContractFilter = function(mode) {
   }
   updateTimeline();
   updateLegend();
+};
+
+// Toggle a company bucket on/off (or "__ALL__" for select-all) and re-render.
+// Behavior:
+//   - Click an individual chip: flips that bucket in/out of the filter.
+//   - Click "All" when any chip is off: turns all 4 back on.
+//   - Click "All" when all 4 are already on: turns all 4 off (quick clear).
+// Chip id pattern: "co-<lowercase-hyphenated-bucket>" (e.g. "co-gta-rentals",
+// "co-all"). Internal bucket keys match process_cmmc.py: "GTA Rentals",
+// "GTA Tents", "East", "West".
+const CO_CHIP_IDS = {
+  'GTA Rentals': 'co-gta-rentals',
+  'GTA Tents':   'co-gta-tents',
+  'East':        'co-east',
+  'West':        'co-west',
+};
+
+function _setChipActive(id, active) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (active) el.classList.add('active');
+  else el.classList.remove('active');
+}
+
+function _syncAllChip() {
+  // "All" chip is visually active iff every bucket is in the filter.
+  const allOn = ALL_COMPANIES.every(c => companyFilter.has(c));
+  _setChipActive('co-all', allOn);
+}
+
+window.toggleCompany = function(co) {
+  if (co === '__ALL__') {
+    const allOn = ALL_COMPANIES.every(c => companyFilter.has(c));
+    if (allOn) {
+      // All currently on → clear everything
+      ALL_COMPANIES.forEach(c => companyFilter.delete(c));
+      ALL_COMPANIES.forEach(c => _setChipActive(CO_CHIP_IDS[c], false));
+    } else {
+      // Some off → turn all on
+      ALL_COMPANIES.forEach(c => companyFilter.add(c));
+      ALL_COMPANIES.forEach(c => _setChipActive(CO_CHIP_IDS[c], true));
+    }
+  } else {
+    if (companyFilter.has(co)) companyFilter.delete(co);
+    else companyFilter.add(co);
+    _setChipActive(CO_CHIP_IDS[co], companyFilter.has(co));
+  }
+  _syncAllChip();
+  updateTimeline();
 };
 
 window.toggleLayer = function(which) {

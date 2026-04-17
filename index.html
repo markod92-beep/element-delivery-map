@@ -8,105 +8,191 @@
 <meta http-equiv="Expires" content="0">
 <title>Element Delivery Zones — Old vs New Pricing + Contracts</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+<script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
 <style>
+/* ===== ELEMENT EVENT SOLUTIONS — BRAND TOKENS ===== */
+:root {
+  --element-teal:          #1C3B42;
+  --element-teal-dark:     #0F2428;
+  --element-teal-mid:      #2A5A63;
+  --element-mint:          #C0DEC7;
+  --element-offwhite:      #F7F3EC;
+  --element-offwhite-tint: #CDC7B4;
+  --element-white:         #FFFFFF;
+  --element-ink:           #1C3B42;   /* body text */
+  --element-muted:         #6B7A7E;   /* secondary labels */
+  --element-border:        #E3DED1;   /* card borders */
+}
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: 'Segoe UI', Arial, sans-serif; }
-#map { width: 100%; height: 100vh; }
+body {
+  font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  color: var(--element-ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+#map { width: 100%; height: 100vh; background: var(--element-offwhite); }
+
+/* Hide the default +/- zoom control globally — users pinch/scroll instead */
+.leaflet-control-zoom { display: none !important; }
+
+/* ===== SEARCH BAR (leaflet-control-geocoder, restyled to brand) ===== */
+.leaflet-control-geocoder {
+  border-radius: 10px !important;
+  border: 1px solid var(--element-border) !important;
+  box-shadow: 0 4px 14px rgba(28, 59, 66, 0.15) !important;
+  background: var(--element-white) !important;
+  overflow: hidden;
+}
+.leaflet-control-geocoder-icon {
+  background-color: var(--element-white) !important;
+  border-radius: 10px !important;
+  width: 36px !important; height: 36px !important;
+}
+.leaflet-control-geocoder-form input {
+  font-family: inherit !important;
+  font-size: 13px !important;
+  color: var(--element-ink) !important;
+  padding: 0 10px !important;
+  height: 36px !important;
+  width: 240px !important;
+  border: none !important;
+  background: var(--element-white) !important;
+}
+.leaflet-control-geocoder-form input::placeholder { color: var(--element-muted); }
+.leaflet-control-geocoder-alternatives {
+  border-top: 1px solid var(--element-border) !important;
+  background: var(--element-white) !important;
+  font-family: inherit;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.leaflet-control-geocoder-alternatives a {
+  color: var(--element-ink) !important;
+  font-size: 12px !important;
+  padding: 8px 12px !important;
+  border-bottom: 1px solid var(--element-border);
+}
+.leaflet-control-geocoder-alternatives a:last-child { border-bottom: none; }
+@media (hover: hover) {
+  .leaflet-control-geocoder-alternatives a:hover {
+    background: var(--element-mint) !important;
+  }
+}
 
 .legend {
-  background: white; padding: 14px 18px; border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.25); line-height: 1.8;
-  font-size: 13px; max-width: 220px;
+  background: var(--element-white); padding: 14px 18px; border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(28, 59, 66, 0.15);
+  border: 1px solid var(--element-border);
+  line-height: 1.8; font-size: 13px; max-width: 220px;
 }
-.legend h4 { margin-bottom: 6px; font-size: 14px; color: #1a1a2e; }
-.legend-item { display: flex; align-items: center; gap: 8px; }
-.legend-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(0,0,0,0.2); flex-shrink: 0; }
-.legend-rect { width: 14px; height: 14px; border-radius: 3px; opacity: 0.5; border: 2px solid rgba(0,0,0,0.3); flex-shrink: 0; }
-.legend hr { margin: 6px 0; border: none; border-top: 1px solid #ddd; }
+.legend h4 { margin-bottom: 6px; font-size: 13px; color: var(--element-teal); font-weight: 700; letter-spacing: 0.01em; }
+.legend-item { display: flex; align-items: center; gap: 8px; color: var(--element-ink); }
+.legend-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(28,59,66,0.2); flex-shrink: 0; }
+.legend-rect { width: 14px; height: 14px; border-radius: 3px; opacity: 0.5; border: 2px solid rgba(28,59,66,0.3); flex-shrink: 0; }
+.legend hr { margin: 6px 0; border: none; border-top: 1px solid var(--element-border); }
 
 .info-panel {
-  background: white; padding: 14px 18px; border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.25); font-size: 13px;
-  max-width: 320px;
+  background: var(--element-white); padding: 14px 18px; border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(28, 59, 66, 0.15);
+  border: 1px solid var(--element-border);
+  font-size: 13px; max-width: 320px;
 }
-.info-panel h4 { font-size: 15px; color: #1a1a2e; margin-bottom: 4px; }
-.info-panel .subtitle { color: #666; font-size: 12px; margin-bottom: 8px; }
-.toggle-row { display: flex; gap: 12px; margin-top: 6px; }
+.info-panel h4 { font-size: 14px; color: var(--element-teal); margin-bottom: 4px; font-weight: 700; letter-spacing: 0.01em; }
+.info-panel .subtitle { color: var(--element-muted); font-size: 11px; margin-bottom: 8px; font-weight: 500; }
+.toggle-row { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
 .toggle-btn {
-  padding: 6px 14px; border-radius: 6px; border: 2px solid #ccc;
-  background: #f5f5f5; cursor: pointer; font-size: 12px; font-weight: 600;
-  transition: all 0.2s;
+  padding: 6px 14px; border-radius: 999px;
+  border: 1.5px solid var(--element-offwhite-tint);
+  background: var(--element-offwhite); cursor: pointer;
+  font-family: inherit; font-size: 12px; font-weight: 500;
+  color: var(--element-ink); transition: all 0.15s ease;
 }
-.toggle-btn.active-new { background: #0B3D91; color: white; border-color: #0B3D91; }
-.toggle-btn.active-old { background: #8B4513; color: white; border-color: #8B4513; }
-.toggle-btn.active-rev { background: #253494; color: white; border-color: #253494; }
-.toggle-btn:hover { opacity: 0.85; }
-.co-chip { padding: 4px 10px; font-size: 11px; border-width: 1.5px; }
-.co-chip.active { background: #0B3D91; color: white; border-color: #0B3D91; }
-.co-label { font-size: 10px; color: #888; margin: 6px 0 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+.toggle-btn.active-new { background: var(--element-teal); color: var(--element-white); border-color: var(--element-teal); }
+.toggle-btn.active-old { background: var(--element-teal-mid); color: var(--element-white); border-color: var(--element-teal-mid); }
+.toggle-btn.active-rev { background: var(--element-teal-dark); color: var(--element-white); border-color: var(--element-teal-dark); }
+@media (hover: hover) {
+  .toggle-btn:hover { border-color: var(--element-teal); transform: translateY(-1px); }
+}
+.co-chip { padding: 5px 11px; font-size: 11px; border-width: 1.5px; font-weight: 500; }
+.co-chip.active { background: var(--element-teal); color: var(--element-white); border-color: var(--element-teal); }
+.co-label { font-size: 10px; color: var(--element-muted); margin: 8px 0 4px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
 
 .leaflet-popup-content { max-height: 70vh; overflow-y: auto; }
-.city-popup .popup-title { font-weight: 700; font-size: 14px; color: #1a1a2e; }
-.city-popup .popup-band { font-size: 12px; color: #666; margin: 2px 0 6px; }
-.city-popup .popup-price { font-size: 18px; font-weight: 700; }
-.city-popup .popup-compare { margin-top: 6px; padding-top: 6px; border-top: 1px solid #eee; font-size: 12px; color: #666; }
-.city-popup .delta-up { color: #c0392b; }
-.city-popup .delta-down { color: #27ae60; }
-.city-popup .delta-same { color: #888; }
+.leaflet-popup-content-wrapper {
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(28, 59, 66, 0.2);
+  border: 1px solid var(--element-border);
+}
+.leaflet-popup-tip { background: var(--element-white); }
+.city-popup { font-family: inherit; }
+.city-popup .popup-title { font-weight: 700; font-size: 14px; color: var(--element-teal); }
+.city-popup .popup-band { font-size: 11px; color: var(--element-muted); margin: 2px 0 6px; font-weight: 500; }
+.city-popup .popup-price { font-size: 18px; font-weight: 700; color: var(--element-teal); }
+.city-popup .popup-compare { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--element-border); font-size: 12px; color: var(--element-muted); }
+.city-popup .delta-up { color: #b03a2e; font-weight: 600; }
+.city-popup .delta-down { color: #1e7e5a; font-weight: 600; }
+.city-popup .delta-same { color: var(--element-muted); }
 
 .leaflet-tooltip.price-label {
   background: transparent; border: none; box-shadow: none;
-  font-weight: 700; font-size: 11px; color: #333;
+  font-family: inherit; font-weight: 700; font-size: 11px; color: var(--element-teal);
   text-shadow: 1px 1px 2px white, -1px -1px 2px white, 1px -1px 2px white, -1px 1px 2px white;
   padding: 0;
 }
 .leaflet-tooltip.delta-label-up {
-  color: #c0392b; font-size: 10px; font-weight: 800;
+  color: #b03a2e; font-size: 10px; font-weight: 700;
 }
 .leaflet-tooltip.delta-label-down {
-  color: #27ae60; font-size: 10px; font-weight: 800;
+  color: #1e7e5a; font-size: 10px; font-weight: 700;
 }
 .leaflet-tooltip.delta-label-same {
-  color: #888; font-size: 10px; font-weight: 700;
+  color: var(--element-muted); font-size: 10px; font-weight: 600;
 }
 
 .timeline-panel {
   position: absolute; top: 10px; right: 10px; z-index: 1000;
-  background: rgba(255,255,255,0.95); border-radius: 10px;
-  padding: 16px 22px; box-shadow: 0 2px 12px rgba(0,0,0,0.15);
-  font-family: 'Segoe UI', sans-serif; min-width: 520px;
-  border: 1px solid #ddd;
+  background: rgba(255, 255, 255, 0.97); border-radius: 12px;
+  padding: 16px 22px; box-shadow: 0 4px 20px rgba(28, 59, 66, 0.15);
+  font-family: inherit; min-width: 520px;
+  border: 1px solid var(--element-border);
+  backdrop-filter: blur(8px);
 }
-.timeline-panel h4 { margin: 0 0 6px 0; font-size: 13px; color: #2c3e50; }
-.timeline-panel .range-labels { display: flex; justify-content: space-between; font-size: 11px; color: #666; margin-top: 2px; }
-.timeline-panel .range-display { font-size: 12px; font-weight: 600; color: #2c3e50; margin-bottom: 6px; text-align: center; }
-.timeline-panel input[type=range] { width: 100%; margin: 2px 0; height: 24px; cursor: pointer; }
+.timeline-panel h4 { margin: 0 0 6px 0; font-size: 13px; color: var(--element-teal); font-weight: 700; letter-spacing: 0.01em; }
+.timeline-panel .range-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--element-muted); margin-top: 2px; font-weight: 500; }
+.timeline-panel .range-display { font-size: 12px; font-weight: 600; color: var(--element-teal); margin-bottom: 6px; text-align: center; }
+.timeline-panel input[type=range] { width: 100%; margin: 2px 0; height: 24px; cursor: pointer; accent-color: var(--element-teal); }
 .timeline-panel input[type=range]::-webkit-slider-thumb { width: 18px; height: 18px; }
 .timeline-panel input[type=range]::-webkit-slider-runnable-track { height: 8px; }
 .slider-row { display: flex; gap: 8px; align-items: center; }
-.slider-row label { font-size: 12px; color: #555; white-space: nowrap; min-width: 40px; font-weight: 600; }
+.slider-row label { font-size: 11px; color: var(--element-muted); white-space: nowrap; min-width: 40px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
 .slider-row input[type=range] { flex: 1; }
-.timeline-panel .rev-total { font-size: 11px; color: #888; margin-top: 4px; text-align: center; }
+.timeline-panel .rev-total { font-size: 11px; color: var(--element-muted); margin-top: 4px; text-align: center; font-weight: 500; }
 
 .venue-row { cursor: pointer; }
-.venue-row:hover { background: #f0f7ff; }
+@media (hover: hover) {
+  .venue-row:hover { background: var(--element-mint); }
+}
 .venue-row td { white-space: nowrap; }
 .venue-detail { display: none; }
 .venue-detail.open { display: table-row; }
 .venue-detail td { padding: 0 !important; }
-.event-table { width: 100%; border-collapse: collapse; background: #fafafa; }
-.event-table th { font-size: 10px; padding: 4px 8px; text-align: center; color: #888; border-bottom: 1px solid #eee; white-space: nowrap; }
+.event-table { width: 100%; border-collapse: collapse; background: var(--element-offwhite); }
+.event-table th { font-size: 10px; padding: 4px 8px; text-align: center; color: var(--element-muted); border-bottom: 1px solid var(--element-border); white-space: nowrap; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
 .event-table th:first-child { text-align: left; }
 .event-table th:nth-child(2) { text-align: center; padding: 4px 12px; }
 .event-table td { font-size: 11px; padding: 4px 8px; border-bottom: 1px solid #f0f0f0; white-space: nowrap; }
 .event-table td:nth-child(2) { text-align: center; padding: 4px 12px; }
 .event-table td:nth-child(3), .event-table td:nth-child(4) { text-align: center; }
 .event-table td:nth-child(5), .event-table td:nth-child(6) { text-align: center; }
-.event-table tr.evt-d td:first-child { border-left: 3px solid #2171b5; }
-.event-table tr.evt-p td:first-child { border-left: 3px solid #c87f0a; }
-.venue-expand { font-size: 9px; color: #999; margin-left: 4px; }
+.event-table tr.evt-d td:first-child { border-left: 3px solid var(--element-teal); }
+.event-table tr.evt-p td:first-child { border-left: 3px solid var(--element-teal-mid); }
+.venue-expand { font-size: 9px; color: var(--element-muted); margin-left: 4px; }
 
 .contract-filter {
   display: none; margin-top: 8px; padding: 0;
@@ -114,84 +200,103 @@ body { font-family: 'Segoe UI', Arial, sans-serif; }
 .contract-filter.visible { display: block; }
 .contract-filter-row { display: flex; gap: 4px; margin-top: 4px; }
 .cf-btn {
-  padding: 3px 10px; border-radius: 4px; border: 2px solid #ccc;
-  background: #f5f5f5; cursor: pointer; font-size: 11px; font-weight: 600;
-  transition: all 0.15s; flex: 1; text-align: center;
+  padding: 4px 10px; border-radius: 999px;
+  border: 1.5px solid var(--element-offwhite-tint);
+  background: var(--element-offwhite); cursor: pointer;
+  font-family: inherit; font-size: 11px; font-weight: 500;
+  color: var(--element-ink); transition: all 0.15s ease;
+  flex: 1; text-align: center;
 }
-.cf-btn.cf-all { background: #253494; color: white; border-color: #253494; }
-.cf-btn.cf-closed { background: #253494; color: white; border-color: #253494; }
-.cf-btn.cf-open { background: #253494; color: white; border-color: #253494; }
-.cf-btn:hover { opacity: 0.85; }
+.cf-btn.cf-all { background: var(--element-teal); color: var(--element-white); border-color: var(--element-teal); }
+.cf-btn.cf-closed { background: var(--element-teal); color: var(--element-white); border-color: var(--element-teal); }
+.cf-btn.cf-open { background: var(--element-teal); color: var(--element-white); border-color: var(--element-teal); }
+@media (hover: hover) {
+  .cf-btn:hover { border-color: var(--element-teal); transform: translateY(-1px); }
+}
 .quick-jump { margin-top: 8px; }
-.quick-jump-label { font-size: 10px; color: #666; font-weight: 600; margin-bottom: 3px; }
+.quick-jump-label { font-size: 10px; color: var(--element-muted); font-weight: 600; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
 .quick-jump-row { display: flex; gap: 4px; flex-wrap: wrap; }
 .qj-btn {
-  padding: 3px 9px; border-radius: 4px; border: 1.5px solid #ccc;
-  background: #f5f5f5; cursor: pointer; font-size: 11px; font-weight: 600;
-  transition: all 0.15s; white-space: nowrap;
+  padding: 4px 10px; border-radius: 999px;
+  border: 1.5px solid var(--element-offwhite-tint);
+  background: var(--element-offwhite); cursor: pointer;
+  font-family: inherit; font-size: 11px; font-weight: 500;
+  color: var(--element-ink); transition: all 0.15s ease;
+  white-space: nowrap;
 }
-.qj-btn:hover { background: #e0e7ff; border-color: #6366f1; }
-.qj-btn.qj-active { background: #253494; color: white; border-color: #253494; }
+@media (hover: hover) {
+  .qj-btn:hover { background: var(--element-mint); border-color: var(--element-teal); }
+}
+.qj-btn.qj-active { background: var(--element-teal); color: var(--element-white); border-color: var(--element-teal); }
 
 .contract-detail-card {
-  margin: 4px 0; padding: 6px 8px; background: #f8fafc; border-radius: 5px;
-  border-left: 3px solid #253494; font-size: 11px; line-height: 1.5;
+  margin: 4px 0; padding: 8px 10px; background: var(--element-offwhite); border-radius: 6px;
+  border-left: 3px solid var(--element-teal); font-size: 11px; line-height: 1.5;
   max-width: 450px;
 }
-.contract-detail-card .cd-header { font-weight: 700; color: #1a1a2e; font-size: 12px; margin-bottom: 3px; }
+.contract-detail-card .cd-header { font-weight: 700; color: var(--element-teal); font-size: 12px; margin-bottom: 3px; }
 .contract-detail-card .cd-row { display: flex; gap: 6px; }
-.contract-detail-card .cd-label { color: #666; min-width: 70px; font-size: 10px; }
-.contract-detail-card .cd-value { font-weight: 600; color: #1a1a2e; }
-.contract-detail-card .cd-notes { margin-top: 4px; padding: 3px 6px; background: #fef3c7;
-  border-radius: 3px; font-size: 10px; color: #92400e; font-style: italic; }
-.contract-num-link { color: #1a73e8; text-decoration: underline; cursor: pointer; }
-.contract-num-link:hover { color: #0d47a1; }
+.contract-detail-card .cd-label { color: var(--element-muted); min-width: 70px; font-size: 10px; font-weight: 500; }
+.contract-detail-card .cd-value { font-weight: 600; color: var(--element-ink); }
+.contract-detail-card .cd-notes { margin-top: 4px; padding: 4px 8px; background: var(--element-mint);
+  border-radius: 4px; font-size: 10px; color: var(--element-teal); font-style: italic; }
+.contract-num-link { color: var(--element-teal); text-decoration: underline; cursor: pointer; font-weight: 600; }
+@media (hover: hover) {
+  .contract-num-link:hover { color: var(--element-teal-dark); }
+}
 .cd-inline { display: none; }
 .cd-inline.cd-open { display: block; }
 
-
-
 .future-indicator {
-  display: none; margin-top: 4px; padding: 3px 8px;
-  background: #fef3c7; border-radius: 4px; font-size: 10px;
-  color: #92400e; text-align: center; font-weight: 600;
+  display: none; margin-top: 4px; padding: 4px 10px;
+  background: var(--element-mint); border-radius: 6px; font-size: 10px;
+  color: var(--element-teal); text-align: center; font-weight: 600;
 }
 .future-indicator.visible { display: block; }
 
 /* ===== LOADING SPINNER ===== */
 #loading-overlay {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-  background: #f7f9f8; z-index: 99998;
+  background: var(--element-offwhite); z-index: 99998;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  font-family: 'Segoe UI', Arial, sans-serif;
-  transition: opacity 0.3s ease;
+  font-family: inherit;
+  transition: opacity 0.35s ease;
 }
 #loading-overlay.fade-out { opacity: 0; pointer-events: none; }
+.loading-brand {
+  font-size: 20px; font-weight: 700; color: var(--element-teal);
+  letter-spacing: 0.12em; text-transform: uppercase;
+  margin-bottom: 24px;
+}
 .loading-spinner {
-  width: 44px; height: 44px; border: 4px solid #e0e0e0;
-  border-top: 4px solid #1a3c34; border-radius: 50%;
-  animation: spin 0.8s linear infinite; margin-bottom: 16px;
+  width: 44px; height: 44px; border: 3px solid var(--element-mint);
+  border-top: 3px solid var(--element-teal); border-radius: 50%;
+  animation: spin 0.9s linear infinite; margin-bottom: 18px;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 #loading-overlay .loading-text {
-  font-size: 14px; color: #666; font-weight: 600;
+  font-size: 13px; color: var(--element-muted); font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 /* ===== GPS LOCATE BUTTON ===== */
 .leaflet-control-locate {
-  background: white; border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  background: var(--element-white); border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(28, 59, 66, 0.18);
+  border: 1px solid var(--element-border);
 }
 .leaflet-control-locate a {
   display: flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px; cursor: pointer;
-  text-decoration: none; color: #333;
-  border-radius: 6px; background: white;
+  width: 36px; height: 36px; cursor: pointer;
+  text-decoration: none; color: var(--element-teal);
+  border-radius: 8px; background: var(--element-white);
   transition: background 0.2s;
 }
-.leaflet-control-locate a:hover { background: #f0f0f0; }
+@media (hover: hover) {
+  .leaflet-control-locate a:hover { background: var(--element-offwhite); }
+}
 .leaflet-control-locate a svg { width: 20px; height: 20px; }
-.leaflet-control-locate.locating a { background: #e8f5e9; }
+.leaflet-control-locate.locating a { background: var(--element-mint); }
 
 /* ===== MOBILE RESPONSIVE STYLES ===== */
 
@@ -199,7 +304,7 @@ body { font-family: 'Segoe UI', Arial, sans-serif; }
 .mobile-collapse-btn {
   display: none;
   width: 100%; padding: 8px 12px; margin-bottom: 6px;
-  background: #1a3c34; color: white; border: none; border-radius: 6px;
+  background: var(--element-teal); color: var(--element-white); border: none; border-radius: 6px;
   font-size: 13px; font-weight: 600; cursor: pointer;
   text-align: left;
 }
@@ -223,8 +328,8 @@ body { font-family: 'Segoe UI', Arial, sans-serif; }
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: #1a3c34; border: none; padding: 0 14px;
-    font-size: 13px; font-weight: 700; color: white;
+    background: var(--element-teal); border: none; padding: 0 14px;
+    font-size: 13px; font-weight: 700; color: var(--element-white);
     cursor: pointer; width: 100%; text-align: left;
     min-height: 44px; line-height: 44px;
     border-radius: 6px;
@@ -283,8 +388,8 @@ body { font-family: 'Segoe UI', Arial, sans-serif; }
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: #1a3c34; border: none; padding: 0 14px;
-    font-size: 13px; font-weight: 700; color: white;
+    background: var(--element-teal); border: none; padding: 0 14px;
+    font-size: 13px; font-weight: 700; color: var(--element-white);
     cursor: pointer; width: 100%; text-align: left;
     min-height: 44px; line-height: 44px;
     border-radius: 6px;
@@ -365,20 +470,27 @@ body { font-family: 'Segoe UI', Arial, sans-serif; }
     font-size: 11px; color: #888; margin-left: 10px; font-weight: 600;
   }
 
-  /* Popups — wider and more readable on mobile */
+  /* Popups on mobile: styled like a bottom sheet (rounded top, larger, softer shadow) */
   .leaflet-popup-content-wrapper {
-    max-width: 90vw !important;
-    border-radius: 10px !important;
+    max-width: 92vw !important;
+    border-radius: 14px !important;
+    box-shadow: 0 -6px 24px rgba(28, 59, 66, 0.25) !important;
   }
   .leaflet-popup-content {
-    max-height: 60vh !important;
-    max-width: 85vw !important;
+    max-height: 62vh !important;
+    max-width: 88vw !important;
     font-size: 13px !important;
     -webkit-overflow-scrolling: touch;
-    margin: 10px 12px !important;
+    margin: 14px 14px !important;
   }
   .city-popup .popup-title { font-size: 15px !important; }
-  .city-popup .popup-price { font-size: 16px !important; }
+  .city-popup .popup-price { font-size: 18px !important; }
+
+  /* Larger geocoder input on mobile */
+  .leaflet-control-geocoder-form input {
+    width: 200px !important;
+    font-size: 14px !important;
+  }
 
   /* Contract detail cards */
   .contract-detail-card {
@@ -463,8 +575,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- LOADING SPINNER (shown during map initialization) -->
 <div id="loading-overlay" style="display:none;">
+  <div class="loading-brand">element</div>
   <div class="loading-spinner"></div>
-  <div class="loading-text">Loading map data...</div>
+  <div class="loading-text">Loading delivery data&hellip;</div>
 </div>
 
 <div id="map"></div>
@@ -680,11 +793,47 @@ newCities.forEach(city => {
 });
 
 // ===== MAP INITIALIZATION =====
-const map = L.map('map').setView([43.85, -79.35], 9);
+// zoomControl disabled globally — scroll wheel / pinch-to-zoom only (cleaner UI).
+const map = L.map('map', { zoomControl: false }).setView([43.85, -79.35], 9);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
   attribution: '&copy; OpenStreetMap &copy; CARTO',
   maxZoom: 18
 }).addTo(map);
+
+// Escape key closes any open popup (keyboard UX).
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' || e.key === 'Esc') {
+    map.closePopup();
+  }
+});
+
+// ===== SEARCH BAR =====
+// leaflet-control-geocoder (Nominatim/OpenStreetMap). Lets users jump to any
+// address, venue, or FSA. Biased to Ontario so local matches rank highest.
+if (typeof L.Control !== 'undefined' && L.Control.Geocoder) {
+  L.Control.geocoder({
+    position: 'topleft',
+    placeholder: 'Search address, venue, or FSA...',
+    defaultMarkGeocode: false,
+    geocoder: L.Control.Geocoder.nominatim({
+      geocodingQueryParams: {
+        countrycodes: 'ca',
+        viewbox: '-83.5,41.5,-74.0,46.5',  // rough Ontario bbox
+        bounded: 0
+      }
+    })
+  })
+  .on('markgeocode', function(e) {
+    const c = e.geocode.center;
+    map.flyTo(c, 13, { duration: 0.8 });
+    L.popup({ maxWidth: 260, className: 'search-result-popup' })
+      .setLatLng(c)
+      .setContent('<div class="city-popup"><div class="popup-title">' +
+        (e.geocode.name || 'Location') + '</div></div>')
+      .openOn(map);
+  })
+  .addTo(map);
+}
 
 const bandColors = {
   "0-25km":  {fill:"#2ecc71", stroke:"#1a9850", labelNew:"0-25 km — $100", labelOld:"$0 – $100"},
@@ -712,7 +861,7 @@ function getBandFromRate(rate) {
 
 // ===== WAREHOUSE MARKER =====
 const warehouse = L.marker([43.7745, -79.2358],{
-  icon: L.divIcon({className:'warehouse-icon',html:'<div style="display:flex;align-items:center;gap:4px;background:#2c3e50;color:#fff;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35);"><span style="font-size:16px;">&#127981;</span> 601 Milner Ave</div>',iconSize:[0,0],iconAnchor:[-5,15]})
+  icon: L.divIcon({className:'warehouse-icon',html:'<div style="display:flex;align-items:center;gap:4px;background:#1C3B42;color:#fff;padding:5px 11px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap;border:2px solid #fff;box-shadow:0 3px 10px rgba(28,59,66,0.35);letter-spacing:0.02em;"><span style="font-size:15px;">&#127981;</span> 601 Milner Ave</div>',iconSize:[0,0],iconAnchor:[-5,15]})
 }).addTo(map);
 
 // ===== NEW PRICING LAYER (Voronoi Polygons) =====
@@ -787,7 +936,7 @@ oldCities.forEach(city => {
 
   marker.bindPopup(
     '<div class="city-popup">' +
-    '<div class="popup-title">' + city.name + ' <span style="color:#8B4513;font-size:11px;">(OLD)</span></div>' +
+    '<div class="popup-title">' + city.name + ' <span style="color:#2A5A63;font-size:11px;font-weight:500;">(OLD)</span></div>' +
     '<div class="popup-band">' + city.km + ' km &bull; ' + listedTag + minOrderHtml + '</div>' +
     '<div class="popup-price" style="color:' + c.stroke + '">$' + city.rate + '</div>' +
     compareHtml + '</div>', {maxWidth:480}
@@ -1018,8 +1167,8 @@ window.getContractEvents = function(cityKey, customerName) {
       : '<span style="color:#888;">Cust Pickup</span>';
     const hasClosed = rows.some(e => e[5] === 'C');
     const hasOpen = rows.some(e => e[5] === 'O');
-    const statusLabel = hasClosed && hasOpen ? '<span style="color:#2c3e50;">C</span>/<span style="color:#e67e22;">O</span>'
-      : hasClosed ? '<span style="color:#2c3e50;">Closed</span>'
+    const statusLabel = hasClosed && hasOpen ? '<span style="color:#1C3B42;">C</span>/<span style="color:#2A5A63;">O</span>'
+      : hasClosed ? '<span style="color:#1C3B42;">Closed</span>'
       : '<span style="color:#e67e22;">Open</span>';
     const feeStr = totalFee > 0 ? '$' + Math.round(totalFee).toLocaleString() : '\u2014';
     // Make each contract number clickable for detail drill-down
@@ -1304,7 +1453,7 @@ function updateTimeline() {
         '<td style="padding:2px 6px;font-size:11px;color:#1a73e8;text-decoration:underline;">' + name + '<span class="venue-expand">\u25BC</span></td>' +
         '<td style="padding:2px 6px;font-size:11px;text-align:right;font-weight:600;">$' + Math.round(vd.rev).toLocaleString() + '</td>' +
         '<td style="padding:2px 6px;font-size:11px;text-align:center;">' + vd.events + '</td>' +
-        '<td style="padding:2px 6px;font-size:11px;text-align:right;color:#8B4513;font-weight:600;">' + avgFee + '</td></tr>';
+        '<td style="padding:2px 6px;font-size:11px;text-align:right;color:#2A5A63;font-weight:600;">' + avgFee + '</td></tr>';
       venueHtml += '<tr class="venue-detail" id="' + detailId + '"></tr>';
       vidx++;
     });
@@ -1330,13 +1479,13 @@ function updateTimeline() {
     const summaryHtml = '<div style="display:flex;gap:12px;margin:4px 0;font-size:11px;">' +
       '<span style="color:#2171b5;font-weight:600;">' + loc.del + ' Deliveries</span>' +
       '<span style="color:#c87f0a;font-weight:600;">' + loc.pick + ' Pickups</span></div>' +
-      '<div class="popup-band" style="color:#8B4513;font-weight:600;">Avg Delivery Fee: ' + avgFee + '</div>' +
+      '<div class="popup-band" style="color:#2A5A63;font-weight:600;">Avg Delivery Fee: ' + avgFee + '</div>' +
       pricingHtml;
 
     let splitHtml = '';
     if (loc.closedR > 0 || loc.openR > 0) {
       splitHtml = '<div style="display:flex;gap:8px;margin:2px 0;font-size:11px;">';
-      if (loc.closedR > 0) splitHtml += '<span style="color:#2c3e50;font-weight:600;">Closed: $' + Math.round(loc.closedR).toLocaleString() + '</span>';
+      if (loc.closedR > 0) splitHtml += '<span style="color:#1C3B42;font-weight:600;">Closed: $' + Math.round(loc.closedR).toLocaleString() + '</span>';
       if (loc.openR > 0) splitHtml += '<span style="color:#e67e22;font-weight:600;">Open: $' + Math.round(loc.openR).toLocaleString() + '</span>';
       splitHtml += '</div>';
     }
@@ -1348,7 +1497,7 @@ function updateTimeline() {
       '<div class="popup-band">' + loc.events + ' events</div>' +
       summaryHtml +
       splitHtml +
-      (venueHtml ? '<table style="width:100%;border-collapse:collapse;margin-top:6px;"><tr style="border-bottom:1px solid #eee;"><th style="padding:2px 6px;font-size:10px;text-align:left;">Venue</th><th style="padding:2px 6px;font-size:10px;text-align:right;">Revenue</th><th style="padding:2px 6px;font-size:10px;">Events</th><th style="padding:2px 6px;font-size:10px;text-align:right;color:#8B4513;">Avg Fee</th></tr>' + venueHtml + '</table>' : '') +
+      (venueHtml ? '<table style="width:100%;border-collapse:collapse;margin-top:6px;"><tr style="border-bottom:1px solid #eee;"><th style="padding:2px 6px;font-size:10px;text-align:left;">Venue</th><th style="padding:2px 6px;font-size:10px;text-align:right;">Revenue</th><th style="padding:2px 6px;font-size:10px;">Events</th><th style="padding:2px 6px;font-size:10px;text-align:right;color:#2A5A63;">Avg Fee</th></tr>' + venueHtml + '</table>' : '') +
       '</div>', {maxWidth: 480}
     );
   }
@@ -1568,7 +1717,7 @@ function buildPickupLayer() {
         '<td style="padding:2px 6px;font-size:11px;color:#1a73e8;text-decoration:underline;">' + name + '<span class="venue-expand">\u25BC</span></td>' +
         '<td style="padding:2px 6px;font-size:11px;text-align:right;font-weight:600;">$' + Math.round(vd[0]).toLocaleString() + '</td>' +
         '<td style="padding:2px 6px;font-size:11px;text-align:center;">' + vd[2] + '</td>' +
-        '<td style="padding:2px 6px;font-size:11px;text-align:right;color:#8B4513;font-weight:600;">' + avgFeeV + '</td></tr>';
+        '<td style="padding:2px 6px;font-size:11px;text-align:right;color:#2A5A63;font-weight:600;">' + avgFeeV + '</td></tr>';
       venueHtml += '<tr class="venue-detail" id="' + cdetailId + '"></tr>';
       cvIdx++;
     });
@@ -1587,7 +1736,7 @@ function buildPickupLayer() {
     let splitHtml = '';
     if (pd.closed.r > 0 || pd.open.r > 0) {
       splitHtml = '<div style="display:flex;gap:8px;margin:2px 0;font-size:11px;">';
-      if (pd.closed.r > 0) splitHtml += '<span style="color:#2c3e50;font-weight:600;">Closed: $' + Math.round(pd.closed.r).toLocaleString() + ' (' + pd.closed.e + ')</span>';
+      if (pd.closed.r > 0) splitHtml += '<span style="color:#1C3B42;font-weight:600;">Closed: $' + Math.round(pd.closed.r).toLocaleString() + ' (' + pd.closed.e + ')</span>';
       if (pd.open.r > 0) splitHtml += '<span style="color:#e67e22;font-weight:600;">Open: $' + Math.round(pd.open.r).toLocaleString() + ' (' + pd.open.e + ')</span>';
       splitHtml += '</div>';
     }
@@ -1600,7 +1749,7 @@ function buildPickupLayer() {
       '<div class="popup-band">' + pd.events + ' contracts (no delivery)</div>' +
       cPricingHtml +
       splitHtml +
-      (venueHtml ? '<table style="width:100%;border-collapse:collapse;margin-top:6px;"><tr style="border-bottom:1px solid #eee;"><th style="padding:2px 6px;font-size:10px;text-align:left;">Customer</th><th style="padding:2px 6px;font-size:10px;text-align:right;">Rent</th><th style="padding:2px 6px;font-size:10px;">Contracts</th><th style="padding:2px 6px;font-size:10px;text-align:right;color:#8B4513;">Avg Fee</th></tr>' + venueHtml + '</table>' : '') +
+      (venueHtml ? '<table style="width:100%;border-collapse:collapse;margin-top:6px;"><tr style="border-bottom:1px solid #eee;"><th style="padding:2px 6px;font-size:10px;text-align:left;">Customer</th><th style="padding:2px 6px;font-size:10px;text-align:right;">Rent</th><th style="padding:2px 6px;font-size:10px;">Contracts</th><th style="padding:2px 6px;font-size:10px;text-align:right;color:#2A5A63;">Avg Fee</th></tr>' + venueHtml + '</table>' : '') +
       '</div>', {maxWidth: 480}
     );
   }
@@ -1683,11 +1832,14 @@ window.setContractFilter = function(mode) {
   updateLegend();
 };
 
-// Toggle a company bucket on/off (or "__ALL__" for select-all) and re-render.
+// Toggle a company bucket (or "__ALL__") and re-render.
 // Behavior:
-//   - Click an individual chip: flips that bucket in/out of the filter.
-//   - Click "All" when any chip is off: turns all 4 back on.
-//   - Click "All" when all 4 are already on: turns all 4 off (quick clear).
+//   - Click an individual chip (e.g. "GTA Rentals"): EXCLUSIVE — sets that
+//     bucket as the only active filter, unselects the other three.
+//   - Click an individual chip that is already the only one on: NO-OP (prevents
+//     an empty-filter state that would hide everything).
+//   - Click "All": activates all 4 buckets (always an on-switch; does not toggle
+//     off, for the same empty-state reason).
 // Chip id pattern: "co-<lowercase-hyphenated-bucket>" (e.g. "co-gta-rentals",
 // "co-all"). Internal bucket keys match process_cmmc.py: "GTA Rentals",
 // "GTA Tents", "East", "West".
@@ -1713,20 +1865,22 @@ function _syncAllChip() {
 
 window.toggleCompany = function(co) {
   if (co === '__ALL__') {
-    const allOn = ALL_COMPANIES.every(c => companyFilter.has(c));
-    if (allOn) {
-      // All currently on → clear everything
-      ALL_COMPANIES.forEach(c => companyFilter.delete(c));
-      ALL_COMPANIES.forEach(c => _setChipActive(CO_CHIP_IDS[c], false));
-    } else {
-      // Some off → turn all on
-      ALL_COMPANIES.forEach(c => companyFilter.add(c));
-      ALL_COMPANIES.forEach(c => _setChipActive(CO_CHIP_IDS[c], true));
-    }
+    // "All" always turns every bucket on (no longer toggles off — ensures the
+    // map never ends up with zero filters applied, which would show nothing).
+    ALL_COMPANIES.forEach(c => companyFilter.add(c));
+    ALL_COMPANIES.forEach(c => _setChipActive(CO_CHIP_IDS[c], true));
   } else {
-    if (companyFilter.has(co)) companyFilter.delete(co);
-    else companyFilter.add(co);
-    _setChipActive(CO_CHIP_IDS[co], companyFilter.has(co));
+    // Individual chip click is EXCLUSIVE: selects only that company, unselects
+    // the rest. If the chip is already the only one on, clicking it is a no-op
+    // (prevents empty-filter state). To view multiple companies, click "All".
+    const onlyThisOn = companyFilter.has(co) && companyFilter.size === 1;
+    if (onlyThisOn) {
+      // no-op
+    } else {
+      companyFilter.clear();
+      companyFilter.add(co);
+      ALL_COMPANIES.forEach(c => _setChipActive(CO_CHIP_IDS[c], c === co));
+    }
   }
   _syncAllChip();
   updateTimeline();

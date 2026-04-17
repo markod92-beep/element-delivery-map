@@ -123,16 +123,20 @@ body {
 .co-chip.active { background: var(--element-teal); color: var(--element-white); border-color: var(--element-teal); }
 .co-label { font-size: 10px; color: var(--element-muted); margin: 8px 0 4px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
 
-/* ===== Dispatch Routes panel (top-right) ===== */
+/* ===== Dispatch Routes panel (top-right — shifts below timeline when revenue is on) ===== */
 .dispatch-panel {
-  position: absolute; top: 12px; right: 12px; z-index: 1000;
+  position: absolute; top: 12px; right: 12px; z-index: 999;
   background: var(--element-white); padding: 12px 14px; border-radius: 10px;
   box-shadow: 0 4px 16px rgba(28, 59, 66, 0.15);
   border: 1px solid var(--element-border);
   font-size: 12px; width: 280px; max-height: calc(100vh - 24px); overflow-y: auto;
   display: none;
+  transition: top 0.2s ease;
 }
 .dispatch-panel.show { display: block; }
+/* When Revenue Heatmap is also on, timeline-panel occupies the top-right —
+   shift dispatch panel below it so they don't overlap. */
+body.rev-on .dispatch-panel { top: 260px; }
 .dispatch-panel h4 { font-size: 13px; color: var(--element-teal); margin-bottom: 4px; font-weight: 700; }
 .dispatch-panel .subtitle { color: var(--element-muted); font-size: 11px; margin-bottom: 8px; }
 .dispatch-panel .dp-label { font-size: 10px; color: var(--element-muted); margin: 8px 0 4px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
@@ -151,6 +155,25 @@ body {
   width: 100%; padding: 5px 6px; border-radius: 6px; border: 1px solid var(--element-border);
   font-family: inherit; font-size: 11px; color: var(--element-ink); background: var(--element-white);
 }
+.dispatch-panel .dp-truck-list {
+  border: 1px solid var(--element-border); border-radius: 6px;
+  max-height: 180px; overflow-y: auto; padding: 4px 6px; background: var(--element-white);
+}
+.dispatch-panel .dp-truck-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 4px; border-radius: 4px; cursor: pointer;
+  font-size: 11px; color: var(--element-ink);
+}
+.dispatch-panel .dp-truck-row:hover { background: var(--element-offwhite); }
+.dispatch-panel .dp-truck-row input { margin: 0; cursor: pointer; accent-color: var(--element-teal); }
+.dispatch-panel .dp-truck-swatch {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(28,59,66,0.2);
+}
+.dispatch-panel .dp-mini-link {
+  font-size: 10px; color: var(--element-teal); text-decoration: none; margin: 0 2px;
+}
+.dispatch-panel .dp-mini-link:hover { text-decoration: underline; }
 .dispatch-panel .dp-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .dispatch-panel .dp-chip {
   padding: 4px 9px; border-radius: 999px;
@@ -169,6 +192,27 @@ body {
 .dispatch-panel .dp-stats .dp-stat-row { display: flex; justify-content: space-between; margin: 2px 0; }
 .dispatch-panel .dp-stats .dp-stat-label { color: var(--element-muted); }
 .dispatch-panel .dp-stats .dp-stat-value { font-weight: 600; color: var(--element-ink); }
+
+/* Numbered stop markers (divIcon) */
+.stop-number-icon { background: transparent; border: none; }
+.stop-number-icon > div {
+  width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #fff;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+/* Stack / city-cluster markers: bigger, show count badge.
+   Used when multiple stops share a lat/lng (Address view) or when
+   stops are grouped by city (City view). */
+.stop-cluster-icon { background: transparent; border: none; }
+.stop-cluster-icon > div {
+  min-width: 28px; height: 28px; padding: 0 6px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: #fff;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+}
 
 /* Stop popup styling */
 .stop-popup { font-family: inherit; font-size: 12px; min-width: 200px; }
@@ -236,6 +280,17 @@ body {
 .slider-row label { font-size: 11px; color: var(--element-muted); white-space: nowrap; min-width: 40px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
 .slider-row input[type=range] { flex: 1; }
 .timeline-panel .rev-total { font-size: 11px; color: var(--element-muted); margin-top: 4px; text-align: center; font-weight: 500; }
+.timeline-panel .off-map-stat {
+  font-size: 10px;
+  color: var(--element-muted);
+  margin-top: 2px;
+  text-align: center;
+  font-weight: 500;
+  opacity: 0.85;
+  cursor: help;
+}
+.timeline-panel .off-map-stat .omv { color: var(--element-teal); font-weight: 600; }
+.timeline-panel .off-map-stat.hidden { display: none; }
 
 .venue-row { cursor: pointer; }
 @media (hover: hover) {
@@ -273,6 +328,10 @@ body {
 .cf-btn.cf-all { background: var(--element-teal); color: var(--element-white); border-color: var(--element-teal); }
 .cf-btn.cf-closed { background: var(--element-teal); color: var(--element-white); border-color: var(--element-teal); }
 .cf-btn.cf-open { background: var(--element-teal); color: var(--element-white); border-color: var(--element-teal); }
+/* Generic active state for chips managed via _setChipActive (e.g., day-of-week)
+   — matches the teal fill used by cf-all / cf-closed / cf-open so all chips
+   inside the timeline panel read consistently. */
+.cf-btn.active { background: var(--element-teal); color: var(--element-white); border-color: var(--element-teal); }
 @media (hover: hover) {
   .cf-btn:hover { border-color: var(--element-teal); transform: translateY(-1px); }
 }
@@ -303,6 +362,22 @@ body {
 .contract-detail-card .cd-value { font-weight: 600; color: var(--element-ink); }
 .contract-detail-card .cd-notes { margin-top: 4px; padding: 4px 8px; background: var(--element-mint);
   border-radius: 4px; font-size: 10px; color: var(--element-teal); font-style: italic; }
+.contract-detail-card .cd-cats-label {
+  color: var(--element-muted); font-size: 10px; font-weight: 500; margin-top: 5px; margin-bottom: 2px;
+}
+.contract-detail-card .cd-cats {
+  display: flex; flex-wrap: wrap; gap: 3px 4px;
+}
+.contract-detail-card .cd-cat-chip {
+  display: inline-flex; align-items: baseline; gap: 3px;
+  padding: 1px 7px; border-radius: 10px;
+  background: var(--element-white); border: 1px solid var(--element-border, #e0e4e6);
+  font-size: 10px; font-weight: 600; color: var(--element-ink);
+  line-height: 1.6;
+}
+.contract-detail-card .cd-cat-chip .ccq {
+  color: var(--element-teal); font-weight: 700;
+}
 .contract-num-link { color: var(--element-teal); text-decoration: underline; cursor: pointer; font-weight: 600; }
 @media (hover: hover) {
   .contract-num-link:hover { color: var(--element-teal-dark); }
@@ -674,6 +749,9 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
   </div>
   <div class="rev-total" id="rev-total"></div>
+  <div class="off-map-stat hidden" id="off-map-stat" title="Revenue from POR rows that couldn't be placed on the map because the delivery address had no resolvable postal code (private estates, parks, customer pickups, etc.). Included in the POR-grand-total line so numbers tie back to the source.">
+    Off-map (no FSA): <span class="omv" id="off-map-value">—</span>
+  </div>
   <div class="future-indicator" id="future-indicator">Showing 2026 Contract Data</div>
   <div class="contract-filter" id="contract-filter">
     <div style="font-size:10px;color:#666;font-weight:600;margin-bottom:2px;">Contract Status Filter:</div>
@@ -682,6 +760,22 @@ document.addEventListener('DOMContentLoaded', function() {
       <div class="cf-btn" id="cf-closed" onclick="setContractFilter('closed')">Closed</div>
       <div class="cf-btn" id="cf-open" onclick="setContractFilter('open')">Open</div>
       <div class="cf-btn" id="cf-pickup" onclick="setContractFilter('pickup')" style="border-left:2px solid #999;margin-left:4px;padding-left:12px;">Cust Pickups</div>
+    </div>
+    <div style="font-size:10px;color:#666;font-weight:600;margin-top:6px;margin-bottom:2px;">Map View:</div>
+    <div class="contract-filter-row">
+      <div class="cf-btn cf-all" id="rv-view-address" onclick="setRevView('address')" title="Per-FSA in Toronto, zone-level outside — as granular as the data allows.">Address</div>
+      <div class="cf-btn" id="rv-view-city" onclick="setRevView('city')" title="Collapse all Toronto FSAs into a single Toronto bubble.">By city</div>
+    </div>
+    <div style="font-size:10px;color:#666;font-weight:600;margin-top:6px;margin-bottom:2px;">Day of Week:</div>
+    <div class="contract-filter-row">
+      <div class="cf-btn active" id="dow-all" onclick="toggleDayOfWeek('__ALL__')">All</div>
+      <div class="cf-btn active" id="dow-mon" onclick="toggleDayOfWeek(0)">M</div>
+      <div class="cf-btn active" id="dow-tue" onclick="toggleDayOfWeek(1)">T</div>
+      <div class="cf-btn active" id="dow-wed" onclick="toggleDayOfWeek(2)">W</div>
+      <div class="cf-btn active" id="dow-thu" onclick="toggleDayOfWeek(3)">T</div>
+      <div class="cf-btn active" id="dow-fri" onclick="toggleDayOfWeek(4)">F</div>
+      <div class="cf-btn active" id="dow-sat" onclick="toggleDayOfWeek(5)">S</div>
+      <div class="cf-btn active" id="dow-sun" onclick="toggleDayOfWeek(6)">S</div>
     </div>
   </div>
 
@@ -697,10 +791,14 @@ document.addEventListener('DOMContentLoaded', function() {
     <button id="dp-next" onclick="stepDispatchDate(1)" title="Next day">&#9654;</button>
   </div>
 
-  <div class="dp-label">Truck</div>
-  <select class="dp-select" id="dp-truck" onchange="setDispatchTruck(this.value)">
-    <option value="__ALL__">All trucks</option>
-  </select>
+  <div class="dp-label" style="display:flex;justify-content:space-between;align-items:baseline;">
+    <span>Trucks</span>
+    <span style="font-weight:400;text-transform:none;letter-spacing:0;">
+      <a href="#" onclick="setAllTrucks(true);return false;" class="dp-mini-link">All</a> ·
+      <a href="#" onclick="setAllTrucks(false);return false;" class="dp-mini-link">None</a>
+    </span>
+  </div>
+  <div class="dp-truck-list" id="dp-truck-list"></div>
 
   <div class="dp-label">Stop types</div>
   <div class="dp-chip-row" style="margin-bottom:6px;">
@@ -712,6 +810,12 @@ document.addEventListener('DOMContentLoaded', function() {
   <div class="dp-chip-row">
     <div class="dp-chip" id="dp-chip-S" onclick="toggleDispatchClass('S')">Subrent</div>
     <div class="dp-chip" id="dp-chip-T" onclick="toggleDispatchClass('T')">Transfer</div>
+  </div>
+
+  <div class="dp-label">Map view</div>
+  <div class="dp-chip-row" style="margin-bottom:4px;">
+    <div class="dp-chip active" id="dp-view-address" onclick="setDispatchView('address')" title="One dot per unique address. Stops stacked at the same site show a count badge.">Address</div>
+    <div class="dp-chip" id="dp-view-city" onclick="setDispatchView('city')" title="Group stops by city/town. Marker sits at the centroid of all stops in that city.">By city</div>
   </div>
 
   <div class="dp-stats" id="dp-stats"></div>
@@ -1057,6 +1161,11 @@ const fsaPricing = {"M5V":{"o":250,"n":260,"k":22,"b":"Downtown Core"},"M4W":{"o
 
 // ===== 2026 CONTRACT WEEKLY DATA =====
 const contractWeekly = {};
+// Revenue that couldn't be placed on the map because the POR row had no resolvable
+// FSA/postal — private estates, parks, customer pickups, etc. Keyed by
+// wk -> status -> company -> {r, f, e, c}. Used to display an "off-map" tally
+// so timeline totals sum back to POR's raw revenue.
+const unmappedWeekly = {};
 const contractCityRef = {};
 const contractEvents = {};
 const newWeekKeys = [];
@@ -1066,10 +1175,17 @@ const newWeekLabels = {};
 const contractInfo = {};
 let contractFilter = 'all'; // 'all', 'closed', 'open'
 
+// Revenue map view: 'address' = current behavior (per-FSA in Toronto, zone-level
+// elsewhere); 'city' = collapse all Toronto FSAs into one TORONTO bubble.
+// Non-Toronto zones already behave city-like under 'address', so City mode only
+// affects Toronto-area granularity.
+let revView = 'address';
+const TORONTO_CENTROID = { lat: 43.6532, lng: -79.3832 };
+
 // Company bucket filter — matches buckets defined in process_cmmc.py.
 // All on by default. Unclassified rows ("Other") are always included as a
 // safety net for new store codes before Mark classifies them.
-const ALL_COMPANIES = ['GTA Rentals', 'GTA Tents', 'East', 'West'];
+const ALL_COMPANIES = ['GTA', 'GTA Tents', 'East', 'West'];
 const companyFilter = new Set(ALL_COMPANIES);
 
 // Day-of-week filter: 0=Mon, 1=Tue, ..., 6=Sun. Default = all 7 on.
@@ -1109,11 +1225,18 @@ let dispatchData = null;
 let dispatchLoading = false;
 let dispatchVisible = false;
 let dispatchDate = null;                              // ISO YYYY-MM-DD
-let dispatchTruck = '__ALL__';                        // '__ALL__' or a truck name
+// Multi-select truck filter. Empty set = "no trucks" (hide all). Reset to
+// "all trucks matching current date + company filter" on date/company change.
+const dispatchTrucks = new Set();
 // Stop-class visibility. D (Delivery) and P (Pickup) are ALWAYS visible — they're
 // the core of any route, so we color-code them rather than filter. S (Subrent)
 // and T (Transfer) are the only user-toggleable classes (off by default).
 const dispatchClassFilter = new Set(['D', 'P']);
+// Map view mode: 'address' = dedupe stops at identical lat/lng into one marker
+// with a count badge (solves stacking when a route has multiple contracts at the
+// same site, e.g. 12 pickups from 60 Simcoe St); 'city' = aggregate stops by
+// city extracted from addr, marker placed at cluster centroid.
+let dispatchView = 'address';
 const dispatchLayerGroup = L.layerGroup();
 // Color by trip class
 const TRIP_CLASS_COLORS = {
@@ -1123,6 +1246,34 @@ const TRIP_CLASS_COLORS = {
   'T': '#6B7A7E',   // gray — transfer
 };
 const TRIP_CLASS_LABELS = { 'D': 'Delivery', 'P': 'Pickup', 'S': 'Subrent', 'T': 'Transfer' };
+
+// Store code -> company bucket (parallel to process_cmmc.py classification).
+// Used to filter dispatch routes by the Company chips (GTA / Tents / East / West).
+const DISPATCH_STORE_TO_CO = {
+  'CFR': 'GTA', 'CMM': 'GTA', 'ERG': 'GTA', 'HIG': 'GTA',
+  'ATR': 'GTA Tents',   'RT':  'GTA Tents',
+  'MFL': 'East',
+  'A&B': 'West',        'LW':  'West',
+};
+
+// Return the set of company buckets a route touches, based on its stops' stores.
+function _routeCompanies(route) {
+  const out = new Set();
+  (route.stops || []).forEach(function(s) {
+    const co = DISPATCH_STORE_TO_CO[s.store];
+    if (co) out.add(co);
+  });
+  return out;
+}
+
+// Does a route match the currently-active company filter? Match = any overlap.
+// If no stores on the route are in the bucket map (edge case), route is shown.
+function _routeMatchesCompany(route) {
+  const cos = _routeCompanies(route);
+  if (cos.size === 0) return true;
+  for (const co of cos) if (companyFilter.has(co)) return true;
+  return false;
+}
 
 // Info panel (top-left)
 const infoControl = L.control({position:'topleft'});
@@ -1139,22 +1290,15 @@ infoControl.onAdd = function() {
     '<div class="co-label">Company</div>' +
     '<div class="toggle-row" style="flex-wrap:wrap;gap:6px;">' +
     '<div class="toggle-btn co-chip active" id="co-all" onclick="toggleCompany(\'__ALL__\')">All</div>' +
-    '<div class="toggle-btn co-chip active" id="co-gta-rentals" onclick="toggleCompany(\'GTA Rentals\')">GTA Rentals</div>' +
+    '<div class="toggle-btn co-chip active" id="co-gta" onclick="toggleCompany(\'GTA\')">GTA</div>' +
     '<div class="toggle-btn co-chip active" id="co-gta-tents" onclick="toggleCompany(\'GTA Tents\')">Tents</div>' +
     '<div class="toggle-btn co-chip active" id="co-east" onclick="toggleCompany(\'East\')">East</div>' +
     '<div class="toggle-btn co-chip active" id="co-west" onclick="toggleCompany(\'West\')">West</div>' +
     '</div>' +
-    '<div class="co-label">Day of week</div>' +
-    '<div class="toggle-row" style="flex-wrap:wrap;gap:6px;">' +
-    '<div class="toggle-btn co-chip active" id="dow-all" onclick="toggleDayOfWeek(\'__ALL__\')">All</div>' +
-    '<div class="toggle-btn co-chip active" id="dow-mon" onclick="toggleDayOfWeek(0)">M</div>' +
-    '<div class="toggle-btn co-chip active" id="dow-tue" onclick="toggleDayOfWeek(1)">T</div>' +
-    '<div class="toggle-btn co-chip active" id="dow-wed" onclick="toggleDayOfWeek(2)">W</div>' +
-    '<div class="toggle-btn co-chip active" id="dow-thu" onclick="toggleDayOfWeek(3)">T</div>' +
-    '<div class="toggle-btn co-chip active" id="dow-fri" onclick="toggleDayOfWeek(4)">F</div>' +
-    '<div class="toggle-btn co-chip active" id="dow-sat" onclick="toggleDayOfWeek(5)">S</div>' +
-    '<div class="toggle-btn co-chip active" id="dow-sun" onclick="toggleDayOfWeek(6)">S</div>' +
-    '</div>';
+    '';
+    // Day-of-week filter lives in the timeline panel now (see #contract-filter),
+    // next to the other time-window filters, so it's grouped with the controls
+    // that affect the revenue layer.
   L.DomEvent.disableClickPropagation(div);
   return div;
 };
@@ -1448,7 +1592,7 @@ function updateTimeline() {
           const cd = contractCityData[locKey][status];
           // Dual-schema support:
           //   OLD shape: raw = { r, f, d, p, e, v }  (no company filter possible)
-          //   NEW shape: raw = { "GTA Rentals": {r,f,d,p,e,v}, "West": {...}, ... }
+          //   NEW shape: raw = { "GTA": {r,f,d,p,e,v}, "West": {...}, ... }
           const isOldShape = (typeof raw.r === 'number');
           const addOne = (sd) => {
             cd.r += sd.r; cd.f += sd.f; cd.d += sd.d; cd.p += sd.p; cd.e += sd.e;
@@ -1569,11 +1713,19 @@ function updateTimeline() {
           displayLat = ref.lat; displayLng = ref.lng;
         } else continue;
       } else if (locKey.split(',')[0].startsWith('M')) {
-        // Toronto FSA — individual
-        if (!ref) continue;
-        displayKey = locKey;
-        displayName = ref.name;
-        displayLat = ref.lat; displayLng = ref.lng;
+        // Toronto FSA — in Address mode, one bubble per FSA. In City mode,
+        // collapse all Toronto FSAs into a single downtown-Toronto bubble so
+        // the city reads as one market rather than a dozen overlapping dots.
+        if (revView === 'city') {
+          displayKey = 'CITY:TORONTO';
+          displayName = 'Toronto';
+          displayLat = TORONTO_CENTROID.lat; displayLng = TORONTO_CENTROID.lng;
+        } else {
+          if (!ref) continue;
+          displayKey = locKey;
+          displayName = ref.name;
+          displayLat = ref.lat; displayLng = ref.lng;
+        }
       } else {
         // Non-Toronto FSA — merge by zone
         const firstFsa = locKey.split(',')[0].trim();
@@ -1741,17 +1893,74 @@ function updateTimeline() {
     totalFees += loc.fees;
     totalEvents += loc.events;
   }
-  if (totalRev === 0 && totalEvents === 0) {
+
+  // Off-map (no-FSA) revenue for the same week range + company + status filter.
+  // Not DoW-filterable (we don't keep per-event dates for unmapped rows), so we
+  // skip display when DoW is restricted — the mapped total stops being apples-to-
+  // apples with a full-week off-map figure.
+  let offMapRev = 0, offMapFees = 0, offMapEvents = 0, offMapContracts = 0;
+  const offMapApplicable = !dowRestricted && Object.keys(unmappedWeekly).length > 0;
+  if (offMapApplicable) {
+    const statusWanted = (contractFilter === 'closed') ? ['closed']
+                       : (contractFilter === 'open')   ? ['open']
+                       : ['closed', 'open']; // 'all' and 'pickup' both use the full sum
+    for (let i = startIdx; i <= endIdx; i++) {
+      const wk = weekKeys[i];
+      const byStatus = unmappedWeekly[wk];
+      if (!byStatus) continue;
+      for (const st of statusWanted) {
+        const byCo = byStatus[st];
+        if (!byCo) continue;
+        for (const co in byCo) {
+          if (co !== 'Other' && !companyFilter.has(co)) continue;
+          const u = byCo[co];
+          offMapRev += u.r;
+          offMapFees += u.f;
+          offMapEvents += u.e;
+          offMapContracts += (u.c || 0);
+        }
+      }
+    }
+  }
+
+  if (totalRev === 0 && totalEvents === 0 && offMapRev === 0) {
     document.getElementById('rev-total').textContent = 'No data available for this period';
     document.getElementById('rev-total').style.color = '#999';
   } else {
     const grandTotal = totalRev + totalFees;
-    const totalLabel =
+    const porGrandTotal = grandTotal + offMapRev + offMapFees;
+    let totalLabel =
       'Net: $' + Math.round(totalRev).toLocaleString() +
-      ' \u00b7 Total (w/ delivery): $' + Math.round(grandTotal).toLocaleString() +
-      ' \u00b7 ' + totalEvents + ' events, ' + Object.keys(allLocations).length + ' locations';
+      ' \u00b7 Total (w/ delivery): $' + Math.round(grandTotal).toLocaleString();
+    if (offMapApplicable && offMapRev > 0) {
+      totalLabel += ' \u00b7 POR grand total: $' + Math.round(porGrandTotal).toLocaleString();
+    }
+    totalLabel += ' \u00b7 ' + totalEvents + ' events, ' + Object.keys(allLocations).length + ' locations';
     document.getElementById('rev-total').textContent = totalLabel;
     document.getElementById('rev-total').style.color = '';
+  }
+
+  // Off-map panel line
+  const offEl = document.getElementById('off-map-stat');
+  const offVal = document.getElementById('off-map-value');
+  if (offEl && offVal) {
+    if (offMapApplicable && offMapRev > 0) {
+      const pct = (totalRev + offMapRev) > 0
+        ? (offMapRev / (totalRev + offMapRev)) * 100
+        : 0;
+      offVal.textContent =
+        '$' + Math.round(offMapRev).toLocaleString() +
+        '  \u00b7  ' + offMapEvents.toLocaleString() + ' rows' +
+        (offMapContracts ? ' / ' + offMapContracts.toLocaleString() + ' contracts' : '') +
+        '  \u00b7  ' + pct.toFixed(1) + '% of total';
+      offEl.classList.remove('hidden');
+    } else if (dowRestricted && Object.keys(unmappedWeekly).length > 0) {
+      // Signal to Mark that the off-map figure is suppressed while DoW is filtered.
+      offVal.textContent = 'hidden while Day-of-Week filter is active';
+      offEl.classList.remove('hidden');
+    } else {
+      offEl.classList.add('hidden');
+    }
   }
 
   // Update pickup layer
@@ -1785,6 +1994,7 @@ fetch('delivery_data.json?v=' + Date.now(), { cache: 'no-store' })
     data.weekKeys.forEach(function(k){ weekKeys.push(k); });
     Object.assign(weekLabels, data.weekLabels);
     Object.assign(contractWeekly, data.contractWeekly);
+    if (data.unmappedWeekly) Object.assign(unmappedWeekly, data.unmappedWeekly);
     Object.assign(contractCityRef, data.contractCityRef);
     Object.assign(contractEvents, data.contractEvents);
     Object.assign(contractInfo, data.contractInfo);
@@ -2065,10 +2275,37 @@ window.showContractDetail = function(contractNum, detailId) {
   }
   if (info.tt) h += '<div class="cd-row"><span class="cd-label">Total Value</span><span class="cd-value">$' + info.tt.toLocaleString() + '</span></div>';
   if (info.sl) h += '<div class="cd-row"><span class="cd-label">Sale Items</span><span class="cd-value">$' + info.sl.toLocaleString() + '</span></div>';
+
+  // What's on the contract — rough category-level quantities from POR's
+  // category columns (sorted by qty desc). POR doesn't split revenue per
+  // category cleanly, so this is quantity-only.
+  if (info.cats && info.cats.length) {
+    h += '<div class="cd-cats-label">What\u2019s on it</div>';
+    h += '<div class="cd-cats">';
+    for (const [name, qty] of info.cats) {
+      h += '<span class="cd-cat-chip">' + name +
+           '<span class="ccq">' + qty.toLocaleString() + '</span></span>';
+    }
+    h += '</div>';
+  }
+
   if (info.dn) h += '<div class="cd-notes">' + info.dn + '</div>';
   h += '</div>';
   el.innerHTML = h;
   el.classList.add('cd-open');
+};
+
+// Revenue map view toggle — 'address' (current FSA/zone granularity) or
+// 'city' (collapse Toronto FSAs into one bubble at downtown centroid).
+window.setRevView = function(mode) {
+  if (mode !== 'address' && mode !== 'city') return;
+  if (revView === mode) return;
+  revView = mode;
+  const a = document.getElementById('rv-view-address');
+  const c = document.getElementById('rv-view-city');
+  if (a) a.className = mode === 'address' ? 'cf-btn cf-all' : 'cf-btn';
+  if (c) c.className = mode === 'city' ? 'cf-btn cf-all' : 'cf-btn';
+  updateTimeline();
 };
 
 window.setContractFilter = function(mode) {
@@ -2098,17 +2335,17 @@ window.setContractFilter = function(mode) {
 
 // Toggle a company bucket (or "__ALL__") and re-render.
 // Behavior:
-//   - Click an individual chip (e.g. "GTA Rentals"): EXCLUSIVE — sets that
+//   - Click an individual chip (e.g. "GTA"): EXCLUSIVE — sets that
 //     bucket as the only active filter, unselects the other three.
 //   - Click an individual chip that is already the only one on: NO-OP (prevents
 //     an empty-filter state that would hide everything).
 //   - Click "All": activates all 4 buckets (always an on-switch; does not toggle
 //     off, for the same empty-state reason).
-// Chip id pattern: "co-<lowercase-hyphenated-bucket>" (e.g. "co-gta-rentals",
-// "co-all"). Internal bucket keys match process_cmmc.py: "GTA Rentals",
+// Chip id pattern: "co-<lowercase-hyphenated-bucket>" (e.g. "co-gta",
+// "co-all"). Internal bucket keys match process_cmmc.py: "GTA",
 // "GTA Tents", "East", "West".
 const CO_CHIP_IDS = {
-  'GTA Rentals': 'co-gta-rentals',
+  'GTA': 'co-gta',
   'GTA Tents':   'co-gta-tents',
   'East':        'co-east',
   'West':        'co-west',
@@ -2148,6 +2385,10 @@ window.toggleCompany = function(co) {
   }
   _syncAllChip();
   updateTimeline();
+  if (dispatchVisible) {
+    updateDispatchTruckOptions(false);  // company change -> reset truck selection to new scope
+    buildDispatchLayer(true);
+  }
 };
 
 function _syncAllDowChip() {
@@ -2186,8 +2427,8 @@ window.toggleLayer = function(which) {
     else { map.removeLayer(oldLayerGroup); document.getElementById('btn-old').className='toggle-btn'; document.getElementById('btn-old').textContent='Old Pricing (101)'; }
   } else if (which === 'rev') {
     revVisible = !revVisible;
-    if (revVisible) { map.addLayer(revLayerGroup); document.getElementById('timeline-panel').style.display='block'; document.getElementById('btn-rev').className='toggle-btn active-rev'; document.getElementById('btn-rev').innerHTML='&#10004; Revenue Heatmap'; }
-    else { map.removeLayer(revLayerGroup); document.getElementById('timeline-panel').style.display='none'; document.getElementById('btn-rev').className='toggle-btn'; document.getElementById('btn-rev').textContent='Revenue Heatmap'; }
+    if (revVisible) { map.addLayer(revLayerGroup); document.getElementById('timeline-panel').style.display='block'; document.getElementById('btn-rev').className='toggle-btn active-rev'; document.getElementById('btn-rev').innerHTML='&#10004; Revenue Heatmap'; document.body.classList.add('rev-on'); }
+    else { map.removeLayer(revLayerGroup); document.getElementById('timeline-panel').style.display='none'; document.getElementById('btn-rev').className='toggle-btn'; document.getElementById('btn-rev').textContent='Revenue Heatmap'; document.body.classList.remove('rev-on'); }
   } else if (which === 'dispatch') {
     dispatchVisible = !dispatchVisible;
     const btn = document.getElementById('btn-dispatch');
@@ -2237,7 +2478,7 @@ function ensureDispatchData() {
       document.getElementById('dp-date-input').value = dispatchDate;
       document.getElementById('dp-date-input').min = data.window && data.window.start;
       document.getElementById('dp-date-input').max = data.window && data.window.end;
-      updateDispatchTruckOptions();
+      updateDispatchTruckOptions(false);
       document.getElementById('dp-subtitle').textContent =
         dates.length + ' days of dispatch history';
       return data;
@@ -2245,26 +2486,74 @@ function ensureDispatchData() {
   return dispatchLoading;
 }
 
-// Populate truck selector with trucks on the currently-selected date.
-function updateDispatchTruckOptions() {
+// Populate truck checkbox list with trucks on the currently-selected date,
+// scoped to the active company filter (GTA / Tents / East / West).
+// On date or company change the selection resets to "all trucks in scope".
+function updateDispatchTruckOptions(preserveSelection) {
   if (!dispatchData || !dispatchDate) return;
-  const routes = (dispatchData.routes || {})[dispatchDate] || [];
-  const trucks = Array.from(new Set(routes.map(function(r) { return r.truck; }))).sort();
-  const sel = document.getElementById('dp-truck');
-  const currentVal = dispatchTruck;
-  sel.innerHTML = '<option value="__ALL__">All trucks (' + trucks.length + ')</option>' +
-    trucks.map(function(t) { return '<option value="' + t.replace(/"/g, '&quot;') + '">' + t + '</option>'; }).join('');
-  // preserve selection if still valid, else reset to ALL
-  if (currentVal !== '__ALL__' && trucks.indexOf(currentVal) < 0) {
-    dispatchTruck = '__ALL__';
+  const allRoutes = (dispatchData.routes || {})[dispatchDate] || [];
+  const routes = allRoutes.filter(_routeMatchesCompany);
+  // Map truck -> color so the checkbox swatch matches the map polyline
+  const truckColor = {};
+  routes.forEach(function(r) { if (!truckColor[r.truck]) truckColor[r.truck] = r.color; });
+  const trucks = Object.keys(truckColor).sort();
+
+  if (!preserveSelection) {
+    // Reset: select all trucks in current scope
+    dispatchTrucks.clear();
+    trucks.forEach(function(t) { dispatchTrucks.add(t); });
+  } else {
+    // Drop any previously-selected trucks that aren't in current scope
+    for (const t of Array.from(dispatchTrucks)) {
+      if (trucks.indexOf(t) < 0) dispatchTrucks.delete(t);
+    }
   }
-  sel.value = dispatchTruck;
+
+  const list = document.getElementById('dp-truck-list');
+  if (!list) return;
+  if (trucks.length === 0) {
+    list.innerHTML = '<div style="padding:6px;color:var(--element-muted);font-size:11px;">No routes on this date.</div>';
+    return;
+  }
+  list.innerHTML = trucks.map(function(t) {
+    const checked = dispatchTrucks.has(t) ? ' checked' : '';
+    const safeT = t.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    return '<label class="dp-truck-row">' +
+      '<input type="checkbox" onchange="toggleDispatchTruck(\'' + safeT.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\', this.checked)"' + checked + '>' +
+      '<span class="dp-truck-swatch" style="background:' + truckColor[t] + ';"></span>' +
+      '<span>' + _esc(t) + '</span>' +
+    '</label>';
+  }).join('');
 }
+
+// Toggle a single truck in the multi-select.
+window.toggleDispatchTruck = function(truck, checked) {
+  if (checked) dispatchTrucks.add(truck);
+  else dispatchTrucks.delete(truck);
+  buildDispatchLayer();
+};
+
+// "All" / "None" quick-select for the truck list.
+window.setAllTrucks = function(allOn) {
+  const list = document.getElementById('dp-truck-list');
+  if (!list) return;
+  const boxes = list.querySelectorAll('input[type="checkbox"]');
+  dispatchTrucks.clear();
+  boxes.forEach(function(b) {
+    b.checked = allOn;
+    if (allOn) {
+      // Recover the truck name from the onchange attribute
+      const m = b.getAttribute('onchange').match(/toggleDispatchTruck\('(.+?)',/);
+      if (m) dispatchTrucks.add(m[1].replace(/\\'/g, "'").replace(/\\\\/g, "\\"));
+    }
+  });
+  buildDispatchLayer(allOn);  // refit bounds on "All" for a clean view
+};
 
 window.setDispatchDate = function(isoDate) {
   if (!isoDate) return;
   dispatchDate = isoDate;
-  updateDispatchTruckOptions();
+  updateDispatchTruckOptions(false);  // date change -> reset to all trucks
   buildDispatchLayer(true);  // true = fit bounds
 };
 
@@ -2277,11 +2566,6 @@ window.stepDispatchDate = function(delta) {
   setDispatchDate(iso);
 };
 
-window.setDispatchTruck = function(truck) {
-  dispatchTruck = truck;
-  buildDispatchLayer(true);
-};
-
 window.toggleDispatchClass = function(cls) {
   // D and P are always on — only S and T toggle.
   if (cls === 'D' || cls === 'P') return;
@@ -2291,6 +2575,39 @@ window.toggleDispatchClass = function(cls) {
   if (chip) chip.classList.toggle('active', dispatchClassFilter.has(cls));
   buildDispatchLayer();
 };
+
+// Switch map aggregation mode: 'address' (one marker per lat/lng, with stack
+// count) or 'city' (one marker per city, at centroid).
+window.setDispatchView = function(mode) {
+  if (mode !== 'address' && mode !== 'city') return;
+  if (dispatchView === mode) return;
+  dispatchView = mode;
+  const a = document.getElementById('dp-view-address');
+  const c = document.getElementById('dp-view-city');
+  if (a) a.classList.toggle('active', mode === 'address');
+  if (c) c.classList.toggle('active', mode === 'city');
+  buildDispatchLayer();
+};
+
+// Extract a city/town label from a stop address. POR writes addresses as
+// "123 MAIN ST, TORONTO" or sometimes "123 MAIN ST, TORONTO, ON" — the city is
+// the segment before any trailing 2-letter province / postal token. Falls back
+// to the raw address when no comma is present.
+function _cityFromAddr(addr) {
+  if (!addr) return 'Unknown';
+  const parts = String(addr).split(',').map(function(p) { return p.trim(); }).filter(Boolean);
+  if (!parts.length) return 'Unknown';
+  // Walk from the right, skipping province codes / postal fragments.
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    // Skip 2-letter province codes (ON, QC, BC...) and Canadian postal stubs (e.g. "M5V 1A1", "M5V")
+    if (/^[A-Z]{2}$/i.test(p)) continue;
+    if (/^[A-Z]\d[A-Z]/i.test(p)) continue;
+    if (/^\d{5}(-\d{4})?$/.test(p)) continue;  // US zip fallback
+    return p.toUpperCase();
+  }
+  return parts[0].toUpperCase();
+}
 
 // Build (or rebuild) dispatch layer from current date / truck / class filter.
 function buildDispatchLayer(fitBounds) {
@@ -2304,13 +2621,22 @@ function buildDispatchLayer(fitBounds) {
 
   if (!dispatchData || !dispatchDate) return;
   const allRoutes = (dispatchData.routes || {})[dispatchDate] || [];
-  const routes = (dispatchTruck === '__ALL__')
-    ? allRoutes
-    : allRoutes.filter(function(r) { return r.truck === dispatchTruck; });
+  // Filter by company chips first, then by truck multi-select
+  let routes = allRoutes.filter(_routeMatchesCompany);
+  routes = routes.filter(function(r) { return dispatchTrucks.has(r.truck); });
 
   let totalStops = 0, totalRev = 0, totalDist = 0;
-  let ontimeN = 0, ontimeD = 0;     // on-time numerator/denominator
   const bounds = [];
+  // Bucket = one marker on the map. Key depends on dispatchView:
+  //   'address' -> "lat|lng" (5dp)      stops at same site collapse
+  //   'city'    -> city name (UPPER)    stops in same city collapse
+  // Each bucket accumulates its stops; marker position is the bucket centroid
+  // (mean of member lat/lngs) so city view doesn't snap to an arbitrary member.
+  const buckets = new Map();
+  const _bucketKey = function(s) {
+    if (dispatchView === 'city') return _cityFromAddr(s.addr);
+    return s.ll[0].toFixed(5) + '|' + s.ll[1].toFixed(5);
+  };
 
   routes.forEach(function(r) {
     // Which stops are visible as markers (governed by S/T toggles — D and P always on)
@@ -2340,64 +2666,80 @@ function buildDispatchLayer(fitBounds) {
       line.addTo(dispatchLayerGroup);
     }
 
-    // Stop markers — only those matching class filter
-    visibleStops.forEach(function(s, idx) {
-      const color = TRIP_CLASS_COLORS[s.cls] || '#6B7A7E';
-      const marker = L.circleMarker([s.ll[0], s.ll[1]], {
-        radius: 6,
-        color: '#fff',
-        weight: 1.5,
-        fillColor: color,
-        fillOpacity: 0.9,
-      });
-      // Popup
-      const ontimeRaw = (s.ot || '').toLowerCase();
-      let ontimeBadge = '';
-      if (ontimeRaw.indexOf('late') >= 0) ontimeBadge = '<span style="color:#c0392b;font-weight:600;">Late</span>';
-      else if (ontimeRaw.indexOf('ontime') >= 0 || ontimeRaw.indexOf('on time') >= 0) ontimeBadge = '<span style="color:#1B7A3A;font-weight:600;">On time</span>';
-      else if (ontimeRaw.indexOf('early') >= 0) ontimeBadge = '<span style="color:#2171b5;font-weight:600;">Early</span>';
-      else if (s.ot) ontimeBadge = '<span style="color:#888;">' + s.ot + '</span>';
+    // Stable 1-based stop number based on full sorted route order (survives S/T toggles).
+    const stopNumberByRef = new Map();
+    allSortedStops.forEach(function(s, i) { stopNumberByRef.set(s, i + 1); });
 
-      const html = '<div class="stop-popup">' +
-        '<div class="sp-title">Stop #' + s.seq + (r.truck ? ' · ' + r.truck : '') + '</div>' +
-        '<div class="sp-type" style="background:' + color + ';">' + (TRIP_CLASS_LABELS[s.cls] || s.tt) + '</div>' +
-        (s.con ? '<div class="sp-row"><span class="sp-label">Contract</span><span class="sp-value">' + s.con + '</span></div>' : '') +
-        (s.cust ? '<div class="sp-row"><span class="sp-label">Customer</span><span class="sp-value">' + _esc(s.cust) + '</span></div>' : '') +
-        (s.store ? '<div class="sp-row"><span class="sp-label">Store</span><span class="sp-value">' + s.store + '</span></div>' : '') +
-        (s.rev ? '<div class="sp-row"><span class="sp-label">Revenue</span><span class="sp-value">$' + s.rev.toLocaleString('en-CA', {maximumFractionDigits:0}) + '</span></div>' : '') +
-        (s.parr ? '<div class="sp-row"><span class="sp-label">Promised arrival</span><span class="sp-value">' + s.parr + '</span></div>' : '') +
-        (s.aarr ? '<div class="sp-row"><span class="sp-label">Actual arrival</span><span class="sp-value">' + s.aarr + '</span></div>' : '') +
-        (ontimeBadge ? '<div class="sp-row"><span class="sp-label">On-time</span><span class="sp-value">' + ontimeBadge + '</span></div>' : '') +
-        (s.addr ? '<div class="sp-row"><span class="sp-label">Address</span><span class="sp-value" style="max-width:160px;word-break:break-word;">' + _esc(s.addr) + '</span></div>' : '') +
-        '</div>';
-      marker.bindPopup(html);
-      marker.bindTooltip(String(s.seq), {permanent: false, direction: 'center', className: 'stop-seq-tooltip'});
-      marker.addTo(dispatchLayerGroup);
+    visibleStops.forEach(function(s) {
+      const stopNum = stopNumberByRef.get(s);
+      const key = _bucketKey(s);
+      let b = buckets.get(key);
+      if (!b) {
+        b = { key: key, stops: [], latSum: 0, lngSum: 0, count: 0 };
+        buckets.set(key, b);
+      }
+      b.stops.push({ s: s, r: r, stopNum: stopNum });
+      b.latSum += s.ll[0];
+      b.lngSum += s.ll[1];
+      b.count += 1;
 
-      bounds.push([s.ll[0], s.ll[1]]);
       totalStops += 1;
       totalRev += (s.rev || 0);
-      if (ontimeRaw) {
-        ontimeD += 1;
-        if (ontimeRaw.indexOf('ontime') >= 0 || ontimeRaw.indexOf('on time') >= 0) ontimeN += 1;
-      }
     });
 
     totalDist += (r.dist || 0);
   });
 
-  // Stats panel
+  // Draw one marker per bucket. Color = class of majority stop in bucket.
+  buckets.forEach(function(b) {
+    const lat = b.latSum / b.count;
+    const lng = b.lngSum / b.count;
+    // Dominant class for coloring
+    const clsCount = {};
+    b.stops.forEach(function(x) { clsCount[x.s.cls] = (clsCount[x.s.cls] || 0) + 1; });
+    let topCls = 'D', topN = -1;
+    Object.keys(clsCount).forEach(function(c) { if (clsCount[c] > topN) { topN = clsCount[c]; topCls = c; } });
+    const color = TRIP_CLASS_COLORS[topCls] || '#6B7A7E';
+
+    let icon, html, tooltip;
+    if (b.count === 1 && dispatchView === 'address') {
+      // Single stop at this address — numbered pin (keeps existing behavior).
+      const x = b.stops[0];
+      icon = L.divIcon({
+        className: 'stop-number-icon',
+        html: '<div style="background:' + color + ';">' + x.stopNum + '</div>',
+        iconSize: [22, 22], iconAnchor: [11, 11],
+      });
+      html = _renderSingleStopPopup(x.s, x.r, x.stopNum, color);
+    } else {
+      // Multiple stops at this bucket — count-badge marker.
+      const label = (dispatchView === 'city') ? (b.count + ' · ' + b.key) : String(b.count);
+      icon = L.divIcon({
+        className: 'stop-cluster-icon',
+        html: '<div style="background:' + color + ';">' + _esc(label) + '</div>',
+        iconSize: [null, 28], iconAnchor: [14, 14],
+      });
+      html = _renderBucketPopup(b, color);
+      tooltip = (dispatchView === 'city' ? _esc(b.key) + ' — ' : '') + b.count + ' stops';
+    }
+
+    const marker = L.marker([lat, lng], { icon: icon });
+    marker.bindPopup(html, { maxWidth: 320, maxHeight: 420 });
+    if (tooltip) marker.bindTooltip(tooltip, { direction: 'top' });
+    marker.addTo(dispatchLayerGroup);
+    bounds.push([lat, lng]);
+  });
+
+  // Stats panel — aggregate On-time % removed per request.
   const routeCount = routes.filter(function(r) {
     return (r.stops || []).some(function(s) { return dispatchClassFilter.has(s.cls); });
   }).length;
-  const otPct = ontimeD > 0 ? Math.round(100 * ontimeN / ontimeD) : null;
   const statsEl = document.getElementById('dp-stats');
   if (statsEl) {
     statsEl.innerHTML =
       '<div class="dp-stat-row"><span class="dp-stat-label">Routes</span><span class="dp-stat-value">' + routeCount + '</span></div>' +
       '<div class="dp-stat-row"><span class="dp-stat-label">Stops</span><span class="dp-stat-value">' + totalStops + '</span></div>' +
-      '<div class="dp-stat-row"><span class="dp-stat-label">Revenue</span><span class="dp-stat-value">$' + totalRev.toLocaleString('en-CA', {maximumFractionDigits:0}) + '</span></div>' +
-      (otPct !== null ? '<div class="dp-stat-row"><span class="dp-stat-label">On-time</span><span class="dp-stat-value">' + otPct + '%</span></div>' : '');
+      '<div class="dp-stat-row"><span class="dp-stat-label">Revenue</span><span class="dp-stat-value">$' + totalRev.toLocaleString('en-CA', {maximumFractionDigits:0}) + '</span></div>';
   }
 
   // Fit bounds on date/truck change only
@@ -2406,11 +2748,130 @@ function buildDispatchLayer(fitBounds) {
   }
 }
 
+// Render the popup for a single dispatch stop (used when a bucket contains
+// exactly one stop in address mode).
+function _renderSingleStopPopup(s, r, stopNum, color) {
+  const ontimeRaw = (s.ot || '').toLowerCase();
+  let ontimeBadge = '';
+  if (ontimeRaw.indexOf('late') >= 0) ontimeBadge = '<span style="color:#c0392b;font-weight:600;">Late</span>';
+  else if (ontimeRaw.indexOf('ontime') >= 0 || ontimeRaw.indexOf('on time') >= 0) ontimeBadge = '<span style="color:#1B7A3A;font-weight:600;">On time</span>';
+  else if (ontimeRaw.indexOf('early') >= 0) ontimeBadge = '<span style="color:#2171b5;font-weight:600;">Early</span>';
+  else if (s.ot) ontimeBadge = '<span style="color:#888;">' + _esc(s.ot) + '</span>';
+
+  const cInfo = s.con ? contractInfo[s.con] : null;
+  const contractBlock = cInfo ? _renderStopContractBlock(s.con, cInfo) : '';
+
+  return '<div class="stop-popup">' +
+    '<div class="sp-title">Stop #' + stopNum + (r && r.truck ? ' · ' + _esc(r.truck) : '') + '</div>' +
+    '<div class="sp-type" style="background:' + color + ';">' + _esc(TRIP_CLASS_LABELS[s.cls] || s.tt) + '</div>' +
+    (s.con ? '<div class="sp-row"><span class="sp-label">Contract</span><span class="sp-value">' + _esc(s.con) + '</span></div>' : '') +
+    (s.cust ? '<div class="sp-row"><span class="sp-label">Customer</span><span class="sp-value">' + _esc(s.cust) + '</span></div>' : '') +
+    (s.store ? '<div class="sp-row"><span class="sp-label">Store</span><span class="sp-value">' + _esc(s.store) + '</span></div>' : '') +
+    (s.rev ? '<div class="sp-row"><span class="sp-label">Revenue (stop)</span><span class="sp-value">$' + s.rev.toLocaleString('en-CA', {maximumFractionDigits:0}) + '</span></div>' : '') +
+    (s.parr ? '<div class="sp-row"><span class="sp-label">Promised arrival</span><span class="sp-value">' + _esc(s.parr) + '</span></div>' : '') +
+    (s.aarr ? '<div class="sp-row"><span class="sp-label">Actual arrival</span><span class="sp-value">' + _esc(s.aarr) + '</span></div>' : '') +
+    (ontimeBadge ? '<div class="sp-row"><span class="sp-label">On-time</span><span class="sp-value">' + ontimeBadge + '</span></div>' : '') +
+    (s.addr ? '<div class="sp-row"><span class="sp-label">Address</span><span class="sp-value" style="max-width:160px;word-break:break-word;">' + _esc(s.addr) + '</span></div>' : '') +
+    contractBlock +
+    '</div>';
+}
+
+// Render the popup for a bucket containing multiple stops — either a stack
+// of contracts at a single address (Address view) or all stops in a city
+// (City view). Lists each stop as a compact row with stop number, truck,
+// class, contract, and customer.
+function _renderBucketPopup(b, color) {
+  const view = dispatchView;
+  const header = (view === 'city')
+    ? _esc(b.key) + ' — ' + b.count + ' stops'
+    : b.count + ' stops at this address';
+  // Rev total + dominant address (for city view address rollup)
+  let revSum = 0;
+  b.stops.forEach(function(x) { revSum += (x.s.rev || 0); });
+  // Group rows by truck for readability, ordered by first appearance
+  const byTruck = new Map();
+  b.stops.forEach(function(x) {
+    const t = (x.r && x.r.truck) || '—';
+    if (!byTruck.has(t)) byTruck.set(t, []);
+    byTruck.get(t).push(x);
+  });
+  let rowsHtml = '';
+  byTruck.forEach(function(list, truck) {
+    rowsHtml += '<div style="margin-top:6px;font-size:11px;color:var(--element-teal);font-weight:700;">' + _esc(truck) + '</div>';
+    list.sort(function(a, b) { return a.stopNum - b.stopNum; });
+    list.forEach(function(x) {
+      const s = x.s;
+      const cColor = TRIP_CLASS_COLORS[s.cls] || '#6B7A7E';
+      const tLabel = TRIP_CLASS_LABELS[s.cls] || s.tt || '';
+      const revStr = s.rev ? ' · $' + Math.round(s.rev).toLocaleString('en-CA') : '';
+      const custStr = s.cust ? _esc(s.cust) : '';
+      const conStr = s.con ? _esc(s.con) : '';
+      const addrLine = (view === 'city' && s.addr) ? ('<div style="color:var(--element-muted);font-size:10px;">' + _esc(s.addr) + '</div>') : '';
+      rowsHtml +=
+        '<div style="padding:4px 0;border-bottom:1px solid var(--element-border);display:flex;gap:6px;align-items:flex-start;">' +
+          '<span style="flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:' + cColor + ';color:#fff;font-size:10px;font-weight:700;">' + x.stopNum + '</span>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="font-size:11px;font-weight:600;color:var(--element-ink);">' + _esc(tLabel) + (conStr ? ' · ' + conStr : '') + revStr + '</div>' +
+            (custStr ? '<div style="font-size:10px;color:var(--element-muted);">' + custStr + '</div>' : '') +
+            addrLine +
+          '</div>' +
+        '</div>';
+    });
+  });
+  return '<div class="stop-popup" style="max-width:300px;">' +
+    '<div class="sp-title">' + header + '</div>' +
+    '<div class="sp-type" style="background:' + color + ';">' +
+      (view === 'city' ? 'City group' : 'Address group') +
+      (revSum ? ' · $' + Math.round(revSum).toLocaleString('en-CA') : '') +
+    '</div>' +
+    '<div style="max-height:280px;overflow-y:auto;">' + rowsHtml + '</div>' +
+    '</div>';
+}
+
 // Small HTML escape for user-visible text.
 function _esc(s) {
   return String(s).replace(/[&<>"']/g, function(c) {
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
   });
+}
+
+// Render the CMMC contract context inside a dispatch stop popup.
+// Reuses fields from delivery_data.json's contractInfo map.
+// Skips bogus dates like 1899-12-30 (Excel time-only cells that leaked into POR date columns).
+function _renderStopContractBlock(contractNum, info) {
+  if (!info) return '';
+  const _fmt = function(iso) {
+    if (!iso) return '';
+    if (iso.startsWith('1899') || iso.startsWith('1900')) return '';  // sentinel/blank date
+    const d = new Date(iso + 'T00:00:00');
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+  let spanStr = '';
+  const sdStr = _fmt(info.sd);
+  const pdStr = _fmt(info.pd);
+  if (sdStr || pdStr) {
+    spanStr = (sdStr || '—') + ' → ' + (pdStr || '—');
+    if (sdStr && pdStr) {
+      const d1 = new Date(info.sd + 'T00:00:00');
+      const d2 = new Date(info.pd + 'T00:00:00');
+      const days = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+      if (days >= 0) spanStr += ' <span style="color:#6B7A7E;">(' + (days + 1) + ' ' + (days === 0 ? 'day' : 'days') + ')</span>';
+    }
+  }
+  let h = '<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--element-border);">' +
+    '<div style="font-size:10px;color:var(--element-muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:600;margin-bottom:4px;">Contract details</div>';
+  if (info.vn) h += '<div class="sp-row"><span class="sp-label">Venue</span><span class="sp-value">' + _esc(info.vn) + '</span></div>';
+  if (info.ct) h += '<div class="sp-row"><span class="sp-label">Type</span><span class="sp-value">' + _esc(info.ct) + '</span></div>';
+  if (info.sp) h += '<div class="sp-row"><span class="sp-label">Salesperson</span><span class="sp-value">' + _esc(info.sp) + '</span></div>';
+  if (info.ca) h += '<div class="sp-row"><span class="sp-label">Caterer</span><span class="sp-value">' + _esc(info.ca) + '</span></div>';
+  if (info.pl) h += '<div class="sp-row"><span class="sp-label">Planner</span><span class="sp-value">' + _esc(info.pl) + '</span></div>';
+  if (spanStr) h += '<div class="sp-row"><span class="sp-label">Rental span</span><span class="sp-value">' + spanStr + '</span></div>';
+  if (info.tt) h += '<div class="sp-row"><span class="sp-label">Total value</span><span class="sp-value">$' + Number(info.tt).toLocaleString() + '</span></div>';
+  if (info.sl) h += '<div class="sp-row"><span class="sp-label">Sale items</span><span class="sp-value">$' + Number(info.sl).toLocaleString() + '</span></div>';
+  if (info.dn) h += '<div style="margin-top:4px;padding:4px 8px;background:var(--element-mint);border-radius:4px;font-size:11px;">' + _esc(info.dn) + '</div>';
+  h += '</div>';
+  return h;
 }
 
 // Ensure map renders correctly after container becomes visible

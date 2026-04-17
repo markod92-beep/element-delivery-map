@@ -123,6 +123,69 @@ body {
 .co-chip.active { background: var(--element-teal); color: var(--element-white); border-color: var(--element-teal); }
 .co-label { font-size: 10px; color: var(--element-muted); margin: 8px 0 4px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
 
+/* ===== Dispatch Routes panel (top-right) ===== */
+.dispatch-panel {
+  position: absolute; top: 12px; right: 12px; z-index: 1000;
+  background: var(--element-white); padding: 12px 14px; border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(28, 59, 66, 0.15);
+  border: 1px solid var(--element-border);
+  font-size: 12px; width: 280px; max-height: calc(100vh - 24px); overflow-y: auto;
+  display: none;
+}
+.dispatch-panel.show { display: block; }
+.dispatch-panel h4 { font-size: 13px; color: var(--element-teal); margin-bottom: 4px; font-weight: 700; }
+.dispatch-panel .subtitle { color: var(--element-muted); font-size: 11px; margin-bottom: 8px; }
+.dispatch-panel .dp-label { font-size: 10px; color: var(--element-muted); margin: 8px 0 4px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+.dispatch-panel .dp-date-row { display: flex; align-items: center; gap: 4px; }
+.dispatch-panel .dp-date-row button {
+  padding: 4px 8px; border-radius: 6px; border: 1px solid var(--element-border);
+  background: var(--element-white); cursor: pointer; font-family: inherit; font-size: 11px;
+  color: var(--element-ink);
+}
+.dispatch-panel .dp-date-row button:hover { border-color: var(--element-teal); }
+.dispatch-panel .dp-date-row input {
+  flex: 1; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--element-border);
+  font-family: inherit; font-size: 11px; color: var(--element-ink);
+}
+.dispatch-panel .dp-select {
+  width: 100%; padding: 5px 6px; border-radius: 6px; border: 1px solid var(--element-border);
+  font-family: inherit; font-size: 11px; color: var(--element-ink); background: var(--element-white);
+}
+.dispatch-panel .dp-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.dispatch-panel .dp-chip {
+  padding: 4px 9px; border-radius: 999px;
+  border: 1.5px solid var(--element-offwhite-tint);
+  background: var(--element-offwhite); cursor: pointer;
+  font-family: inherit; font-size: 11px; font-weight: 500;
+  color: var(--element-ink); transition: all 0.15s ease;
+}
+.dispatch-panel .dp-chip.active { background: var(--element-teal); color: var(--element-white); border-color: var(--element-teal); }
+.dispatch-panel .dp-legend-item { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--element-ink); margin-right: 10px; }
+.dispatch-panel .dp-legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(28,59,66,0.2); }
+.dispatch-panel .dp-stats {
+  background: var(--element-offwhite); padding: 8px 10px; border-radius: 6px; margin-top: 8px;
+  font-size: 11px;
+}
+.dispatch-panel .dp-stats .dp-stat-row { display: flex; justify-content: space-between; margin: 2px 0; }
+.dispatch-panel .dp-stats .dp-stat-label { color: var(--element-muted); }
+.dispatch-panel .dp-stats .dp-stat-value { font-weight: 600; color: var(--element-ink); }
+
+/* Stop popup styling */
+.stop-popup { font-family: inherit; font-size: 12px; min-width: 200px; }
+.stop-popup .sp-title { font-weight: 700; color: var(--element-teal); font-size: 13px; margin-bottom: 4px; }
+.stop-popup .sp-type { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; color: #fff; margin-bottom: 6px; }
+.stop-popup .sp-row { display: flex; justify-content: space-between; margin: 2px 0; gap: 8px; }
+.stop-popup .sp-label { color: var(--element-muted); font-size: 11px; }
+.stop-popup .sp-value { font-weight: 500; color: var(--element-ink); font-size: 11px; text-align: right; }
+
+/* Mobile: reposition dispatch panel */
+@media screen and (max-width: 768px) {
+  .dispatch-panel {
+    top: auto; right: 8px; left: 8px; bottom: 8px;
+    width: auto; max-height: 40vh;
+  }
+}
+
 .leaflet-popup-content { max-height: 70vh; overflow-y: auto; }
 .leaflet-popup-content-wrapper {
   border-radius: 10px;
@@ -622,6 +685,38 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
   </div>
 
+<!-- ===== DISPATCH ROUTES PANEL (top-right) — visible only when Routes layer is on ===== -->
+<div class="dispatch-panel" id="dispatch-panel">
+  <h4>Dispatch Routes</h4>
+  <div class="subtitle" id="dp-subtitle">Loading&hellip;</div>
+
+  <div class="dp-label">Date</div>
+  <div class="dp-date-row">
+    <button id="dp-prev" onclick="stepDispatchDate(-1)" title="Previous day">&#9664;</button>
+    <input type="date" id="dp-date-input" onchange="setDispatchDate(this.value)">
+    <button id="dp-next" onclick="stepDispatchDate(1)" title="Next day">&#9654;</button>
+  </div>
+
+  <div class="dp-label">Truck</div>
+  <select class="dp-select" id="dp-truck" onchange="setDispatchTruck(this.value)">
+    <option value="__ALL__">All trucks</option>
+  </select>
+
+  <div class="dp-label">Stop types</div>
+  <div class="dp-chip-row" style="margin-bottom:6px;">
+    <div class="dp-legend-item"><span class="dp-legend-dot" style="background:#2171b5;"></span>Delivery</div>
+    <div class="dp-legend-item"><span class="dp-legend-dot" style="background:#c87f0a;"></span>Pickup</div>
+  </div>
+
+  <div class="dp-label">Also show</div>
+  <div class="dp-chip-row">
+    <div class="dp-chip" id="dp-chip-S" onclick="toggleDispatchClass('S')">Subrent</div>
+    <div class="dp-chip" id="dp-chip-T" onclick="toggleDispatchClass('T')">Transfer</div>
+  </div>
+
+  <div class="dp-stats" id="dp-stats"></div>
+</div>
+
 
 <script>
 function initMap() {
@@ -977,6 +1072,16 @@ let contractFilter = 'all'; // 'all', 'closed', 'open'
 const ALL_COMPANIES = ['GTA Rentals', 'GTA Tents', 'East', 'West'];
 const companyFilter = new Set(ALL_COMPANIES);
 
+// Day-of-week filter: 0=Mon, 1=Tue, ..., 6=Sun. Default = all 7 on.
+// When all 7 are on, the fast week-level accumulation path is used (unchanged).
+// When restricted, we drop to event-level accumulation from contractEvents.
+const ALL_DOWS = [0,1,2,3,4,5,6];
+const dowFilter = new Set(ALL_DOWS);
+const DOW_CHIP_IDS = {
+  0: 'dow-mon', 1: 'dow-tue', 2: 'dow-wed', 3: 'dow-thu',
+  4: 'dow-fri', 5: 'dow-sat', 6: 'dow-sun'
+};
+
 // City-level pricing lookup (for non-FSA locations outside Toronto)
 const cityPricing = {"ACTON":{"o":704,"n":400,"k":88,"b":"75-100km"},"AJAX":{"o":225,"n":100,"k":25,"b":"0-25km"},"ALLISTON":{"o":864,"n":540,"k":108,"b":"100km+"},"ALTON":{"o":760,"n":400,"k":95,"b":"75-100km"},"AURORA":{"o":215,"n":150,"k":45,"b":"25-50km"},"BALA":{"o":1696,"n":1060,"k":212,"b":"100km+"},"BARRIE":{"o":840,"n":525,"k":105,"b":"100km+"},"BELFOUNTAIN":{"o":704,"n":400,"k":88,"b":"75-100km"},"BELLEVILLE":{"o":1504,"n":940,"k":188,"b":"100km+"},"BLUE MOUNTAINS":{"o":1424,"n":890,"k":178,"b":"100km+"},"BOLTON":{"o":215,"n":250,"k":62,"b":"50-75km"},"BOWMANVILLE":{"o":520,"n":250,"k":65,"b":"50-75km"},"BRACEBRIDGE":{"o":1640,"n":1025,"k":205,"b":"100km+"},"BRAMPTON":{"o":215,"n":250,"k":55,"b":"50-75km"},"BURLINGTON":{"o":624,"n":400,"k":78,"b":"75-100km"},"CALEDON":{"o":275,"n":400,"k":78,"b":"75-100km"},"CALEDON EAST":{"o":576,"n":250,"k":72,"b":"50-75km"},"CALEDON VILLAGE":{"o":704,"n":400,"k":88,"b":"75-100km"},"CAMBRIDGE":{"o":864,"n":540,"k":108,"b":"100km+"},"CAMPBELLCROFT":{"o":784,"n":400,"k":98,"b":"75-100km"},"CAMPBELLVILLE":{"o":624,"n":400,"k":78,"b":"75-100km"},"CHELTENHAM":{"o":624,"n":400,"k":78,"b":"75-100km"},"COBOURG":{"o":1024,"n":640,"k":128,"b":"100km+"},"COLLINGWOOD":{"o":1296,"n":810,"k":162,"b":"100km+"},"CONCORD":{"o":304,"n":150,"k":38,"b":"25-50km"},"ELORA":{"o":944,"n":590,"k":118,"b":"100km+"},"GEORGETOWN":{"o":624,"n":400,"k":78,"b":"75-100km"},"GORMLEY":{"o":200,"n":100,"k":25,"b":"0-25km"},"GRAVENHURST":{"o":1504,"n":940,"k":188,"b":"100km+"},"GRIMSBY":{"o":864,"n":540,"k":108,"b":"100km+"},"GUELPH":{"o":784,"n":400,"k":98,"b":"75-100km"},"HAMILTON":{"o":704,"n":400,"k":88,"b":"75-100km"},"HILLSBURGH":{"o":656,"n":400,"k":82,"b":"75-100km"},"HUNTSVILLE":{"o":1856,"n":1160,"k":232,"b":"100km+"},"INNISFIL":{"o":760,"n":400,"k":95,"b":"75-100km"},"KETTLEBY":{"o":464,"n":250,"k":58,"b":"50-75km"},"KING CITY":{"o":215,"n":150,"k":50,"b":"25-50km"},"KINGSTON":{"o":2120,"n":2120,"k":265,"b":"100km+"},"KITCHENER":{"o":944,"n":590,"k":118,"b":"100km+"},"KLEINBURG":{"o":195,"n":250,"k":55,"b":"50-75km"},"LAKEFIELD":{"o":1264,"n":790,"k":158,"b":"100km+"},"LINDSAY":{"o":944,"n":590,"k":118,"b":"100km+"},"LONDON":{"o":1616,"n":1010,"k":202,"b":"100km+"},"MAPLE":{"o":215,"n":150,"k":40,"b":"25-50km"},"MARKHAM":{"o":275,"n":100,"k":12,"b":"0-25km"},"MIDLAND":{"o":1240,"n":775,"k":155,"b":"100km+"},"MILTON":{"o":275,"n":250,"k":72,"b":"50-75km"},"MISSISSAUGA":{"o":215,"n":150,"k":45,"b":"25-50km"},"MONO":{"o":704,"n":400,"k":88,"b":"75-100km"},"MOUNT ALBERT":{"o":440,"n":250,"k":55,"b":"50-75km"},"NEWCASTLE":{"o":624,"n":400,"k":78,"b":"75-100km"},"NEWMARKET":{"o":225,"n":250,"k":55,"b":"50-75km"},"NIAGARA FALLS":{"o":1104,"n":690,"k":138,"b":"100km+"},"NIAGARA-ON-THE-LAKE":{"o":1104,"n":690,"k":138,"b":"100km+"},"NOBLETON":{"o":215,"n":250,"k":62,"b":"50-75km"},"OAKVILLE":{"o":275,"n":250,"k":58,"b":"50-75km"},"ORANGEVILLE":{"o":656,"n":400,"k":82,"b":"75-100km"},"ORILLIA":{"o":1104,"n":690,"k":138,"b":"100km+"},"OSHAWA":{"o":275,"n":150,"k":45,"b":"25-50km"},"OTTAWA":{"o":3400,"n":3400,"k":425,"b":"100km+"},"PETERBOROUGH":{"o":1136,"n":710,"k":142,"b":"100km+"},"PICKERING":{"o":215,"n":100,"k":18,"b":"0-25km"},"PICTON":{"o":1744,"n":1090,"k":218,"b":"100km+"},"PORT CARLING":{"o":1776,"n":1110,"k":222,"b":"100km+"},"PORT HOPE":{"o":944,"n":590,"k":118,"b":"100km+"},"PORT PERRY":{"o":544,"n":250,"k":68,"b":"50-75km"},"RICHMOND HILL":{"o":175,"n":150,"k":30,"b":"25-50km"},"SCHOMBERG":{"o":560,"n":250,"k":70,"b":"50-75km"},"ST. CATHARINES":{"o":1024,"n":640,"k":128,"b":"100km+"},"STONEY CREEK":{"o":736,"n":400,"k":92,"b":"75-100km"},"STOUFFVILLE":{"o":215,"n":150,"k":30,"b":"25-50km"},"STRATFORD":{"o":1344,"n":840,"k":168,"b":"100km+"},"THORNBURY":{"o":1504,"n":940,"k":188,"b":"100km+"},"THORNHILL":{"o":175,"n":150,"k":28,"b":"25-50km"},"UNIONVILLE":{"o":175,"n":100,"k":15,"b":"0-25km"},"UXBRIDGE":{"o":275,"n":250,"k":55,"b":"50-75km"},"VAUGHAN":{"o":195,"n":150,"k":42,"b":"25-50km"},"WATERLOO":{"o":976,"n":610,"k":122,"b":"100km+"},"WELLAND":{"o":1184,"n":740,"k":148,"b":"100km+"},"WELLINGTON":{"o":1584,"n":990,"k":198,"b":"100km+"},"WHITBY":{"o":275,"n":150,"k":35,"b":"25-50km"},"WOODBRIDGE":{"o":215,"n":150,"k":45,"b":"25-50km"},"ANCASTER":{"o":704,"n":400,"k":88,"b":"75-100km"},"VINELAND":{"o":920,"n":575,"k":115,"b":"100km+"},"COLDWATER":{"o":1104,"n":690,"k":138,"b":"100km+"},"LEFROY":{"o":760,"n":400,"k":95,"b":"75-100km"},"MULMUR":{"o":704,"n":400,"k":88,"b":"75-100km"},"BRANTFORD":{"o":1040,"n":650,"k":130,"b":"100km+"},"JERSEYVILLE":{"o":840,"n":525,"k":105,"b":"100km+"},"REXDALE":{"o":240,"n":150,"k":30,"b":"25-50km"}};
 
@@ -998,6 +1103,27 @@ const revLayerGroup = revMarkerGroup;
 let newVisible = true, oldVisible = false, revVisible = false, pickupVisible = false;
 const pickupLayerGroup = L.layerGroup();
 
+// ===== DISPATCH ROUTES STATE =====
+// Populated by dispatch_data.json fetch (lazy, on first Routes toggle).
+let dispatchData = null;
+let dispatchLoading = false;
+let dispatchVisible = false;
+let dispatchDate = null;                              // ISO YYYY-MM-DD
+let dispatchTruck = '__ALL__';                        // '__ALL__' or a truck name
+// Stop-class visibility. D (Delivery) and P (Pickup) are ALWAYS visible — they're
+// the core of any route, so we color-code them rather than filter. S (Subrent)
+// and T (Transfer) are the only user-toggleable classes (off by default).
+const dispatchClassFilter = new Set(['D', 'P']);
+const dispatchLayerGroup = L.layerGroup();
+// Color by trip class
+const TRIP_CLASS_COLORS = {
+  'D': '#2171b5',   // blue — delivery
+  'P': '#c87f0a',   // orange — pickup
+  'S': '#7A3E9D',   // purple — subrent
+  'T': '#6B7A7E',   // gray — transfer
+};
+const TRIP_CLASS_LABELS = { 'D': 'Delivery', 'P': 'Pickup', 'S': 'Subrent', 'T': 'Transfer' };
+
 // Info panel (top-left)
 const infoControl = L.control({position:'topleft'});
 infoControl.onAdd = function() {
@@ -1008,6 +1134,7 @@ infoControl.onAdd = function() {
     '<div class="toggle-btn active-new" id="btn-new" onclick="toggleLayer(\'new\')">&#10004; New Pricing (99)</div>' +
     '<div class="toggle-btn" id="btn-old" onclick="toggleLayer(\'old\')">Old Pricing (101)</div>' +
     '<div class="toggle-btn" id="btn-rev" onclick="toggleLayer(\'rev\')">Revenue Heatmap</div>' +
+    '<div class="toggle-btn" id="btn-dispatch" onclick="toggleLayer(\'dispatch\')">Routes</div>' +
     '</div>' +
     '<div class="co-label">Company</div>' +
     '<div class="toggle-row" style="flex-wrap:wrap;gap:6px;">' +
@@ -1016,6 +1143,17 @@ infoControl.onAdd = function() {
     '<div class="toggle-btn co-chip active" id="co-gta-tents" onclick="toggleCompany(\'GTA Tents\')">Tents</div>' +
     '<div class="toggle-btn co-chip active" id="co-east" onclick="toggleCompany(\'East\')">East</div>' +
     '<div class="toggle-btn co-chip active" id="co-west" onclick="toggleCompany(\'West\')">West</div>' +
+    '</div>' +
+    '<div class="co-label">Day of week</div>' +
+    '<div class="toggle-row" style="flex-wrap:wrap;gap:6px;">' +
+    '<div class="toggle-btn co-chip active" id="dow-all" onclick="toggleDayOfWeek(\'__ALL__\')">All</div>' +
+    '<div class="toggle-btn co-chip active" id="dow-mon" onclick="toggleDayOfWeek(0)">M</div>' +
+    '<div class="toggle-btn co-chip active" id="dow-tue" onclick="toggleDayOfWeek(1)">T</div>' +
+    '<div class="toggle-btn co-chip active" id="dow-wed" onclick="toggleDayOfWeek(2)">W</div>' +
+    '<div class="toggle-btn co-chip active" id="dow-thu" onclick="toggleDayOfWeek(3)">T</div>' +
+    '<div class="toggle-btn co-chip active" id="dow-fri" onclick="toggleDayOfWeek(4)">F</div>' +
+    '<div class="toggle-btn co-chip active" id="dow-sat" onclick="toggleDayOfWeek(5)">S</div>' +
+    '<div class="toggle-btn co-chip active" id="dow-sun" onclick="toggleDayOfWeek(6)">S</div>' +
     '</div>';
   L.DomEvent.disableClickPropagation(div);
   return div;
@@ -1287,42 +1425,96 @@ function updateTimeline() {
     document.getElementById('range-display').textContent = startShort + ' \u2013 ' + endShort + yearSuffix + ' (' + (endIdx - startIdx + 1) + ' weeks)';
   }
 
-  // ===== ACCUMULATE FROM UNIFIED contractWeekly =====
+  // ===== ACCUMULATE =====
+  // Fast path (dowFilter = all 7): use pre-aggregated contractWeekly (week-level sums).
+  // Slow path (dowFilter restricted): iterate contractEvents (per-event detail) and
+  // filter by event date's day-of-week. Slower (~40K events) but still <50ms.
   const contractCityData = {};
   let hasData = false;
+  const dowRestricted = dowFilter.size < 7;
 
-  for (let i = startIdx; i <= endIdx; i++) {
-    const wk = weekKeys[i];
-    const cdata = contractWeekly[wk];
-    if (!cdata) continue;
-    hasData = true;
-    for (const [locKey, statuses] of Object.entries(cdata)) {
-      if (!contractCityData[locKey]) contractCityData[locKey] = {closed:{r:0,f:0,d:0,p:0,e:0,v:{}}, open:{r:0,f:0,d:0,p:0,e:0,v:{}}};
-      for (const status of ['closed','open']) {
-        const raw = statuses[status];
-        if (!raw) continue;
-        const cd = contractCityData[locKey][status];
-        // Dual-schema support:
-        //   OLD shape: raw = { r, f, d, p, e, v }  (no company filter possible)
-        //   NEW shape: raw = { "GTA Rentals": {r,f,d,p,e,v}, "West": {...}, ... }
-        // Detect by checking whether raw.r is a number (old shape).
-        const isOldShape = (typeof raw.r === 'number');
-        const addOne = (sd) => {
-          cd.r += sd.r; cd.f += sd.f; cd.d += sd.d; cd.p += sd.p; cd.e += sd.e;
-          if (sd.v) sd.v.forEach(v => {
-            if (!cd.v[v[0]]) cd.v[v[0]] = [0,0,0];
-            cd.v[v[0]][0] += v[1]; cd.v[v[0]][1] += v[2]; cd.v[v[0]][2] += v[3];
-          });
-        };
-        if (isOldShape) {
-          // Old JSON — company filter is a no-op, treat as "all"
-          addOne(raw);
-        } else {
-          // New JSON — iterate companies, filter in. "Other" always included.
-          for (const co in raw) {
-            if (co !== 'Other' && !companyFilter.has(co)) continue;
-            addOne(raw[co]);
+  if (!dowRestricted) {
+    // --- Fast path: week-level accumulation ---
+    for (let i = startIdx; i <= endIdx; i++) {
+      const wk = weekKeys[i];
+      const cdata = contractWeekly[wk];
+      if (!cdata) continue;
+      hasData = true;
+      for (const [locKey, statuses] of Object.entries(cdata)) {
+        if (!contractCityData[locKey]) contractCityData[locKey] = {closed:{r:0,f:0,d:0,p:0,e:0,v:{}}, open:{r:0,f:0,d:0,p:0,e:0,v:{}}};
+        for (const status of ['closed','open']) {
+          const raw = statuses[status];
+          if (!raw) continue;
+          const cd = contractCityData[locKey][status];
+          // Dual-schema support:
+          //   OLD shape: raw = { r, f, d, p, e, v }  (no company filter possible)
+          //   NEW shape: raw = { "GTA Rentals": {r,f,d,p,e,v}, "West": {...}, ... }
+          const isOldShape = (typeof raw.r === 'number');
+          const addOne = (sd) => {
+            cd.r += sd.r; cd.f += sd.f; cd.d += sd.d; cd.p += sd.p; cd.e += sd.e;
+            if (sd.v) sd.v.forEach(v => {
+              if (!cd.v[v[0]]) cd.v[v[0]] = [0,0,0];
+              cd.v[v[0]][0] += v[1]; cd.v[v[0]][1] += v[2]; cd.v[v[0]][2] += v[3];
+            });
+          };
+          if (isOldShape) {
+            addOne(raw);
+          } else {
+            for (const co in raw) {
+              if (co !== 'Other' && !companyFilter.has(co)) continue;
+              addOne(raw[co]);
+            }
           }
+        }
+      }
+    }
+  } else {
+    // --- Event-level path: filter by DoW ---
+    // Compute ISO date bounds for the selected week range (inclusive).
+    function _isoWeekMonday(wkKey) {
+      const parts = wkKey.split('-W');
+      const yr = parseInt(parts[0], 10);
+      const wk = parseInt(parts[1], 10);
+      const jan4 = new Date(Date.UTC(yr, 0, 4));
+      const jan4Dow = (jan4.getUTCDay() + 6) % 7; // Mon=0
+      const week1Mon = new Date(jan4);
+      week1Mon.setUTCDate(jan4.getUTCDate() - jan4Dow);
+      const target = new Date(week1Mon);
+      target.setUTCDate(week1Mon.getUTCDate() + (wk - 1) * 7);
+      return target;
+    }
+    const startMon = _isoWeekMonday(weekKeys[startIdx]);
+    const endMon = _isoWeekMonday(weekKeys[endIdx]);
+    const endSun = new Date(endMon);
+    endSun.setUTCDate(endMon.getUTCDate() + 6);
+    const startIso = startMon.toISOString().slice(0, 10);
+    const endIso = endSun.toISOString().slice(0, 10);
+
+    for (const [locKey, venues] of Object.entries(contractEvents)) {
+      for (const [venue, events] of Object.entries(venues)) {
+        for (const ev of events) {
+          const date = ev[0], contract = ev[1], rent = ev[2], fee = ev[3], cls = ev[4], statusCode = ev[5];
+          if (date < startIso || date > endIso) continue;
+          // Compute day-of-week (Mon=0)
+          const _d = new Date(date + 'T00:00:00Z');
+          const dow = (_d.getUTCDay() + 6) % 7;
+          if (!dowFilter.has(dow)) continue;
+          // Company filter via contractInfo lookup
+          const info = contractInfo[contract];
+          const co = (info && info.co) ? info.co : 'Other';
+          if (co !== 'Other' && !companyFilter.has(co)) continue;
+          hasData = true;
+          if (!contractCityData[locKey]) contractCityData[locKey] = {closed:{r:0,f:0,d:0,p:0,e:0,v:{}}, open:{r:0,f:0,d:0,p:0,e:0,v:{}}};
+          const statusKey = statusCode === 'C' ? 'closed' : 'open';
+          const cd = contractCityData[locKey][statusKey];
+          cd.r += rent;
+          cd.f += fee;
+          cd.e += 1;
+          if (cls === 'D') cd.d += 1; else cd.p += 1;
+          if (!cd.v[venue]) cd.v[venue] = [0, 0, 0];
+          cd.v[venue][0] += rent;
+          cd.v[venue][1] += fee;
+          cd.v[venue][2] += 1;
         }
       }
     }
@@ -1422,6 +1614,39 @@ function updateTimeline() {
       }
     }
   }
+
+  // --- De-overlap: spread bubbles whose centroids are within a tight radius ---
+  // Handles cases like M5H / M5X where adjacent downtown FSAs have near-identical
+  // centroids and render directly on top of each other. Clusters them and arranges
+  // on a small ring around the cluster's mean centroid.
+  (function deoverlapBubbles() {
+    const THRESH = 0.003;   // cluster if lat & lng both within ~300m (Toronto lat)
+    const SPREAD = 0.006;   // ring radius from cluster center (~650m)
+    const entries = Object.entries(allLocations).filter(function(e){ return e[1].rev > 0; });
+    const seen = new Set();
+    for (let i = 0; i < entries.length; i++) {
+      const k1 = entries[i][0], l1 = entries[i][1];
+      if (seen.has(k1)) continue;
+      const cluster = [l1];
+      seen.add(k1);
+      for (let j = i + 1; j < entries.length; j++) {
+        const k2 = entries[j][0], l2 = entries[j][1];
+        if (seen.has(k2)) continue;
+        if (Math.abs(l1.lat - l2.lat) < THRESH && Math.abs(l1.lng - l2.lng) < THRESH) {
+          cluster.push(l2);
+          seen.add(k2);
+        }
+      }
+      if (cluster.length < 2) continue;
+      const cLat = cluster.reduce(function(s, l){ return s + l.lat; }, 0) / cluster.length;
+      const cLng = cluster.reduce(function(s, l){ return s + l.lng; }, 0) / cluster.length;
+      cluster.forEach(function(l, idx) {
+        const angle = (2 * Math.PI * idx) / cluster.length - Math.PI / 2;
+        l.lat = cLat + SPREAD * Math.sin(angle);
+        l.lng = cLng + SPREAD * Math.cos(angle);
+      });
+    }
+  })();
 
   // --- Render all locations as ONE bubble each ---
   for (const [locKey, loc] of Object.entries(allLocations)) {
@@ -1667,6 +1892,11 @@ function buildPickupLayer() {
         const _co = _info && _info.co ? _info.co : 'Other';
         if (_co !== 'Other' && !companyFilter.has(_co)) continue;
 
+        // Day-of-week filter (applies across pickup mode too, for consistency)
+        const _dowDate = new Date(row[0] + 'T00:00:00Z');
+        const _dow = (_dowDate.getUTCDay() + 6) % 7;
+        if (!dowFilter.has(_dow)) continue;
+
         // Check date is in slider range
         const wk = (function(dateStr) {
           const d = new Date(dateStr + 'T00:00:00');
@@ -1817,6 +2047,22 @@ window.showContractDetail = function(contractNum, detailId) {
   if (info.sp) h += '<div class="cd-row"><span class="cd-label">Salesperson</span><span class="cd-value">' + info.sp + '</span></div>';
   if (info.ca) h += '<div class="cd-row"><span class="cd-label">Caterer</span><span class="cd-value">' + info.ca + '</span></div>';
   if (info.pl) h += '<div class="cd-row"><span class="cd-label">Planner</span><span class="cd-value">' + info.pl + '</span></div>';
+  // Rental span — delivery (sd) → on-site pickup (pd). Tent contracts span days/weeks.
+  if (info.sd || info.pd) {
+    const _fmt = function(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso + 'T00:00:00');
+      return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
+    };
+    let spanStr = _fmt(info.sd) + ' → ' + _fmt(info.pd);
+    if (info.sd && info.pd) {
+      const d1 = new Date(info.sd + 'T00:00:00');
+      const d2 = new Date(info.pd + 'T00:00:00');
+      const days = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+      if (days >= 0) spanStr += ' <span style="color:#6B7A7E;">(' + (days + 1) + ' ' + (days === 0 ? 'day' : 'days') + ')</span>';
+    }
+    h += '<div class="cd-row"><span class="cd-label">Rental span</span><span class="cd-value">' + spanStr + '</span></div>';
+  }
   if (info.tt) h += '<div class="cd-row"><span class="cd-label">Total Value</span><span class="cd-value">$' + info.tt.toLocaleString() + '</span></div>';
   if (info.sl) h += '<div class="cd-row"><span class="cd-label">Sale Items</span><span class="cd-value">$' + info.sl.toLocaleString() + '</span></div>';
   if (info.dn) h += '<div class="cd-notes">' + info.dn + '</div>';
@@ -1904,6 +2150,31 @@ window.toggleCompany = function(co) {
   updateTimeline();
 };
 
+function _syncAllDowChip() {
+  const allOn = ALL_DOWS.every(d => dowFilter.has(d));
+  _setChipActive('dow-all', allOn);
+}
+
+// Day-of-week filter — same EXCLUSIVE-click semantics as company chips.
+// Click a day -> only that day. Click "All" -> all 7 on. Click the only-on day -> no-op.
+window.toggleDayOfWeek = function(d) {
+  if (d === '__ALL__') {
+    ALL_DOWS.forEach(x => dowFilter.add(x));
+    ALL_DOWS.forEach(x => _setChipActive(DOW_CHIP_IDS[x], true));
+  } else {
+    const onlyThisOn = dowFilter.has(d) && dowFilter.size === 1;
+    if (onlyThisOn) {
+      // no-op — prevents empty-filter state
+    } else {
+      dowFilter.clear();
+      dowFilter.add(d);
+      ALL_DOWS.forEach(x => _setChipActive(DOW_CHIP_IDS[x], x === d));
+    }
+  }
+  _syncAllDowChip();
+  updateTimeline();
+};
+
 window.toggleLayer = function(which) {
   if (which === 'new') {
     newVisible = !newVisible;
@@ -1917,9 +2188,230 @@ window.toggleLayer = function(which) {
     revVisible = !revVisible;
     if (revVisible) { map.addLayer(revLayerGroup); document.getElementById('timeline-panel').style.display='block'; document.getElementById('btn-rev').className='toggle-btn active-rev'; document.getElementById('btn-rev').innerHTML='&#10004; Revenue Heatmap'; }
     else { map.removeLayer(revLayerGroup); document.getElementById('timeline-panel').style.display='none'; document.getElementById('btn-rev').className='toggle-btn'; document.getElementById('btn-rev').textContent='Revenue Heatmap'; }
+  } else if (which === 'dispatch') {
+    dispatchVisible = !dispatchVisible;
+    const btn = document.getElementById('btn-dispatch');
+    const panel = document.getElementById('dispatch-panel');
+    if (dispatchVisible) {
+      btn.className = 'toggle-btn active-rev';
+      btn.innerHTML = '&#10004; Routes';
+      panel.classList.add('show');
+      ensureDispatchData().then(function() {
+        map.addLayer(dispatchLayerGroup);
+        buildDispatchLayer();
+      }).catch(function(err) {
+        console.error('Dispatch data load failed:', err);
+        document.getElementById('dp-subtitle').textContent = 'Failed to load dispatch data.';
+      });
+    } else {
+      map.removeLayer(dispatchLayerGroup);
+      btn.className = 'toggle-btn';
+      btn.textContent = 'Routes';
+      panel.classList.remove('show');
+    }
   }
   updateLegend();
 };
+
+// ===== DISPATCH ROUTES: data load + controls + rendering =====
+
+// Lazy-load dispatch_data.json on first Routes toggle.
+function ensureDispatchData() {
+  if (dispatchData) return Promise.resolve(dispatchData);
+  if (dispatchLoading) return dispatchLoading;
+  dispatchLoading = fetch('dispatch_data.json?v=' + Date.now(), { cache: 'no-store' })
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(data) {
+      dispatchData = data;
+      // Default date: yesterday, else latest available date in data
+      const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+      const ymd = yesterday.toISOString().slice(0, 10);
+      const dates = data.dates || [];
+      if (dates.indexOf(ymd) >= 0) dispatchDate = ymd;
+      else {
+        // pick most recent date ≤ yesterday, else latest in dataset
+        let pick = null;
+        for (const d of dates) { if (d <= ymd) pick = d; else break; }
+        dispatchDate = pick || (dates.length ? dates[dates.length - 1] : ymd);
+      }
+      document.getElementById('dp-date-input').value = dispatchDate;
+      document.getElementById('dp-date-input').min = data.window && data.window.start;
+      document.getElementById('dp-date-input').max = data.window && data.window.end;
+      updateDispatchTruckOptions();
+      document.getElementById('dp-subtitle').textContent =
+        dates.length + ' days of dispatch history';
+      return data;
+    });
+  return dispatchLoading;
+}
+
+// Populate truck selector with trucks on the currently-selected date.
+function updateDispatchTruckOptions() {
+  if (!dispatchData || !dispatchDate) return;
+  const routes = (dispatchData.routes || {})[dispatchDate] || [];
+  const trucks = Array.from(new Set(routes.map(function(r) { return r.truck; }))).sort();
+  const sel = document.getElementById('dp-truck');
+  const currentVal = dispatchTruck;
+  sel.innerHTML = '<option value="__ALL__">All trucks (' + trucks.length + ')</option>' +
+    trucks.map(function(t) { return '<option value="' + t.replace(/"/g, '&quot;') + '">' + t + '</option>'; }).join('');
+  // preserve selection if still valid, else reset to ALL
+  if (currentVal !== '__ALL__' && trucks.indexOf(currentVal) < 0) {
+    dispatchTruck = '__ALL__';
+  }
+  sel.value = dispatchTruck;
+}
+
+window.setDispatchDate = function(isoDate) {
+  if (!isoDate) return;
+  dispatchDate = isoDate;
+  updateDispatchTruckOptions();
+  buildDispatchLayer(true);  // true = fit bounds
+};
+
+window.stepDispatchDate = function(delta) {
+  if (!dispatchData || !dispatchDate) return;
+  const d = new Date(dispatchDate + 'T00:00:00');
+  d.setDate(d.getDate() + delta);
+  const iso = d.toISOString().slice(0, 10);
+  document.getElementById('dp-date-input').value = iso;
+  setDispatchDate(iso);
+};
+
+window.setDispatchTruck = function(truck) {
+  dispatchTruck = truck;
+  buildDispatchLayer(true);
+};
+
+window.toggleDispatchClass = function(cls) {
+  // D and P are always on — only S and T toggle.
+  if (cls === 'D' || cls === 'P') return;
+  if (dispatchClassFilter.has(cls)) dispatchClassFilter.delete(cls);
+  else dispatchClassFilter.add(cls);
+  const chip = document.getElementById('dp-chip-' + cls);
+  if (chip) chip.classList.toggle('active', dispatchClassFilter.has(cls));
+  buildDispatchLayer();
+};
+
+// Build (or rebuild) dispatch layer from current date / truck / class filter.
+function buildDispatchLayer(fitBounds) {
+  // Clear existing layers and popup/tooltip bindings to avoid memory leaks
+  dispatchLayerGroup.eachLayer(function(layer) {
+    if (layer.unbindPopup) layer.unbindPopup();
+    if (layer.unbindTooltip) layer.unbindTooltip();
+    if (layer.off) layer.off();
+  });
+  dispatchLayerGroup.clearLayers();
+
+  if (!dispatchData || !dispatchDate) return;
+  const allRoutes = (dispatchData.routes || {})[dispatchDate] || [];
+  const routes = (dispatchTruck === '__ALL__')
+    ? allRoutes
+    : allRoutes.filter(function(r) { return r.truck === dispatchTruck; });
+
+  let totalStops = 0, totalRev = 0, totalDist = 0;
+  let ontimeN = 0, ontimeD = 0;     // on-time numerator/denominator
+  const bounds = [];
+
+  routes.forEach(function(r) {
+    // Which stops are visible as markers (governed by S/T toggles — D and P always on)
+    const visibleStops = (r.stops || []).filter(function(s) {
+      return dispatchClassFilter.has(s.cls);
+    });
+    if (!visibleStops.length) return;
+
+    // Polyline follows the ACTUAL driven path: every stop on the route in sequence,
+    // independent of the class filter. This keeps the line shape honest even when
+    // the user hides Subrent / Transfer stops.
+    const allSortedStops = (r.stops || []).slice().sort(function(a, b) { return a.seq - b.seq; });
+    const latlngs = allSortedStops.map(function(s) { return [s.ll[0], s.ll[1]]; });
+    if (latlngs.length >= 2) {
+      const line = L.polyline(latlngs, {
+        color: r.color,
+        weight: 3,
+        opacity: 0.75,
+        lineJoin: 'round',
+      });
+      line.bindTooltip(
+        '<b>' + r.truck + '</b><br>' +
+        (r.drv || '—') + '<br>' +
+        (r.stops || []).length + ' stops · ' + r.dist + ' km · ' + r.time + ' min',
+        { sticky: true, direction: 'top' }
+      );
+      line.addTo(dispatchLayerGroup);
+    }
+
+    // Stop markers — only those matching class filter
+    visibleStops.forEach(function(s, idx) {
+      const color = TRIP_CLASS_COLORS[s.cls] || '#6B7A7E';
+      const marker = L.circleMarker([s.ll[0], s.ll[1]], {
+        radius: 6,
+        color: '#fff',
+        weight: 1.5,
+        fillColor: color,
+        fillOpacity: 0.9,
+      });
+      // Popup
+      const ontimeRaw = (s.ot || '').toLowerCase();
+      let ontimeBadge = '';
+      if (ontimeRaw.indexOf('late') >= 0) ontimeBadge = '<span style="color:#c0392b;font-weight:600;">Late</span>';
+      else if (ontimeRaw.indexOf('ontime') >= 0 || ontimeRaw.indexOf('on time') >= 0) ontimeBadge = '<span style="color:#1B7A3A;font-weight:600;">On time</span>';
+      else if (ontimeRaw.indexOf('early') >= 0) ontimeBadge = '<span style="color:#2171b5;font-weight:600;">Early</span>';
+      else if (s.ot) ontimeBadge = '<span style="color:#888;">' + s.ot + '</span>';
+
+      const html = '<div class="stop-popup">' +
+        '<div class="sp-title">Stop #' + s.seq + (r.truck ? ' · ' + r.truck : '') + '</div>' +
+        '<div class="sp-type" style="background:' + color + ';">' + (TRIP_CLASS_LABELS[s.cls] || s.tt) + '</div>' +
+        (s.con ? '<div class="sp-row"><span class="sp-label">Contract</span><span class="sp-value">' + s.con + '</span></div>' : '') +
+        (s.cust ? '<div class="sp-row"><span class="sp-label">Customer</span><span class="sp-value">' + _esc(s.cust) + '</span></div>' : '') +
+        (s.store ? '<div class="sp-row"><span class="sp-label">Store</span><span class="sp-value">' + s.store + '</span></div>' : '') +
+        (s.rev ? '<div class="sp-row"><span class="sp-label">Revenue</span><span class="sp-value">$' + s.rev.toLocaleString('en-CA', {maximumFractionDigits:0}) + '</span></div>' : '') +
+        (s.parr ? '<div class="sp-row"><span class="sp-label">Promised arrival</span><span class="sp-value">' + s.parr + '</span></div>' : '') +
+        (s.aarr ? '<div class="sp-row"><span class="sp-label">Actual arrival</span><span class="sp-value">' + s.aarr + '</span></div>' : '') +
+        (ontimeBadge ? '<div class="sp-row"><span class="sp-label">On-time</span><span class="sp-value">' + ontimeBadge + '</span></div>' : '') +
+        (s.addr ? '<div class="sp-row"><span class="sp-label">Address</span><span class="sp-value" style="max-width:160px;word-break:break-word;">' + _esc(s.addr) + '</span></div>' : '') +
+        '</div>';
+      marker.bindPopup(html);
+      marker.bindTooltip(String(s.seq), {permanent: false, direction: 'center', className: 'stop-seq-tooltip'});
+      marker.addTo(dispatchLayerGroup);
+
+      bounds.push([s.ll[0], s.ll[1]]);
+      totalStops += 1;
+      totalRev += (s.rev || 0);
+      if (ontimeRaw) {
+        ontimeD += 1;
+        if (ontimeRaw.indexOf('ontime') >= 0 || ontimeRaw.indexOf('on time') >= 0) ontimeN += 1;
+      }
+    });
+
+    totalDist += (r.dist || 0);
+  });
+
+  // Stats panel
+  const routeCount = routes.filter(function(r) {
+    return (r.stops || []).some(function(s) { return dispatchClassFilter.has(s.cls); });
+  }).length;
+  const otPct = ontimeD > 0 ? Math.round(100 * ontimeN / ontimeD) : null;
+  const statsEl = document.getElementById('dp-stats');
+  if (statsEl) {
+    statsEl.innerHTML =
+      '<div class="dp-stat-row"><span class="dp-stat-label">Routes</span><span class="dp-stat-value">' + routeCount + '</span></div>' +
+      '<div class="dp-stat-row"><span class="dp-stat-label">Stops</span><span class="dp-stat-value">' + totalStops + '</span></div>' +
+      '<div class="dp-stat-row"><span class="dp-stat-label">Revenue</span><span class="dp-stat-value">$' + totalRev.toLocaleString('en-CA', {maximumFractionDigits:0}) + '</span></div>' +
+      (otPct !== null ? '<div class="dp-stat-row"><span class="dp-stat-label">On-time</span><span class="dp-stat-value">' + otPct + '%</span></div>' : '');
+  }
+
+  // Fit bounds on date/truck change only
+  if (fitBounds && bounds.length > 0) {
+    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
+  }
+}
+
+// Small HTML escape for user-visible text.
+function _esc(s) {
+  return String(s).replace(/[&<>"']/g, function(c) {
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
 
 // Ensure map renders correctly after container becomes visible
 setTimeout(function(){ map.invalidateSize(); }, 100);

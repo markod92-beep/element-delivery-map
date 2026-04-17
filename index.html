@@ -161,11 +161,19 @@ body.rev-on .dispatch-panel { top: 260px; }
 }
 .dispatch-panel .dp-truck-row {
   display: flex; align-items: center; gap: 6px;
-  padding: 3px 4px; border-radius: 4px; cursor: pointer;
-  font-size: 11px; color: var(--element-ink);
+  padding: 3px 6px; border-radius: 4px; cursor: pointer;
+  font-size: 11px; color: var(--element-muted);
+  border: 1px solid transparent;
+  transition: background 0.1s ease, color 0.1s ease, border-color 0.1s ease;
 }
-.dispatch-panel .dp-truck-row:hover { background: var(--element-offwhite); }
-.dispatch-panel .dp-truck-row input { margin: 0; cursor: pointer; accent-color: var(--element-teal); }
+.dispatch-panel .dp-truck-row:hover { background: var(--element-offwhite); color: var(--element-ink); }
+.dispatch-panel .dp-truck-row.on {
+  background: var(--element-offwhite);
+  color: var(--element-ink);
+  font-weight: 600;
+  border-color: var(--element-offwhite-tint);
+}
+.dispatch-panel .dp-truck-row.on .dp-truck-swatch { box-shadow: 0 0 0 1.5px var(--element-teal); }
 .dispatch-panel .dp-truck-swatch {
   width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
   border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(28,59,66,0.2);
@@ -213,6 +221,18 @@ body.rev-on .dispatch-panel { top: 260px; }
   border: 2px solid #fff;
   box-shadow: 0 1px 4px rgba(0,0,0,0.35);
 }
+/* Route origin / terminus anchors — square badges at the depot coords from
+   POR's Map_Route export. Square distinguishes them from circle stop pins. */
+.route-depot-icon { background: transparent; border: none; }
+.route-depot-icon > div {
+  width: 20px; height: 20px; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #fff;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+  transform: rotate(45deg);
+}
+.route-depot-icon > div > span { transform: rotate(-45deg); display: inline-block; }
 
 /* Stop popup styling */
 .stop-popup { font-family: inherit; font-size: 12px; min-width: 200px; }
@@ -794,8 +814,7 @@ document.addEventListener('DOMContentLoaded', function() {
   <div class="dp-label" style="display:flex;justify-content:space-between;align-items:baseline;">
     <span>Trucks</span>
     <span style="font-weight:400;text-transform:none;letter-spacing:0;">
-      <a href="#" onclick="setAllTrucks(true);return false;" class="dp-mini-link">All</a> ·
-      <a href="#" onclick="setAllTrucks(false);return false;" class="dp-mini-link">None</a>
+      <a href="#" onclick="setAllTrucks(true);return false;" class="dp-mini-link">All</a>
     </span>
   </div>
   <div class="dp-truck-list" id="dp-truck-list"></div>
@@ -1225,9 +1244,15 @@ let dispatchData = null;
 let dispatchLoading = false;
 let dispatchVisible = false;
 let dispatchDate = null;                              // ISO YYYY-MM-DD
-// Multi-select truck filter. Empty set = "no trucks" (hide all). Reset to
+// Truck filter. Empty set = "no trucks" (hide all). Reset to
 // "all trucks matching current date + company filter" on date/company change.
+// Click-to-solo semantics (matches company chips): clicking a truck selects
+// ONLY that one; clicking "All" re-selects every truck in current scope.
 const dispatchTrucks = new Set();
+// In-scope trucks for the current date + company filter. Populated by
+// updateDispatchTruckOptions so toggleDispatchTruck / setAllTrucks can recover
+// the full set without re-reading the DOM.
+let dispatchTrucksInScope = [];
 // Stop-class visibility. D (Delivery) and P (Pickup) are ALWAYS visible — they're
 // the core of any route, so we color-code them rather than filter. S (Subrent)
 // and T (Transfer) are the only user-toggleable classes (off by default).
@@ -1254,6 +1279,24 @@ const DISPATCH_STORE_TO_CO = {
   'ATR': 'GTA Tents',   'RT':  'GTA Tents',
   'MFL': 'East',
   'A&B': 'West',        'LW':  'West',
+};
+
+// Home store (hs) → warehouse anchor. Used as a fallback when POR's per-route
+// StartStore / StopStore coords are missing or get rejected by the sanity
+// check in process_dispatch.py. Addresses sourced from Element's store SKU
+// register (Kim Nosyworthy, 2026-04-17). Coords are ~200m of the street
+// address (FSA-centroid nudged toward the actual lot). `000` is intentionally
+// omitted — already dropped upstream.
+const HOME_STORE_COORDS = {
+  '001': { name: '501 Consumers Rd, Toronto',     lat: 43.7783, lng: -79.3374 },
+  '002': { name: '210 Wicksteed Ave, Toronto',    lat: 43.7063, lng: -79.3603 },
+  '003': { name: '461 Higney Ave, Dartmouth NS',  lat: 44.6852, lng: -63.4959 },
+  '004': { name: '210 Wicksteed (Tents GTA)',     lat: 43.7063, lng: -79.3603 },
+  '005': { name: '5555 Trapp Ave, Burnaby BC',    lat: 49.2183, lng: -122.9594 },
+  '006': { name: '331 Arvin Ave, Stoney Creek',   lat: 43.2025, lng: -79.7353 },
+  '007': { name: '1125 Vernon Dr, Vancouver BC',  lat: 49.2770, lng: -123.0755 },
+  '008': { name: '210 Wicksteed (Premium, defunct)', lat: 43.7063, lng: -79.3603 },
+  '009': { name: '19 Rangemore Rd, Etobicoke (defunct)', lat: 43.6263, lng: -79.5328 },
 };
 
 // Return the set of company buckets a route touches, based on its stops' stores.
@@ -1928,14 +1971,10 @@ function updateTimeline() {
     document.getElementById('rev-total').style.color = '#999';
   } else {
     const grandTotal = totalRev + totalFees;
-    const porGrandTotal = grandTotal + offMapRev + offMapFees;
-    let totalLabel =
+    const totalLabel =
       'Net: $' + Math.round(totalRev).toLocaleString() +
-      ' \u00b7 Total (w/ delivery): $' + Math.round(grandTotal).toLocaleString();
-    if (offMapApplicable && offMapRev > 0) {
-      totalLabel += ' \u00b7 POR grand total: $' + Math.round(porGrandTotal).toLocaleString();
-    }
-    totalLabel += ' \u00b7 ' + totalEvents + ' events, ' + Object.keys(allLocations).length + ' locations';
+      ' \u00b7 Total (w/ delivery): $' + Math.round(grandTotal).toLocaleString() +
+      ' \u00b7 ' + totalEvents + ' events, ' + Object.keys(allLocations).length + ' locations';
     document.getElementById('rev-total').textContent = totalLabel;
     document.getElementById('rev-total').style.color = '';
   }
@@ -2486,20 +2525,23 @@ function ensureDispatchData() {
   return dispatchLoading;
 }
 
-// Populate truck checkbox list with trucks on the currently-selected date,
-// scoped to the active company filter (GTA / Tents / East / West).
+// Populate truck list with trucks that have routes on the currently-selected
+// date AND belong to the active company filter. A truck only appears if at
+// least one of its routes touches a company bucket in companyFilter — so
+// filtering to GTA hides BC trucks, filtering to West hides CMM trucks, etc.
 // On date or company change the selection resets to "all trucks in scope".
 function updateDispatchTruckOptions(preserveSelection) {
   if (!dispatchData || !dispatchDate) return;
   const allRoutes = (dispatchData.routes || {})[dispatchDate] || [];
   const routes = allRoutes.filter(_routeMatchesCompany);
-  // Map truck -> color so the checkbox swatch matches the map polyline
+  // Map truck -> color so the chip swatch matches the map polyline
   const truckColor = {};
   routes.forEach(function(r) { if (!truckColor[r.truck]) truckColor[r.truck] = r.color; });
   const trucks = Object.keys(truckColor).sort();
+  dispatchTrucksInScope = trucks.slice();
 
   if (!preserveSelection) {
-    // Reset: select all trucks in current scope
+    // Reset: select all trucks in current scope (matches "All companies" UX)
     dispatchTrucks.clear();
     trucks.forEach(function(t) { dispatchTrucks.add(t); });
   } else {
@@ -2507,48 +2549,65 @@ function updateDispatchTruckOptions(preserveSelection) {
     for (const t of Array.from(dispatchTrucks)) {
       if (trucks.indexOf(t) < 0) dispatchTrucks.delete(t);
     }
+    // If preserving but nothing is left selected, fall back to all-in-scope
+    // (otherwise the map would go blank with no way to recover).
+    if (dispatchTrucks.size === 0) {
+      trucks.forEach(function(t) { dispatchTrucks.add(t); });
+    }
   }
 
   const list = document.getElementById('dp-truck-list');
   if (!list) return;
   if (trucks.length === 0) {
-    list.innerHTML = '<div style="padding:6px;color:var(--element-muted);font-size:11px;">No routes on this date.</div>';
+    list.innerHTML = '<div style="padding:6px;color:var(--element-muted);font-size:11px;">No routes on this date for the selected business unit(s).</div>';
     return;
   }
-  list.innerHTML = trucks.map(function(t) {
-    const checked = dispatchTrucks.has(t) ? ' checked' : '';
-    const safeT = t.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    return '<label class="dp-truck-row">' +
-      '<input type="checkbox" onchange="toggleDispatchTruck(\'' + safeT.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\', this.checked)"' + checked + '>' +
+  list.innerHTML = trucks.map(function(t, idx) {
+    const onCls = dispatchTrucks.has(t) ? ' on' : '';
+    // Attribute-safe truck name for the data-* hook
+    const safeAttr = t.replace(/"/g, '&quot;').replace(/&/g, '&amp;');
+    return '<div class="dp-truck-row' + onCls + '" data-truck="' + safeAttr + '" ' +
+           'onclick="soloDispatchTruck(this.getAttribute(\'data-truck\'))" ' +
+           'title="Click to show only this truck">' +
       '<span class="dp-truck-swatch" style="background:' + truckColor[t] + ';"></span>' +
       '<span>' + _esc(t) + '</span>' +
-    '</label>';
+    '</div>';
   }).join('');
 }
 
-// Toggle a single truck in the multi-select.
-window.toggleDispatchTruck = function(truck, checked) {
-  if (checked) dispatchTrucks.add(truck);
-  else dispatchTrucks.delete(truck);
-  buildDispatchLayer();
+// Solo a truck: click selects ONLY that truck, deselects all others. If it's
+// already the only selected truck, clicking is a no-op (mirrors company chip
+// behavior — prevents the zero-selected state that would blank the map).
+window.soloDispatchTruck = function(truck) {
+  if (!truck) return;
+  const onlyThisOn = dispatchTrucks.has(truck) && dispatchTrucks.size === 1;
+  if (onlyThisOn) return;
+  dispatchTrucks.clear();
+  dispatchTrucks.add(truck);
+  // Update row classes in-place (avoids rebuilding the list)
+  const list = document.getElementById('dp-truck-list');
+  if (list) {
+    list.querySelectorAll('.dp-truck-row').forEach(function(row) {
+      row.classList.toggle('on', row.getAttribute('data-truck') === truck);
+    });
+  }
+  buildDispatchLayer(true);  // refit bounds when soloing — otherwise the lone
+                              // truck's route may be offscreen from the prior view
 };
 
-// "All" / "None" quick-select for the truck list.
+// "All" — re-select every truck currently in scope (date + company filter).
 window.setAllTrucks = function(allOn) {
-  const list = document.getElementById('dp-truck-list');
-  if (!list) return;
-  const boxes = list.querySelectorAll('input[type="checkbox"]');
+  if (!allOn) return;  // "None" no longer exposed — empty state isn't useful
   dispatchTrucks.clear();
-  boxes.forEach(function(b) {
-    b.checked = allOn;
-    if (allOn) {
-      // Recover the truck name from the onchange attribute
-      const m = b.getAttribute('onchange').match(/toggleDispatchTruck\('(.+?)',/);
-      if (m) dispatchTrucks.add(m[1].replace(/\\'/g, "'").replace(/\\\\/g, "\\"));
-    }
-  });
-  buildDispatchLayer(allOn);  // refit bounds on "All" for a clean view
+  dispatchTrucksInScope.forEach(function(t) { dispatchTrucks.add(t); });
+  const list = document.getElementById('dp-truck-list');
+  if (list) list.querySelectorAll('.dp-truck-row').forEach(function(row) { row.classList.add('on'); });
+  buildDispatchLayer(true);  // refit bounds for a clean full-scope view
 };
+
+// Back-compat shim: older callers (or bookmarklets) may still pass (truck, checked).
+// Route them through soloDispatchTruck so behavior is consistent.
+window.toggleDispatchTruck = function(truck, _checked) { soloDispatchTruck(truck); };
 
 window.setDispatchDate = function(isoDate) {
   if (!isoDate) return;
@@ -2645,11 +2704,26 @@ function buildDispatchLayer(fitBounds) {
     });
     if (!visibleStops.length) return;
 
+    // Resolve depot coords: prefer POR's per-route StartStore/StopStore (if
+    // process_dispatch.py emitted them), else fall back to the home-store
+    // lookup (r.hs). hs=000 is already dropped upstream, so any non-null hs
+    // here is meaningful.
+    const hsLookup = (r.hs && HOME_STORE_COORDS[r.hs]) || null;
+    const startCoord = (r.start && r.start.length === 2) ? [r.start[0], r.start[1]]
+                      : hsLookup ? [hsLookup.lat, hsLookup.lng] : null;
+    const stopCoord  = (r.stop  && r.stop.length  === 2) ? [r.stop[0],  r.stop[1]]
+                      : hsLookup ? [hsLookup.lat, hsLookup.lng] : null;
+    const depotLabel = hsLookup ? hsLookup.name : (r.hs ? 'home store ' + r.hs : 'home store —');
+
     // Polyline follows the ACTUAL driven path: every stop on the route in sequence,
     // independent of the class filter. This keeps the line shape honest even when
-    // the user hides Subrent / Transfer stops.
+    // the user hides Subrent / Transfer stops. Prepend / append depot coords so
+    // the line visually opens and closes at the warehouse, not at the first /
+    // last customer stop.
     const allSortedStops = (r.stops || []).slice().sort(function(a, b) { return a.seq - b.seq; });
     const latlngs = allSortedStops.map(function(s) { return [s.ll[0], s.ll[1]]; });
+    if (startCoord) latlngs.unshift(startCoord);
+    if (stopCoord)  latlngs.push(stopCoord);
     if (latlngs.length >= 2) {
       const line = L.polyline(latlngs, {
         color: r.color,
@@ -2664,6 +2738,44 @@ function buildDispatchLayer(fitBounds) {
         { sticky: true, direction: 'top' }
       );
       line.addTo(dispatchLayerGroup);
+    }
+
+    // Depot anchors — diamond badges at the route's start/end coords. Drawn
+    // once per route (not per bucket) so they don't inflate the stop count.
+    // When start == stop (same warehouse, which is the common case), only one
+    // anchor is drawn to avoid overlap.
+    if (startCoord) {
+      L.marker(startCoord, {
+        icon: L.divIcon({
+          className: 'route-depot-icon',
+          html: '<div style="background:' + r.color + ';"><span>&#9654;</span></div>',
+          iconSize: [20, 20], iconAnchor: [10, 10],
+        }),
+        zIndexOffset: -100,  // sit under stop pins so clicks on stops still win
+      })
+        .bindTooltip('<b>' + _esc(r.truck) + '</b><br>Route start · ' + _esc(depotLabel),
+                     { direction: 'top' })
+        .addTo(dispatchLayerGroup);
+      bounds.push(startCoord);
+    }
+    if (stopCoord) {
+      const isSameAsStart = startCoord
+        && Math.abs(stopCoord[0] - startCoord[0]) < 1e-5
+        && Math.abs(stopCoord[1] - startCoord[1]) < 1e-5;
+      if (!isSameAsStart) {
+        L.marker(stopCoord, {
+          icon: L.divIcon({
+            className: 'route-depot-icon',
+            html: '<div style="background:' + r.color + ';"><span>&#9632;</span></div>',
+            iconSize: [20, 20], iconAnchor: [10, 10],
+          }),
+          zIndexOffset: -100,
+        })
+          .bindTooltip('<b>' + _esc(r.truck) + '</b><br>Route end · ' + _esc(depotLabel),
+                       { direction: 'top' })
+          .addTo(dispatchLayerGroup);
+        bounds.push(stopCoord);
+      }
     }
 
     // Stable 1-based stop number based on full sorted route order (survives S/T toggles).

@@ -1490,11 +1490,16 @@ function updateTimeline() {
       splitHtml += '</div>';
     }
 
+    // Total revenue (rent + delivery fees)
+    const totalWithFees = rev + loc.fees;
+    const totalLineHtml = '<div style="font-size:11px;color:#1C3B42;font-weight:600;margin-top:2px;">Total (rent + delivery): $' + Math.round(totalWithFees).toLocaleString() + '</div>';
+
     marker.bindPopup(
       '<div class="city-popup">' +
       '<div class="popup-title">' + loc.name + '</div>' +
       '<div class="popup-price" style="color:' + revStroke(rev) + '">$' + Math.round(rev).toLocaleString() + '</div>' +
-      '<div class="popup-band">' + loc.events + ' events</div>' +
+      '<div class="popup-band">Net rent &bull; ' + loc.events + ' events</div>' +
+      totalLineHtml +
       summaryHtml +
       splitHtml +
       (venueHtml ? '<table style="width:100%;border-collapse:collapse;margin-top:6px;"><tr style="border-bottom:1px solid #eee;"><th style="padding:2px 6px;font-size:10px;text-align:left;">Venue</th><th style="padding:2px 6px;font-size:10px;text-align:right;">Revenue</th><th style="padding:2px 6px;font-size:10px;">Events</th><th style="padding:2px 6px;font-size:10px;text-align:right;color:#2A5A63;">Avg Fee</th></tr>' + venueHtml + '</table>' : '') +
@@ -1504,16 +1509,22 @@ function updateTimeline() {
 
   // Total from unified allLocations
   let totalRev = 0;
+  let totalFees = 0;
   let totalEvents = 0;
   for (const loc of Object.values(allLocations)) {
     totalRev += loc.rev;
+    totalFees += loc.fees;
     totalEvents += loc.events;
   }
   if (totalRev === 0 && totalEvents === 0) {
     document.getElementById('rev-total').textContent = 'No data available for this period';
     document.getElementById('rev-total').style.color = '#999';
   } else {
-    const totalLabel = 'Total: $' + Math.round(totalRev).toLocaleString() + ' (' + totalEvents + ' events, ' + Object.keys(allLocations).length + ' locations)';
+    const grandTotal = totalRev + totalFees;
+    const totalLabel =
+      'Net: $' + Math.round(totalRev).toLocaleString() +
+      ' \u00b7 Total (w/ delivery): $' + Math.round(grandTotal).toLocaleString() +
+      ' \u00b7 ' + totalEvents + ' events, ' + Object.keys(allLocations).length + ' locations';
     document.getElementById('rev-total').textContent = totalLabel;
     document.getElementById('rev-total').style.color = '';
   }
@@ -1741,12 +1752,19 @@ function buildPickupLayer() {
       splitHtml += '</div>';
     }
 
+    // Total = rent + any recorded fees (usually 0 for pure customer pickups)
+    const pdTotalWithFees = rev + (pd.fees || 0);
+    const pdTotalLineHtml = pdTotalWithFees > rev
+      ? '<div style="font-size:11px;color:#1C3B42;font-weight:600;margin-top:2px;">Total (rent + delivery): $' + Math.round(pdTotalWithFees).toLocaleString() + '</div>'
+      : '';
+
     marker.bindPopup(
       '<div class="city-popup">' +
       '<div class="popup-title">' + ref.name + '</div>' +
       '<div class="popup-band" style="color:#475569;font-weight:700;">Customer Pickups Only</div>' +
       '<div class="popup-price" style="color:' + revStroke(rev) + '">$' + Math.round(rev).toLocaleString() + '</div>' +
-      '<div class="popup-band">' + pd.events + ' contracts (no delivery)</div>' +
+      '<div class="popup-band">Net rent &bull; ' + pd.events + ' contracts (no delivery)</div>' +
+      pdTotalLineHtml +
       cPricingHtml +
       splitHtml +
       (venueHtml ? '<table style="width:100%;border-collapse:collapse;margin-top:6px;"><tr style="border-bottom:1px solid #eee;"><th style="padding:2px 6px;font-size:10px;text-align:left;">Customer</th><th style="padding:2px 6px;font-size:10px;text-align:right;">Rent</th><th style="padding:2px 6px;font-size:10px;">Contracts</th><th style="padding:2px 6px;font-size:10px;text-align:right;color:#2A5A63;">Avg Fee</th></tr>' + venueHtml + '</table>' : '') +

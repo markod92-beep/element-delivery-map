@@ -204,11 +204,23 @@ body.rev-on .dispatch-panel { top: 260px; }
 /* Numbered stop markers (divIcon) */
 .stop-number-icon { background: transparent; border: none; }
 .stop-number-icon > div {
+  position: relative;
   width: 22px; height: 22px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-size: 11px; font-weight: 700; color: #fff;
   border: 2px solid #fff;
   box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+/* Corner count badge — shows when a single location holds multiple contracts. */
+.stop-number-icon > div > .cnt {
+  position: absolute; top: -7px; right: -9px;
+  background: #111; color: #fff;
+  border: 1.5px solid #fff; border-radius: 9px;
+  min-width: 14px; height: 14px; padding: 0 3px;
+  font-size: 9px; font-weight: 700; line-height: 12px;
+  letter-spacing: 0.2px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.25);
+  pointer-events: none;
 }
 /* Stack / city-cluster markers: bigger, show count badge.
    Used when multiple stops share a lat/lng (Address view) or when
@@ -2829,15 +2841,38 @@ function buildDispatchLayer(fitBounds) {
     const stopNumberByRef = new Map();
     allSortedStops.forEach(function(s, i) { stopNumberByRef.set(s, i + 1); });
 
+    // Per-route LOCATION sequence: each unique bucket key on this route gets
+    // a 1..N number in order of its first stop's sequence. This way if a truck
+    // hits Blue Goose Catering on raw stops 1/3/5/6 and two other venues on
+    // stops 2 and 4, the map shows locations numbered 1, 2, 3, 4 — not 1, 3, 5, 6.
+    // The contract count per location is surfaced via a corner badge on the pin.
+    const locSeqByKeyForRoute = new Map();
+    let _locCounter = 0;
+    allSortedStops.forEach(function(s) {
+      const k = _bucketKey(s);
+      if (!locSeqByKeyForRoute.has(k)) {
+        _locCounter += 1;
+        locSeqByKeyForRoute.set(k, _locCounter);
+      }
+    });
+
     visibleStops.forEach(function(s) {
       const stopNum = stopNumberByRef.get(s);
       const key = _bucketKey(s);
+      const locNum = locSeqByKeyForRoute.get(key) || null;
       let b = buckets.get(key);
       if (!b) {
-        b = { key: key, stops: [], latSum: 0, lngSum: 0, count: 0 };
+        // `routeLocNums` captures each route's location number for this bucket.
+        // Normally all stops in a bucket share one route; when they span trucks
+        // (rare, multi-truck view on same venue) we fall back to the count label.
+        b = { key: key, stops: [], latSum: 0, lngSum: 0, count: 0,
+              routeLocNums: new Map() };
         buckets.set(key, b);
       }
-      b.stops.push({ s: s, r: r, stopNum: stopNum });
+      b.stops.push({ s: s, r: r, stopNum: stopNum, locNum: locNum });
+      if (locNum != null && !b.routeLocNums.has(r.rn)) {
+        b.routeLocNums.set(r.rn, locNum);
+      }
       b.latSum += s.ll[0];
       b.lngSum += s.ll[1];
       b.count += 1;
@@ -2861,17 +2896,38 @@ function buildDispatchLayer(fitBounds) {
     const color = TRIP_CLASS_COLORS[topCls] || '#6B7A7E';
 
     let icon, html, tooltip;
-    if (b.count === 1 && dispatchView === 'address') {
-      // Single stop at this address — numbered pin (keeps existing behavior).
-      const x = b.stops[0];
+    // Decide the label. Priority:
+    //   1. Address view + all stops from ONE route → show that route's location
+    //      number (1..N unique locations per route). Corner badge ×count when
+    //      multiple contracts share this location.
+    //   2. City view → show the count + city key (existing cluster behavior).
+    //   3. Address view spanning multiple routes → fall back to count badge.
+    const _routesOnBucket = b.routeLocNums ? b.routeLocNums.size : 0;
+    const useLocLabel = (dispatchView === 'address' && _routesOnBucket === 1);
+
+    if (useLocLabel) {
+      // Single-route bucket → numbered pin, corner badge if >1 contract.
+      const locNum = b.routeLocNums.values().next().value;
+      const countBadge = (b.count > 1)
+        ? '<span class="cnt">' + b.count + '</span>'
+        : '';
       icon = L.divIcon({
         className: 'stop-number-icon',
-        html: '<div style="background:' + color + ';">' + x.stopNum + '</div>',
+        html: '<div style="background:' + color + ';">' + locNum + countBadge + '</div>',
         iconSize: [22, 22], iconAnchor: [11, 11],
       });
-      html = _renderSingleStopPopup(x.s, x.r, x.stopNum, color);
+      if (b.count === 1) {
+        const x = b.stops[0];
+        html = _renderSingleStopPopup(x.s, x.r, x.stopNum, color);
+      } else {
+        html = _renderBucketPopup(b, color);
+        // Tooltip on multi-contract single-location: "Stop 2 · 3 contracts · Blue Goose Catering"
+        const tipCust = (b.stops[0] && b.stops[0].s && b.stops[0].s.cust) ? b.stops[0].s.cust : '';
+        tooltip = 'Stop ' + locNum + ' · ' + b.count + ' contracts'
+                + (tipCust ? ' · ' + _esc(tipCust) : '');
+      }
     } else {
-      // Multiple stops at this bucket — count-badge marker.
+      // City view OR multi-route bucket → count-badge cluster marker.
       const label = (dispatchView === 'city') ? (b.count + ' · ' + b.key) : String(b.count);
       icon = L.divIcon({
         className: 'stop-cluster-icon',
@@ -2879,9 +2935,6 @@ function buildDispatchLayer(fitBounds) {
         iconSize: [null, 28], iconAnchor: [14, 14],
       });
       html = _renderBucketPopup(b, color);
-      // Tooltip: "5 stops · Blue Goose Catering" when we have a customer name
-      // on a same-address bucket; "TORONTO — 12 stops" in City view; fallback
-      // to plain count.
       const tipCust = (typeof b.key === 'string' && b.key.indexOf('CA:') === 0 && b.stops[0] && b.stops[0].s && b.stops[0].s.cust)
         ? b.stops[0].s.cust : '';
       tooltip = (dispatchView === 'city' ? _esc(b.key) + ' — ' : '') + b.count + ' stops'
@@ -2961,11 +3014,20 @@ function _renderBucketPopup(b, color) {
       bucketAddr = (firstS.addr || '').trim();
     }
   }
+  // Prefer "Stop N · 3 contracts · Blue Goose Catering" when this bucket maps
+  // cleanly to one truck's location sequence; otherwise keep the generic header.
+  const _oneRouteLocNum = (b.routeLocNums && b.routeLocNums.size === 1)
+    ? b.routeLocNums.values().next().value : null;
+  const _contractWord = (b.count === 1) ? 'contract' : 'contracts';
   const header = (view === 'city')
     ? _esc(b.key) + ' — ' + b.count + ' stops'
-    : (isCA && bucketCust)
-      ? b.count + ' stops · ' + _esc(bucketCust)
-      : b.count + ' stops at this address';
+    : (_oneRouteLocNum && isCA && bucketCust)
+      ? 'Stop ' + _oneRouteLocNum + ' · ' + b.count + ' ' + _contractWord + ' · ' + _esc(bucketCust)
+      : (_oneRouteLocNum)
+        ? 'Stop ' + _oneRouteLocNum + ' · ' + b.count + ' ' + _contractWord
+        : (isCA && bucketCust)
+          ? b.count + ' stops · ' + _esc(bucketCust)
+          : b.count + ' stops at this address';
   // Rev total + dominant address (for city view address rollup)
   let revSum = 0;
   b.stops.forEach(function(x) { revSum += (x.s.rev || 0); });

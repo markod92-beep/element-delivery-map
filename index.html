@@ -2466,8 +2466,9 @@ window.toggleLayer = function(which) {
     else { map.removeLayer(oldLayerGroup); document.getElementById('btn-old').className='toggle-btn'; document.getElementById('btn-old').textContent='Old Pricing (101)'; }
   } else if (which === 'rev') {
     revVisible = !revVisible;
-    if (revVisible) { map.addLayer(revLayerGroup); document.getElementById('timeline-panel').style.display='block'; document.getElementById('btn-rev').className='toggle-btn active-rev'; document.getElementById('btn-rev').innerHTML='&#10004; Revenue Heatmap'; document.body.classList.add('rev-on'); }
-    else { map.removeLayer(revLayerGroup); document.getElementById('timeline-panel').style.display='none'; document.getElementById('btn-rev').className='toggle-btn'; document.getElementById('btn-rev').textContent='Revenue Heatmap'; document.body.classList.remove('rev-on'); }
+    if (revVisible) { map.addLayer(revLayerGroup); document.getElementById('btn-rev').className='toggle-btn active-rev'; document.getElementById('btn-rev').innerHTML='&#10004; Revenue Heatmap'; document.body.classList.add('rev-on'); }
+    else { map.removeLayer(revLayerGroup); document.getElementById('btn-rev').className='toggle-btn'; document.getElementById('btn-rev').textContent='Revenue Heatmap'; document.body.classList.remove('rev-on'); }
+    _syncTimelinePanelVisibility();
   } else if (which === 'dispatch') {
     dispatchVisible = !dispatchVisible;
     const btn = document.getElementById('btn-dispatch');
@@ -2489,9 +2490,20 @@ window.toggleLayer = function(which) {
       btn.textContent = 'Routes';
       panel.classList.remove('show');
     }
+    _syncTimelinePanelVisibility();
   }
   updateLegend();
 };
+
+// Timeline panel is shared context: company chips, DOW chips, week window,
+// rev-total, off-map stat. It should be visible whenever EITHER Revenue or
+// Routes is on — the company/DOW filters apply to both layers, so hiding the
+// panel when only Routes is active stranded the user without access to them.
+function _syncTimelinePanelVisibility() {
+  const panel = document.getElementById('timeline-panel');
+  if (!panel) return;
+  panel.style.display = (revVisible || dispatchVisible) ? 'block' : 'none';
+}
 
 // ===== DISPATCH ROUTES: data load + controls + rendering =====
 

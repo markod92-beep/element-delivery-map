@@ -1299,6 +1299,26 @@ const HOME_STORE_COORDS = {
   '009': { name: '19 Rangemore Rd, Etobicoke (defunct)', lat: 43.6263, lng: -79.5328 },
 };
 
+// Decode a Google-style encoded polyline (precision 5) into an array of
+// [lat, lng] pairs. Used to render OSRM road-following geometry for truck
+// routes. Ref: https://developers.google.com/maps/documentation/utilities/polylinealgorithm
+function _decodePolyline(str) {
+  if (!str) return [];
+  const out = [];
+  let idx = 0, lat = 0, lng = 0;
+  const len = str.length;
+  while (idx < len) {
+    let b, shift = 0, result = 0;
+    do { b = str.charCodeAt(idx++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lat += ((result & 1) ? ~(result >> 1) : (result >> 1));
+    shift = 0; result = 0;
+    do { b = str.charCodeAt(idx++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lng += ((result & 1) ? ~(result >> 1) : (result >> 1));
+    out.push([lat * 1e-5, lng * 1e-5]);
+  }
+  return out;
+}
+
 // Return the set of company buckets a route touches, based on its stops' stores.
 function _routeCompanies(route) {
   const out = new Set();
@@ -2699,14 +2719,22 @@ function buildDispatchLayer(fitBounds) {
   let totalStops = 0, totalRev = 0, totalDist = 0;
   const bounds = [];
   // Bucket = one marker on the map. Key depends on dispatchView:
-  //   'address' -> "lat|lng" (5dp)      stops at same site collapse
+  //   'address' -> "CUST|ADDR" (upper, trimmed) — groups multi-contract pickups
+  //                at a single business site into one pin. POR's geocoder rounds
+  //                lat/lng inconsistently for the same address across contracts,
+  //                so a pure lat/lng key would render 5 pins for 5 contracts
+  //                at the same venue. Falls back to "lat|lng" (5dp) when cust or
+  //                addr is blank so unlabeled stops still collapse sensibly.
   //   'city'    -> city name (UPPER)    stops in same city collapse
   // Each bucket accumulates its stops; marker position is the bucket centroid
   // (mean of member lat/lngs) so city view doesn't snap to an arbitrary member.
   const buckets = new Map();
   const _bucketKey = function(s) {
     if (dispatchView === 'city') return _cityFromAddr(s.addr);
-    return s.ll[0].toFixed(5) + '|' + s.ll[1].toFixed(5);
+    const cust = (s.cust || '').trim().toUpperCase();
+    const addr = (s.addr || '').trim().toUpperCase();
+    if (cust && addr) return 'CA:' + cust + '|' + addr;
+    return 'LL:' + s.ll[0].toFixed(5) + '|' + s.ll[1].toFixed(5);
   };
 
   routes.forEach(function(r) {
@@ -2727,17 +2755,24 @@ function buildDispatchLayer(fitBounds) {
                       : hsLookup ? [hsLookup.lat, hsLookup.lng] : null;
     const depotLabel = hsLookup ? hsLookup.name : (r.hs ? 'home store ' + r.hs : 'home store —');
 
-    // Polyline follows the ACTUAL driven path: every stop on the route in sequence,
-    // independent of the class filter. This keeps the line shape honest even when
-    // the user hides Subrent / Transfer stops. Prepend / append depot coords so
-    // the line visually opens and closes at the warehouse, not at the first /
-    // last customer stop.
+    // Polyline: prefer OSRM road-following geometry (r.geom — encoded polyline
+    // from process_dispatch.py's --fetch-geometry pass). Fall back to straight
+    // stop-to-stop lines if the fetch never succeeded or the processor was run
+    // without that flag. Straight fallback still includes the depot endpoints
+    // so the line visually opens and closes at the warehouse.
     const allSortedStops = (r.stops || []).slice().sort(function(a, b) { return a.seq - b.seq; });
-    const latlngs = allSortedStops.map(function(s) { return [s.ll[0], s.ll[1]]; });
-    if (startCoord) latlngs.unshift(startCoord);
-    if (stopCoord)  latlngs.push(stopCoord);
-    if (latlngs.length >= 2) {
-      const line = L.polyline(latlngs, {
+    let polyLatlngs = null;
+    if (r.geom) {
+      const decoded = _decodePolyline(r.geom);
+      if (decoded.length >= 2) polyLatlngs = decoded;
+    }
+    if (!polyLatlngs) {
+      polyLatlngs = allSortedStops.map(function(s) { return [s.ll[0], s.ll[1]]; });
+      if (startCoord) polyLatlngs.unshift(startCoord);
+      if (stopCoord)  polyLatlngs.push(stopCoord);
+    }
+    if (polyLatlngs.length >= 2) {
+      const line = L.polyline(polyLatlngs, {
         color: r.color,
         weight: 3,
         opacity: 0.75,
@@ -2844,7 +2879,13 @@ function buildDispatchLayer(fitBounds) {
         iconSize: [null, 28], iconAnchor: [14, 14],
       });
       html = _renderBucketPopup(b, color);
-      tooltip = (dispatchView === 'city' ? _esc(b.key) + ' — ' : '') + b.count + ' stops';
+      // Tooltip: "5 stops · Blue Goose Catering" when we have a customer name
+      // on a same-address bucket; "TORONTO — 12 stops" in City view; fallback
+      // to plain count.
+      const tipCust = (typeof b.key === 'string' && b.key.indexOf('CA:') === 0 && b.stops[0] && b.stops[0].s && b.stops[0].s.cust)
+        ? b.stops[0].s.cust : '';
+      tooltip = (dispatchView === 'city' ? _esc(b.key) + ' — ' : '') + b.count + ' stops'
+              + (tipCust ? ' · ' + _esc(tipCust) : '');
     }
 
     const marker = L.marker([lat, lng], { icon: icon });
@@ -2906,9 +2947,25 @@ function _renderSingleStopPopup(s, r, stopNum, color) {
 // class, contract, and customer.
 function _renderBucketPopup(b, color) {
   const view = dispatchView;
+  // Same-customer address buckets carry a "CA:CUST|ADDR" key — surface the
+  // customer name in the header so "5 stops at this address" becomes "5 stops
+  // · Blue Goose Catering". Address line is printed once below the header
+  // rather than repeated per-row.
+  const isCA = typeof b.key === 'string' && b.key.indexOf('CA:') === 0;
+  let bucketCust = '', bucketAddr = '';
+  if (isCA) {
+    // Prefer the first stop's casing (human-readable) rather than the UPPER key
+    const firstS = b.stops[0] && b.stops[0].s;
+    if (firstS) {
+      bucketCust = (firstS.cust || '').trim();
+      bucketAddr = (firstS.addr || '').trim();
+    }
+  }
   const header = (view === 'city')
     ? _esc(b.key) + ' — ' + b.count + ' stops'
-    : b.count + ' stops at this address';
+    : (isCA && bucketCust)
+      ? b.count + ' stops · ' + _esc(bucketCust)
+      : b.count + ' stops at this address';
   // Rev total + dominant address (for city view address rollup)
   let revSum = 0;
   b.stops.forEach(function(x) { revSum += (x.s.rev || 0); });
@@ -2942,8 +2999,12 @@ function _renderBucketPopup(b, color) {
         '</div>';
     });
   });
+  const addrBlock = (isCA && bucketAddr)
+    ? '<div style="font-size:10px;color:var(--element-muted);margin-bottom:4px;word-break:break-word;">' + _esc(bucketAddr) + '</div>'
+    : '';
   return '<div class="stop-popup" style="max-width:300px;">' +
     '<div class="sp-title">' + header + '</div>' +
+    addrBlock +
     '<div class="sp-type" style="background:' + color + ';">' +
       (view === 'city' ? 'City group' : 'Address group') +
       (revSum ? ' · $' + Math.round(revSum).toLocaleString('en-CA') : '') +

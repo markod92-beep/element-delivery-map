@@ -1821,23 +1821,30 @@ function updateTimeline() {
 
       const loc = ensureLoc(displayKey, displayName, displayLat, displayLng);
 
-      // Accumulate based on filter
+      // Accumulate based on filter.
+      // c.v / o.v is an ARRAY of [name, rev, fees, deliveries] rows (compact
+      // list shape emitted by process_cmmc.py — NOT an object). Iterating it
+      // with Object.entries would key venues by array index and smash rev/fees
+      // with the venue name string, which is the bug that made the popup's
+      // venue table show nothing meaningful.
       if (contractFilter === 'all' || contractFilter === 'closed') {
         const c = cityData.closed;
         loc.rev += c.r; loc.fees += c.f; loc.del += c.d; loc.pick += c.p; loc.events += c.e;
         loc.closedR += c.r; loc.closedE += c.e;
-        if (c.v) for (const [vn, vd] of Object.entries(c.v)) {
+        if (Array.isArray(c.v)) for (const v of c.v) {
+          const vn = v[0];
           if (!loc.venues[vn]) loc.venues[vn] = {rev:0, events:0, fees:0};
-          loc.venues[vn].rev += vd[0]; loc.venues[vn].fees += vd[1]; loc.venues[vn].events += vd[2];
+          loc.venues[vn].rev += v[1]; loc.venues[vn].fees += v[2]; loc.venues[vn].events += v[3];
         }
       }
       if (contractFilter === 'all' || contractFilter === 'open') {
         const o = cityData.open;
         loc.rev += o.r; loc.fees += o.f; loc.del += o.d; loc.pick += o.p; loc.events += o.e;
         loc.openR += o.r; loc.openE += o.e;
-        if (o.v) for (const [vn, vd] of Object.entries(o.v)) {
+        if (Array.isArray(o.v)) for (const v of o.v) {
+          const vn = v[0];
           if (!loc.venues[vn]) loc.venues[vn] = {rev:0, events:0, fees:0};
-          loc.venues[vn].rev += vd[0]; loc.venues[vn].fees += vd[1]; loc.venues[vn].events += vd[2];
+          loc.venues[vn].rev += v[1]; loc.venues[vn].fees += v[2]; loc.venues[vn].events += v[3];
         }
       }
     }

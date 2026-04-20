@@ -701,9 +701,6 @@ body {
 
   /* Timeline collapse handle visible on mobile */
   .timeline-collapse-handle { display: flex; }
-
-  /* Hide Customer Pickups button on mobile */
-  #cf-pickup { display: none !important; }
 }
 
 /* ===== LANDSCAPE MODE ===== */
@@ -792,7 +789,6 @@ document.addEventListener('DOMContentLoaded', function() {
       <div class="cf-btn cf-all" id="cf-all" onclick="setContractFilter('all')">All</div>
       <div class="cf-btn" id="cf-closed" onclick="setContractFilter('closed')">Closed</div>
       <div class="cf-btn" id="cf-open" onclick="setContractFilter('open')">Open</div>
-      <div class="cf-btn" id="cf-pickup" onclick="setContractFilter('pickup')" style="border-left:2px solid #999;margin-left:4px;padding-left:12px;">Cust Pickups</div>
     </div>
     <div style="font-size:10px;color:#666;font-weight:600;margin-top:6px;margin-bottom:2px;">Map View:</div>
     <div class="contract-filter-row">
@@ -1252,11 +1248,22 @@ let newVisible = true, oldVisible = false, revVisible = false, pickupVisible = f
 const pickupLayerGroup = L.layerGroup();
 
 // ===== DISPATCH ROUTES STATE =====
-// Populated by dispatch_data.json fetch (lazy, on first Routes toggle).
+// Populated by dispatch_data.json fetch. Loaded eagerly on page init so the
+// contract-detail card can show Promised/Actual delivery & pickup times
+// without a second click. Falls back gracefully if the JSON is missing.
 let dispatchData = null;
 let dispatchLoading = false;
 let dispatchVisible = false;
 let dispatchDate = null;                              // ISO YYYY-MM-DD
+
+// Contract-level lookup built when dispatchData lands.
+//   dispatchByContract[<contract#>] = {
+//     deliveries: [{date, parr, aarr, addr, ot, store}, ...],
+//     pickups:    [{date, parr, aarr, addr, ot, store}, ...]
+//   }
+// Dispatch window is rolling 90d back / 30d forward, so contracts outside
+// that window simply won't have an entry — UI shows an em-dash.
+const dispatchByContract = {};
 // Truck filter. Empty set = "no trucks" (hide all). Reset to
 // "all trucks matching current date + company filter" on date/company change.
 // Click-to-solo semantics (matches company chips): clicking a truck selects
@@ -1822,30 +1829,31 @@ function updateTimeline() {
       const loc = ensureLoc(displayKey, displayName, displayLat, displayLng);
 
       // Accumulate based on filter.
-      // c.v / o.v is an ARRAY of [name, rev, fees, deliveries] rows (compact
-      // list shape emitted by process_cmmc.py — NOT an object). Iterating it
-      // with Object.entries would key venues by array index and smash rev/fees
-      // with the venue name string, which is the bug that made the popup's
-      // venue table show nothing meaningful.
+      // contractCityData[locKey][status].v is a DICT {venueName: [rent, fees, deliveries]}
+      // built by updateTimeline. (process_cmmc.py emits .v as an ARRAY, but
+      // updateTimeline re-keys it into a dict for fast merging across weeks.)
+      // A prior Array.isArray guard here always returned false and silently
+      // killed the venue table — and with it the contract drill-down.
+      const _mergeVenues = function(vDict, locBag) {
+        if (!vDict || typeof vDict !== 'object') return;
+        for (const vn in vDict) {
+          const arr = vDict[vn];
+          if (!Array.isArray(arr)) continue;
+          if (!locBag.venues[vn]) locBag.venues[vn] = {rev:0, events:0, fees:0};
+          locBag.venues[vn].rev += arr[0]; locBag.venues[vn].fees += arr[1]; locBag.venues[vn].events += arr[2];
+        }
+      };
       if (contractFilter === 'all' || contractFilter === 'closed') {
         const c = cityData.closed;
         loc.rev += c.r; loc.fees += c.f; loc.del += c.d; loc.pick += c.p; loc.events += c.e;
         loc.closedR += c.r; loc.closedE += c.e;
-        if (Array.isArray(c.v)) for (const v of c.v) {
-          const vn = v[0];
-          if (!loc.venues[vn]) loc.venues[vn] = {rev:0, events:0, fees:0};
-          loc.venues[vn].rev += v[1]; loc.venues[vn].fees += v[2]; loc.venues[vn].events += v[3];
-        }
+        _mergeVenues(c.v, loc);
       }
       if (contractFilter === 'all' || contractFilter === 'open') {
         const o = cityData.open;
         loc.rev += o.r; loc.fees += o.f; loc.del += o.d; loc.pick += o.p; loc.events += o.e;
         loc.openR += o.r; loc.openE += o.e;
-        if (Array.isArray(o.v)) for (const v of o.v) {
-          const vn = v[0];
-          if (!loc.venues[vn]) loc.venues[vn] = {rev:0, events:0, fees:0};
-          loc.venues[vn].rev += v[1]; loc.venues[vn].fees += v[2]; loc.venues[vn].events += v[3];
-        }
+        _mergeVenues(o.v, loc);
       }
     }
   }
@@ -2115,6 +2123,11 @@ fetch('delivery_data.json?v=' + Date.now(), { cache: 'no-store' })
     Object.assign(contractEvents, data.contractEvents);
     Object.assign(contractInfo, data.contractInfo);
     _initDefaultView();
+    // Kick off dispatch_data.json load in parallel so the contract-detail
+    // card can show Promised/Actual delivery & pickup times as soon as the
+    // user clicks a contract. Non-blocking — failure is logged but never
+    // breaks the main map.
+    try { ensureDispatchData().catch(function(){}); } catch(e) {}
   })
   .catch(function(err){
     console.error('Failed to load delivery_data.json:', err);
@@ -2392,6 +2405,73 @@ window.showContractDetail = function(contractNum, detailId) {
   if (info.tt) h += '<div class="cd-row"><span class="cd-label">Total Value</span><span class="cd-value">$' + info.tt.toLocaleString() + '</span></div>';
   if (info.sl) h += '<div class="cd-row"><span class="cd-label">Sale Items</span><span class="cd-value">$' + info.sl.toLocaleString() + '</span></div>';
 
+  // --- Promised vs Actual delivery / pickup (from dispatch_data.json) ---
+  // Dispatch window is rolling ~90d back / 30d forward. Contracts outside
+  // that window (or not routed yet) render as "—". When actual differs from
+  // promised we flag it in red/green so variance jumps out.
+  (function renderDispatchTimes() {
+    const disp = dispatchByContract[contractNum];
+    const _fmtDT = function(iso, hhmm) {
+      if (!iso && !hhmm) return '';
+      let out = '';
+      if (iso) {
+        const d = new Date(iso + 'T00:00:00');
+        out = d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+      }
+      if (hhmm) out = (out ? out + ' ' : '') + hhmm;
+      return out;
+    };
+    const _variance = function(parr, aarr) {
+      if (!parr || !aarr) return '';
+      const pm = parr.split(':'); const am = aarr.split(':');
+      if (pm.length < 2 || am.length < 2) return '';
+      const pMin = (+pm[0]) * 60 + (+pm[1]);
+      const aMin = (+am[0]) * 60 + (+am[1]);
+      const diff = aMin - pMin;
+      if (!diff) return ' <span style="color:#1e7e5a;font-weight:600;">on time</span>';
+      const sign = diff > 0 ? '+' : '';
+      const hrs = Math.floor(Math.abs(diff) / 60);
+      const mins = Math.abs(diff) % 60;
+      const label = (hrs ? hrs + 'h ' : '') + (mins ? mins + 'm' : (hrs ? '' : '0m'));
+      const color = Math.abs(diff) <= 15 ? '#1e7e5a' : (diff > 0 ? '#b03a2e' : '#2A5A63');
+      return ' <span style="color:' + color + ';font-weight:600;">(' + sign + label + ')</span>';
+    };
+    const _row = function(label, entry, kind) {
+      if (!entry) {
+        return '<div class="cd-row"><span class="cd-label">' + label + '</span>' +
+               '<span class="cd-value" style="color:#9aa;font-weight:400;" title="No dispatch data (route not in window, or not yet routed)">\u2014</span></div>';
+      }
+      const p = _fmtDT(entry.date, entry.parr);
+      const a = _fmtDT(entry.date, entry.aarr);
+      const pStr = p || '\u2014';
+      const aStr = a ? a + _variance(entry.parr, entry.aarr) : '\u2014';
+      return '<div class="cd-row"><span class="cd-label">' + label + '</span>' +
+             '<span class="cd-value" style="font-size:10px;">' +
+             '<span style="color:#6B7A7E;">Promised:</span> ' + pStr +
+             '<span style="color:#6B7A7E;margin-left:6px;">Actual:</span> ' + aStr +
+             '</span></div>';
+    };
+    // If dispatchData hasn't loaded yet, show a subtle "loading" placeholder
+    // and re-render once it arrives. Avoids a blank area on first click.
+    if (!dispatchData && dispatchLoading) {
+      h += '<div class="cd-row"><span class="cd-label">Dispatch</span>' +
+           '<span class="cd-value" style="color:#9aa;font-weight:400;">loading\u2026</span></div>';
+      Promise.resolve(dispatchLoading).then(function() {
+        // Re-open the card to refresh contents with now-available dispatch times.
+        const el = document.getElementById(detailId);
+        if (el && el.classList.contains('cd-open')) {
+          el.classList.remove('cd-open');
+          window.showContractDetail(contractNum, detailId);
+        }
+      }).catch(function(){});
+      return;
+    }
+    const delivery = disp && disp.deliveries.length ? disp.deliveries[0] : null;
+    const pickup   = disp && disp.pickups.length    ? disp.pickups[0]    : null;
+    h += _row('Delivery', delivery, 'D');
+    h += _row('Pickup',   pickup,   'P');
+  })();
+
   // What's on the contract — rough category-level quantities from POR's
   // category columns (sorted by qty desc). POR doesn't split revenue per
   // category cleanly, so this is quantity-only.
@@ -2425,25 +2505,17 @@ window.setRevView = function(mode) {
 };
 
 window.setContractFilter = function(mode) {
+  // Cust Pickups chip was removed — force any stray 'pickup' call back to 'all'
+  // so a bookmark / stale handler doesn't land us in a mode with no UI exit.
+  if (mode === 'pickup') mode = 'all';
   contractFilter = mode;
   document.getElementById('cf-all').className = mode === 'all' ? 'cf-btn cf-all' : 'cf-btn';
   document.getElementById('cf-closed').className = mode === 'closed' ? 'cf-btn cf-closed' : 'cf-btn';
   document.getElementById('cf-open').className = mode === 'open' ? 'cf-btn cf-open' : 'cf-btn';
-  document.getElementById('cf-pickup').className = mode === 'pickup' ? 'cf-btn cf-all' : 'cf-btn';
-  // Pickup mode: hide revenue bubbles, show pickup layer
-  if (mode === 'pickup') {
-    if (!pickupVisible) {
-      buildPickupLayer();
-      map.addLayer(pickupLayerGroup);
-      pickupVisible = true;
-    } else {
-      buildPickupLayer(); // Rebuild for current range
-    }
-  } else {
-    if (pickupVisible) {
-      map.removeLayer(pickupLayerGroup);
-      pickupVisible = false;
-    }
+  // Ensure any previously-rendered pickup layer is removed.
+  if (pickupVisible) {
+    map.removeLayer(pickupLayerGroup);
+    pickupVisible = false;
   }
   updateTimeline();
   updateLegend();
@@ -2606,7 +2678,48 @@ function _syncTimelinePanelVisibility() {
 
 // ===== DISPATCH ROUTES: data load + controls + rendering =====
 
-// Lazy-load dispatch_data.json on first Routes toggle.
+// Build dispatchByContract lookup from a loaded dispatch payload.
+// Scans every route → every stop and buckets by contract # + delivery/pickup.
+// Idempotent — safe to call more than once (rebuilds in-place).
+function _buildDispatchByContract(data) {
+  // Clear existing keys (in case of re-fetch)
+  for (const k in dispatchByContract) delete dispatchByContract[k];
+  const routesByDate = (data && data.routes) || {};
+  for (const date in routesByDate) {
+    const routes = routesByDate[date] || [];
+    for (const rt of routes) {
+      const stops = rt.stops || [];
+      for (const s of stops) {
+        if (!s || !s.con) continue;
+        const cls = s.cls;
+        if (cls !== 'D' && cls !== 'P') continue; // ignore subrents / transfers
+        const bucket = cls === 'D' ? 'deliveries' : 'pickups';
+        const entry = {
+          date: date,
+          parr: s.parr || '',
+          aarr: s.aarr || '',
+          addr: s.addr || '',
+          ot:   s.ot   || '',
+          store: s.store || ''
+        };
+        const cKey = String(s.con);
+        if (!dispatchByContract[cKey]) dispatchByContract[cKey] = { deliveries: [], pickups: [] };
+        dispatchByContract[cKey][bucket].push(entry);
+      }
+    }
+  }
+  // Sort each bucket by date ASC so the earliest scheduled stop is first.
+  for (const c in dispatchByContract) {
+    dispatchByContract[c].deliveries.sort((a, b) => a.date.localeCompare(b.date));
+    dispatchByContract[c].pickups.sort((a, b) => a.date.localeCompare(b.date));
+  }
+}
+
+// Load dispatch_data.json and prep all downstream state. Called eagerly on page
+// init AND on Routes toggle — second call is a no-op. Routes-panel UI setup
+// only runs if the date input element exists (skipped for early eager load
+// before initMap has built the DOM — but initMap runs synchronously after
+// delivery_data.json lands, so in practice both are ready).
 function ensureDispatchData() {
   if (dispatchData) return Promise.resolve(dispatchData);
   if (dispatchLoading) return dispatchLoading;
@@ -2614,6 +2727,7 @@ function ensureDispatchData() {
     .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(data) {
       dispatchData = data;
+      _buildDispatchByContract(data);
       // Default date: yesterday, else latest available date in data
       const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
       const ymd = yesterday.toISOString().slice(0, 10);
@@ -2625,13 +2739,22 @@ function ensureDispatchData() {
         for (const d of dates) { if (d <= ymd) pick = d; else break; }
         dispatchDate = pick || (dates.length ? dates[dates.length - 1] : ymd);
       }
-      document.getElementById('dp-date-input').value = dispatchDate;
-      document.getElementById('dp-date-input').min = data.window && data.window.start;
-      document.getElementById('dp-date-input').max = data.window && data.window.end;
-      updateDispatchTruckOptions(false);
-      document.getElementById('dp-subtitle').textContent =
-        dates.length + ' days of dispatch history';
+      const dpDate = document.getElementById('dp-date-input');
+      if (dpDate) {
+        dpDate.value = dispatchDate;
+        dpDate.min = data.window && data.window.start;
+        dpDate.max = data.window && data.window.end;
+      }
+      if (typeof updateDispatchTruckOptions === 'function') updateDispatchTruckOptions(false);
+      const dpSub = document.getElementById('dp-subtitle');
+      if (dpSub) dpSub.textContent = dates.length + ' days of dispatch history';
       return data;
+    })
+    .catch(function(err) {
+      // Non-fatal: routes layer + contract-time rows degrade to "—".
+      console.warn('dispatch_data.json unavailable:', err.message);
+      dispatchLoading = false; // allow retry on next explicit toggle
+      throw err;
     });
   return dispatchLoading;
 }

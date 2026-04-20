@@ -2436,10 +2436,23 @@ window.showContractDetail = function(contractNum, detailId) {
       const color = Math.abs(diff) <= 15 ? '#1e7e5a' : (diff > 0 ? '#b03a2e' : '#2A5A63');
       return ' <span style="color:' + color + ';font-weight:600;">(' + sign + label + ')</span>';
     };
-    const _row = function(label, entry, kind) {
+    // Determine the dispatch window (from loaded payload) so we can tell the
+    // user *why* a row is blank: "Not yet routed" (inside window, dispatcher
+    // hasn't assigned) vs "Outside dispatch window" (too far past/future for
+    // the 90d-back / 30d-forward rolling feed).
+    const dispWin = (dispatchData && dispatchData.window) || null;
+    const _reason = function(refIso) {
+      if (!dispWin || !refIso) return 'Not yet routed';
+      if (refIso < dispWin.start) return 'Outside dispatch window';
+      if (refIso > dispWin.end)   return 'Not yet routed';
+      return 'Not yet routed';
+    };
+    const _row = function(label, entry, refIso) {
       if (!entry) {
+        const why = _reason(refIso);
         return '<div class="cd-row"><span class="cd-label">' + label + '</span>' +
-               '<span class="cd-value" style="color:#9aa;font-weight:400;" title="No dispatch data (route not in window, or not yet routed)">\u2014</span></div>';
+               '<span class="cd-value" style="color:#9aa;font-weight:400;font-size:10px;" title="Dispatch feed covers ~90 days back / 30 days forward">' +
+               why + '</span></div>';
       }
       const p = _fmtDT(entry.date, entry.parr);
       const a = _fmtDT(entry.date, entry.aarr);
@@ -2468,8 +2481,10 @@ window.showContractDetail = function(contractNum, detailId) {
     }
     const delivery = disp && disp.deliveries.length ? disp.deliveries[0] : null;
     const pickup   = disp && disp.pickups.length    ? disp.pickups[0]    : null;
-    h += _row('Delivery', delivery, 'D');
-    h += _row('Pickup',   pickup,   'P');
+    // Reference dates for the "why is this blank?" heuristic:
+    // delivery ~= contract start date; pickup ~= contract pickup date.
+    h += _row('Delivery', delivery, info.sd || null);
+    h += _row('Pickup',   pickup,   info.pd || info.sd || null);
   })();
 
   // What's on the contract — rough category-level quantities from POR's

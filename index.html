@@ -2064,6 +2064,43 @@ function revStroke(rev) {
 }
 
 // Build initial revenue bubbles
+// ===== DEFAULT VIEW INITIALIZER =====
+// Runs once after delivery_data.json loads. Sets the page's default state to
+// "this week + Revenue Heatmap on" so users see current revenue immediately
+// instead of a blank map or a stale default. New Pricing is hidden on first
+// load to keep the Revenue view uncluttered (Mark can toggle it back on).
+function _initDefaultView() {
+  // 1. Compute current ISO week (matches existing dateToWk logic in quickJump)
+  const today = new Date();
+  const iso = new Date(today.getTime());
+  iso.setDate(iso.getDate() + 3 - ((iso.getDay() + 6) % 7));
+  const yearStart = new Date(iso.getFullYear(), 0, 4);
+  const weekNum = 1 + Math.round(((iso - yearStart) / 86400000 - 3 + ((yearStart.getDay() + 6) % 7)) / 7);
+  const wk = iso.getFullYear() + '-W' + String(weekNum).padStart(2, '0');
+
+  // 2. Pin both sliders to current week if it's in the dataset
+  const wkIdx = weekKeys.indexOf(wk);
+  if (wkIdx >= 0) {
+    document.getElementById('slider-from').value = wkIdx;
+    document.getElementById('slider-to').value = wkIdx;
+    // Highlight the "This Week" quick-jump button
+    document.querySelectorAll('.qj-btn').forEach(function(b) {
+      b.classList.remove('qj-active');
+      if (b.textContent.trim() === 'This Week') b.classList.add('qj-active');
+    });
+  }
+
+  // 3. Turn OFF New Pricing (was default-on) so Revenue Heatmap dominates
+  if (newVisible) toggleLayer('new');
+
+  // 4. Turn ON Revenue Heatmap — uses toggleLayer so body class, button
+  //    styling, and timeline panel visibility all sync correctly.
+  if (!revVisible) toggleLayer('rev');
+
+  // 5. Render the revenue bubbles for the current week window
+  updateTimeline();
+}
+
 // ===== DATA LOADER =====
 // Populates the empty containers above from delivery_data.json, then renders.
 // The ?v= cache-bust forces browsers to pick up fresh data after each refresh.
@@ -2077,7 +2114,7 @@ fetch('delivery_data.json?v=' + Date.now(), { cache: 'no-store' })
     Object.assign(contractCityRef, data.contractCityRef);
     Object.assign(contractEvents, data.contractEvents);
     Object.assign(contractInfo, data.contractInfo);
-    updateTimeline();
+    _initDefaultView();
   })
   .catch(function(err){
     console.error('Failed to load delivery_data.json:', err);
@@ -2505,12 +2542,34 @@ window.toggleLayer = function(which) {
     if (oldVisible) { map.addLayer(oldLayerGroup); document.getElementById('btn-old').className='toggle-btn active-old'; document.getElementById('btn-old').innerHTML='&#10004; Old Pricing (101)'; }
     else { map.removeLayer(oldLayerGroup); document.getElementById('btn-old').className='toggle-btn'; document.getElementById('btn-old').textContent='Old Pricing (101)'; }
   } else if (which === 'rev') {
-    revVisible = !revVisible;
+    const turningOn = !revVisible;
+    // Radio-button behavior: Revenue Heatmap and Routes are mutually exclusive.
+    // If turning rev ON and dispatch is currently on, deactivate dispatch first.
+    if (turningOn && dispatchVisible) {
+      dispatchVisible = false;
+      map.removeLayer(dispatchLayerGroup);
+      const dbtn = document.getElementById('btn-dispatch');
+      dbtn.className = 'toggle-btn';
+      dbtn.textContent = 'Routes';
+      document.getElementById('dispatch-panel').classList.remove('show');
+    }
+    revVisible = turningOn;
     if (revVisible) { map.addLayer(revLayerGroup); document.getElementById('btn-rev').className='toggle-btn active-rev'; document.getElementById('btn-rev').innerHTML='&#10004; Revenue Heatmap'; document.body.classList.add('rev-on'); }
     else { map.removeLayer(revLayerGroup); document.getElementById('btn-rev').className='toggle-btn'; document.getElementById('btn-rev').textContent='Revenue Heatmap'; document.body.classList.remove('rev-on'); }
     _syncTimelinePanelVisibility();
   } else if (which === 'dispatch') {
-    dispatchVisible = !dispatchVisible;
+    const turningOn = !dispatchVisible;
+    // Radio-button behavior: if turning Routes ON and Revenue Heatmap is
+    // currently on, deactivate rev first so only one layer renders at a time.
+    if (turningOn && revVisible) {
+      revVisible = false;
+      map.removeLayer(revLayerGroup);
+      const rbtn = document.getElementById('btn-rev');
+      rbtn.className = 'toggle-btn';
+      rbtn.textContent = 'Revenue Heatmap';
+      document.body.classList.remove('rev-on');
+    }
+    dispatchVisible = turningOn;
     const btn = document.getElementById('btn-dispatch');
     const panel = document.getElementById('dispatch-panel');
     if (dispatchVisible) {

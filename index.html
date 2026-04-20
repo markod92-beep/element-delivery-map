@@ -9,12 +9,14 @@
 <title>Element Delivery Zones — Old vs New Pricing + Contracts</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
 <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
 <style>
 /* ===== ELEMENT EVENT SOLUTIONS — BRAND TOKENS ===== */
 :root {
@@ -40,6 +42,46 @@ body {
 
 /* Hide the default +/- zoom control globally — users pinch/scroll instead */
 .leaflet-control-zoom { display: none !important; }
+
+/* ===== BUBBLE CLUSTERING (Leaflet.markercluster) — Element brand palette =====
+   Cluster at zoom ≤ 8, individual bubbles (with existing de-overlap fan) at zoom ≥ 9.
+   Teal fill + Mint ring + white numeric label so clusters read clearly on top of the heatmap. */
+.marker-cluster-small,
+.marker-cluster-medium,
+.marker-cluster-large { background-color: transparent !important; }
+.marker-cluster-small div,
+.marker-cluster-medium div,
+.marker-cluster-large div { background-color: transparent !important; }
+
+.el-cluster {
+  background: var(--element-teal);
+  color: #fff;
+  border: 3px solid var(--element-mint);
+  box-shadow: 0 2px 8px rgba(28, 59, 66, 0.35);
+  border-radius: 999px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 700; letter-spacing: 0.01em; line-height: 1.05;
+  padding: 0 10px;
+}
+.el-cluster .el-cluster-rev   { white-space: nowrap; }
+.el-cluster .el-cluster-count {
+  font-size: 10px; font-weight: 500; opacity: 0.85;
+  margin-top: 1px; white-space: nowrap;
+}
+.el-cluster.sm { min-width: 64px; height: 42px; font-size: 11px; padding: 0 12px; }
+.el-cluster.md { min-width: 76px; height: 48px; font-size: 12px; padding: 0 14px; }
+.el-cluster.lg { min-width: 88px; height: 54px; font-size: 13px; padding: 0 16px; }
+
+/* Revenue bubble — rendered as an L.marker + divIcon (instead of circleMarker) so MarkerCluster can group them. */
+.rev-bubble-wrap { background: transparent; border: none; }
+.rev-bubble {
+  border-radius: 50%;
+  border-width: 1.5px;
+  border-style: solid;
+  opacity: 0.85;
+  box-shadow: 0 1px 4px rgba(28, 59, 66, 0.18);
+}
 
 /* ===== SEARCH BAR (leaflet-control-geocoder, restyled to brand) ===== */
 .leaflet-control-geocoder {
@@ -123,60 +165,71 @@ body {
 .co-chip.active { background: var(--element-teal); color: var(--element-white); border-color: var(--element-teal); }
 .co-label { font-size: 10px; color: var(--element-muted); margin: 8px 0 4px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
 
-/* ===== Dispatch Routes panel (top-right — shifts below timeline when revenue is on) ===== */
+/* ===== Dispatch Routes panel — docked TOP-LEFT to stay clear of the timeline panel (top-right).
+   Previously this lived top-right and had to be shifted down with top:260px, which fought the timeline
+   panel for vertical real estate whenever its content grew. Left-dock resolves the collision cleanly. ===== */
 .dispatch-panel {
-  position: absolute; top: 12px; right: 12px; z-index: 999;
+  /* Top-left column, but offset down so it sits UNDER the info-panel
+     (a Leaflet top-left control containing layer + company toggles, ~300px tall). */
+  position: absolute; top: 320px; left: 12px; right: auto; z-index: 999;
   background: var(--element-white); padding: 12px 14px; border-radius: 10px;
   box-shadow: 0 4px 16px rgba(28, 59, 66, 0.15);
   border: 1px solid var(--element-border);
-  font-size: 12px; width: 280px; max-height: calc(100vh - 24px); overflow-y: auto;
+  font-size: 12px; width: 280px; max-height: calc(100vh - 340px); overflow-y: auto;
   display: none;
-  transition: top 0.2s ease;
 }
-/* The timeline-panel always shows when Routes is on (via
-   _syncTimelinePanelVisibility), and it owns the top-right corner.
-   Shift the dispatch panel below it whenever it's visible so they
-   don't overlap. */
-.dispatch-panel.show { display: block; top: 260px; }
+.dispatch-panel.show { display: block; }
 .dispatch-panel h4 { font-size: 13px; color: var(--element-teal); margin-bottom: 4px; font-weight: 700; }
 .dispatch-panel .subtitle { color: var(--element-muted); font-size: 11px; margin-bottom: 8px; }
 .dispatch-panel .dp-label { font-size: 10px; color: var(--element-muted); margin: 8px 0 4px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
-.dispatch-panel .dp-date-row { display: flex; align-items: center; gap: 4px; }
-.dispatch-panel .dp-date-row button {
-  padding: 4px 8px; border-radius: 6px; border: 1px solid var(--element-border);
-  background: var(--element-white); cursor: pointer; font-family: inherit; font-size: 11px;
-  color: var(--element-ink);
+/* Generic date-picker row — used by both timeline-panel (route date) and, historically, dispatch-panel */
+.dp-date-row { display: flex; align-items: center; gap: 4px; }
+.dp-date-row button {
+  padding: 4px 10px; border-radius: 6px; border: 1px solid var(--element-border);
+  background: var(--element-white); cursor: pointer; font-family: inherit; font-size: 13px;
+  color: var(--element-ink); min-height: 32px;
 }
-.dispatch-panel .dp-date-row button:hover { border-color: var(--element-teal); }
-.dispatch-panel .dp-date-row input {
-  flex: 1; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--element-border);
-  font-family: inherit; font-size: 11px; color: var(--element-ink);
+.dp-date-row button:hover { border-color: var(--element-teal); }
+.dp-date-row input {
+  flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--element-border);
+  font-family: inherit; font-size: 13px; color: var(--element-ink); min-height: 32px;
 }
 .dispatch-panel .dp-select {
   width: 100%; padding: 5px 6px; border-radius: 6px; border: 1px solid var(--element-border);
   font-family: inherit; font-size: 11px; color: var(--element-ink); background: var(--element-white);
 }
 .dispatch-panel .dp-truck-list {
-  border: 1px solid var(--element-border); border-radius: 6px;
-  max-height: 180px; overflow-y: auto; padding: 4px 6px; background: var(--element-white);
+  display: flex; flex-wrap: wrap; gap: 5px;
+  max-height: 220px; overflow-y: auto;
+  padding: 4px 0; background: transparent;
 }
+/* Truck pill — matches the company-filter .cf-btn style for visual consistency.
+   Colored swatch dot on the left, truck name text on the right. Pill rounds
+   via border-radius:999px. Selected state = filled teal pill with white text. */
 .dispatch-panel .dp-truck-row {
-  display: flex; align-items: center; gap: 6px;
-  padding: 3px 6px; border-radius: 4px; cursor: pointer;
-  font-size: 11px; color: var(--element-muted);
-  border: 1px solid transparent;
-  transition: background 0.1s ease, color 0.1s ease, border-color 0.1s ease;
-}
-.dispatch-panel .dp-truck-row:hover { background: var(--element-offwhite); color: var(--element-ink); }
-.dispatch-panel .dp-truck-row.on {
-  background: var(--element-offwhite);
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 999px; cursor: pointer;
+  font-family: inherit; font-size: 11px; font-weight: 500;
+  line-height: 1; white-space: nowrap;
   color: var(--element-ink);
-  font-weight: 600;
-  border-color: var(--element-offwhite-tint);
+  background: var(--element-offwhite);
+  border: 1.5px solid var(--element-offwhite-tint);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
-.dispatch-panel .dp-truck-row.on .dp-truck-swatch { box-shadow: 0 0 0 1.5px var(--element-teal); }
+.dispatch-panel .dp-truck-row:hover {
+  border-color: var(--element-teal);
+}
+.dispatch-panel .dp-truck-row.on {
+  background: var(--element-teal);
+  color: var(--element-white);
+  border-color: var(--element-teal);
+  font-weight: 600;
+}
+.dispatch-panel .dp-truck-row.on .dp-truck-swatch {
+  box-shadow: 0 0 0 1.5px var(--element-white);
+}
 .dispatch-panel .dp-truck-swatch {
-  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
   border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(28,59,66,0.2);
 }
 .dispatch-panel .dp-mini-link {
@@ -255,11 +308,19 @@ body {
 .stop-popup .sp-label { color: var(--element-muted); font-size: 11px; }
 .stop-popup .sp-value { font-weight: 500; color: var(--element-ink); font-size: 11px; text-align: right; }
 
-/* Mobile: reposition dispatch panel */
+/* Mobile: reposition dispatch panel — stack it ABOVE the timeline panel
+   (timeline docks to bottom:0 at up to 55vh tall), so both coexist without collision. */
 @media screen and (max-width: 768px) {
   .dispatch-panel {
-    top: auto; right: 8px; left: 8px; bottom: 8px;
-    width: auto; max-height: 40vh;
+    top: auto; right: 8px; left: 8px;
+    bottom: 58vh;   /* stacks above the bottom-docked timeline panel */
+    width: auto;
+    max-height: 32vh;
+  }
+  /* When timeline panel is collapsed (user dragged the handle down), give dispatch more room by dropping it near the bottom too. */
+  body.timeline-collapsed .dispatch-panel {
+    bottom: 60px;
+    max-height: calc(100vh - 200px);
   }
 }
 
@@ -296,13 +357,15 @@ body {
 }
 
 .timeline-panel {
-  position: absolute; top: 10px; right: 10px; z-index: 1000;
+  position: absolute; top: 12px; right: 12px; z-index: 1000;
   background: rgba(255, 255, 255, 0.97); border-radius: 12px;
-  padding: 16px 22px; box-shadow: 0 4px 20px rgba(28, 59, 66, 0.15);
-  font-family: inherit; min-width: 520px;
+  padding: 14px 16px; box-shadow: 0 4px 20px rgba(28, 59, 66, 0.15);
+  font-family: inherit; width: 300px;
   border: 1px solid var(--element-border);
   backdrop-filter: blur(8px);
 }
+.timeline-panel .tl-section { margin-top: 6px; }
+.timeline-panel .qj-btn { flex: 1; text-align: center; }
 .timeline-panel h4 { margin: 0 0 6px 0; font-size: 13px; color: var(--element-teal); font-weight: 700; letter-spacing: 0.01em; }
 .timeline-panel .range-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--element-muted); margin-top: 2px; font-weight: 500; }
 .timeline-panel .range-display { font-size: 12px; font-weight: 600; color: var(--element-teal); margin-bottom: 6px; text-align: center; }
@@ -384,6 +447,47 @@ body {
 }
 .qj-btn.qj-active { background: var(--element-teal); color: var(--element-white); border-color: var(--element-teal); }
 
+/* ===== UNIFIED TIMELINE — shared by Revenue + Routes layers ===== */
+.tl-chip-row {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  margin-top: 4px;
+}
+.tl-chip-row .qj-btn { flex: 0 1 auto; padding: 4px 8px; font-size: 10.5px; }
+.tl-range-row {
+  display: flex; align-items: stretch; gap: 6px;
+}
+.tl-range-inputs {
+  flex: 1; display: flex; gap: 6px;
+}
+.tl-range-col {
+  flex: 1; display: flex; flex-direction: column;
+}
+.tl-range-col label {
+  font-size: 9px; font-weight: 600; color: var(--element-muted);
+  text-transform: uppercase; letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+.tl-range-col input[type="date"] {
+  font-family: inherit; font-size: 11px;
+  padding: 5px 6px; border: 1.5px solid var(--element-offwhite-tint);
+  border-radius: 4px; background: var(--element-white);
+  color: var(--element-ink); cursor: pointer;
+  width: 100%; box-sizing: border-box;
+}
+.tl-range-col input[type="date"]:focus {
+  outline: none; border-color: var(--element-teal);
+}
+.tl-step {
+  align-self: flex-end;
+  width: 28px; height: 28px;
+  padding: 0; border: 1.5px solid var(--element-offwhite-tint);
+  border-radius: 4px; background: var(--element-white);
+  cursor: pointer; font-size: 12px; color: var(--element-ink);
+  display: flex; align-items: center; justify-content: center;
+  flex: 0 0 auto;
+}
+.tl-step:hover { border-color: var(--element-teal); background: var(--element-mint); }
+
 .contract-detail-card {
   margin: 4px 0; padding: 8px 10px; background: var(--element-offwhite); border-radius: 6px;
   border-left: 3px solid var(--element-teal); font-size: 11px; line-height: 1.5;
@@ -411,6 +515,32 @@ body {
 .contract-detail-card .cd-cat-chip .ccq {
   color: var(--element-teal); font-weight: 700;
 }
+/* Multi-truck banner — shown in drill-down when >1 truck dispatched
+   to the event (same date+addr), including linked sub-contracts. */
+.contract-detail-card .cd-multi-truck {
+  margin-top: 6px; padding: 6px 8px;
+  background: #FFF6E8; border: 1px solid #E8B26A; border-radius: 6px;
+}
+.contract-detail-card .mt-banner {
+  font-weight: 700; color: #8A5A14; font-size: 11px;
+  margin-bottom: 4px; display: flex; align-items: center; gap: 4px;
+}
+.contract-detail-card .mt-row { display: flex; gap: 6px; font-size: 10px; }
+.contract-detail-card .mt-row .cd-label { color: #8A5A14; min-width: 90px; }
+.contract-detail-card .mt-row .cd-value { color: #4A3410; font-weight: 600; }
+.contract-detail-card .mt-trucks {
+  margin-top: 4px; padding-top: 4px;
+  border-top: 1px dashed #E8B26A;
+  display: flex; flex-direction: column; gap: 1px;
+}
+.contract-detail-card .mt-truck {
+  display: flex; gap: 6px; font-size: 10px;
+}
+.contract-detail-card .mt-truck .mt-date {
+  color: #8A5A14; min-width: 58px; font-weight: 500;
+}
+.contract-detail-card .mt-truck .mt-tname { color: #4A3410; font-weight: 600; }
+.contract-detail-card .mt-truck .mt-meta  { color: #8A7A5A; font-weight: 400; margin-left: 4px; }
 .contract-num-link { color: var(--element-teal); text-decoration: underline; cursor: pointer; font-weight: 600; }
 @media (hover: hover) {
   .contract-num-link:hover { color: var(--element-teal-dark); }
@@ -486,6 +616,38 @@ body {
   content: ' ▸';
 }
 
+/* ===== MOBILE TOP BAR — company chips relocated above the map on mobile ===== */
+#mobile-top-bar { display: none; }  /* hidden on desktop */
+@media screen and (max-width: 768px) {
+  #mobile-top-bar {
+    display: flex;
+    position: fixed;
+    top: 58px;  /* sits below the search + locate controls which live at top ~12px, ~40px tall */
+    left: 8px; right: 8px;
+    z-index: 1003;
+    gap: 6px;
+    padding: 6px 8px;
+    background: rgba(255, 255, 255, 0.97);
+    backdrop-filter: blur(6px);
+    border-radius: 999px;
+    box-shadow: 0 2px 10px rgba(28, 59, 66, 0.15);
+    border: 1px solid var(--element-border);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+    /* The chips inside are .toggle-btn.co-chip — override their flex-wrap so they scroll in a row */
+  }
+  #mobile-top-bar::-webkit-scrollbar { display: none; }
+  #mobile-top-bar .toggle-btn {
+    flex: 0 0 auto;
+    margin: 0 !important;
+    padding: 6px 12px !important;
+    min-height: 32px !important;
+    font-size: 12px !important;
+    border-radius: 999px !important;
+  }
+}
+
 @media screen and (max-width: 768px) {
   /* Hide +/- zoom controls on mobile — users can pinch-to-zoom */
   .leaflet-control-zoom { display: none !important; }
@@ -527,14 +689,20 @@ body {
   /* Map fills screen */
   #map { height: 100vh; height: 100dvh; }
 
-  /* Info panel (top-left toggle buttons) */
+  /* Info panel (top-left toggle buttons) — compact on mobile since company chips moved to top bar */
   .info-panel {
     max-width: calc(100vw - 100px) !important;
     padding: 10px 12px !important;
     font-size: 12px !important;
   }
-  .info-panel h4 { font-size: 13px !important; }
-  .info-panel .subtitle { font-size: 11px !important; }
+  /* Decorative headings take up space we don't have on mobile; the collapsed toggle button is enough. */
+  .info-panel h4 { display: none !important; }
+  .info-panel .subtitle { display: none !important; }
+  /* Company-section label + chip row inside the info-panel are duplicated in #mobile-top-bar;
+     hide the panel copy so we don't render them twice. The chips themselves get relocated via JS;
+     the row is left empty in-panel — hide empty rows so we don't render a 6px gap. */
+  .info-panel .co-label { display: none !important; }
+  .info-panel .toggle-row:empty { display: none !important; }
   .toggle-row { gap: 6px !important; }
   .toggle-btn {
     padding: 8px 10px !important;
@@ -721,6 +889,237 @@ body {
   .timeline-collapse-handle { display: none; }
   .legend .legend-toggle { display: none; }
   .info-panel .info-toggle { display: none; }
+  /* Bottom-sheet system is mobile-only. */
+  #mobile-fab-stack, .mobile-sheet, #mobile-sheet-backdrop { display: none !important; }
+}
+
+/* =====================================================================
+   MOBILE BOTTOM-SHEET SYSTEM (≤768px)
+   ---------------------------------------------------------------------
+   3 floating icon buttons on the right edge of the map open bottom
+   sheets that hold the existing Layer / Business Unit / Timeline panels.
+   The sheets reuse the original DOM nodes (moved, not cloned) so all
+   existing onclick handlers keep working without rewrite. Only one
+   sheet is open at a time — opening a new sheet closes any current one.
+   Legend is folded into the Layer sheet since its content depends on
+   the active layer anyway.
+===================================================================== */
+@media screen and (max-width: 768px) {
+  /* When the sheet system is active, hide the original floating panels
+     entirely — the sheet is the only surface. Also hide the
+     mobile-top-bar (company chips) since BU lives in its own sheet now. */
+  body.mobile-sheets .info-panel,
+  body.mobile-sheets .timeline-panel,
+  body.mobile-sheets .dispatch-panel,
+  body.mobile-sheets .legend,
+  body.mobile-sheets #mobile-top-bar { display: none !important; }
+
+  /* ----- Truck filter sheet: mirror .dispatch-panel scoping so reparented
+       truck pills keep their styling once they live in #ms-body-truck ----- */
+  #ms-body-truck .dp-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--element-ink-muted, #6b7c81); font-weight: 600;
+    margin: 4px 0 8px;
+  }
+  #ms-body-truck .dp-mini-link {
+    font-size: 11px; color: var(--element-teal); text-decoration: none; margin: 0 2px;
+  }
+  #ms-body-truck .dp-mini-link:hover { text-decoration: underline; }
+  #ms-body-truck .dp-truck-list {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    max-height: none; overflow-y: visible;
+    padding: 4px 0; background: transparent;
+  }
+  #ms-body-truck .dp-truck-row {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px; border-radius: 999px; cursor: pointer;
+    font-family: inherit; font-size: 13px; font-weight: 500;
+    line-height: 1; white-space: nowrap;
+    color: var(--element-ink);
+    background: var(--element-offwhite);
+    border: 1.5px solid var(--element-offwhite-tint);
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+  #ms-body-truck .dp-truck-row:hover { border-color: var(--element-teal); }
+  #ms-body-truck .dp-truck-row.on {
+    background: var(--element-teal);
+    color: var(--element-white);
+    border-color: var(--element-teal);
+    font-weight: 600;
+  }
+  #ms-body-truck .dp-truck-row.on .dp-truck-swatch {
+    box-shadow: 0 0 0 1.5px var(--element-white);
+  }
+  #ms-body-truck .dp-truck-swatch {
+    width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0;
+    border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(28,59,66,0.2);
+  }
+
+  /* ----- FAB stack (left edge, slightly above center) ----- */
+  #mobile-fab-stack {
+    position: fixed;
+    left: 10px;
+    top: 38%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 1500;
+  }
+  /* Truck FAB is Routes-only — hidden unless Routes layer is active. */
+  .mfab[data-sheet="truck"] { display: none; }
+  body.routes-active .mfab[data-sheet="truck"] { display: flex; }
+  .mfab {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: var(--element-teal);
+    color: var(--element-white);
+    border: none;
+    box-shadow: 0 2px 10px rgba(28,59,66,0.25);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    font-family: inherit; font-size: 18px; font-weight: 600;
+    transition: background 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mfab:active { transform: scale(0.93); }
+  .mfab.active {
+    background: var(--element-white);
+    color: var(--element-teal);
+    box-shadow: 0 2px 12px rgba(28,59,66,0.35), inset 0 0 0 2px var(--element-teal);
+  }
+  .mfab svg { width: 20px; height: 20px; display: block; }
+  /* Tooltip label (small text under icon). Hidden by default to keep the
+     button compact; shown briefly on activation via a CSS class. */
+  .mfab .mfab-label {
+    position: absolute; left: 50px; top: 50%; transform: translateY(-50%);
+    background: rgba(28,59,66,0.9); color: #fff;
+    padding: 4px 8px; border-radius: 6px;
+    font-size: 11px; white-space: nowrap;
+    pointer-events: none; opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  /* ----- Backdrop behind the open sheet ----- */
+  #mobile-sheet-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(28,59,66,0.35);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 1400;
+  }
+  body.ms-sheet-open #mobile-sheet-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* ----- The sheet itself ----- */
+  .mobile-sheet {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    background: var(--element-white);
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
+    box-shadow: 0 -4px 24px rgba(28,59,66,0.18);
+    max-height: 72vh;
+    display: flex;
+    flex-direction: column;
+    transform: translateY(100%);
+    transition: transform 0.28s cubic-bezier(.2,.8,.2,1);
+    z-index: 1450;
+  }
+  .mobile-sheet.ms-open { transform: translateY(0); }
+
+  .mobile-sheet .ms-handle {
+    width: 36px; height: 4px; border-radius: 2px;
+    background: var(--element-offwhite-tint);
+    margin: 8px auto 4px;
+    flex-shrink: 0;
+  }
+  .mobile-sheet .ms-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 4px 16px 8px;
+    border-bottom: 1px solid var(--element-border);
+    flex-shrink: 0;
+  }
+  .mobile-sheet .ms-title {
+    font-family: inherit;
+    font-size: 14px; font-weight: 700;
+    color: var(--element-teal);
+    letter-spacing: 0.01em;
+  }
+  .mobile-sheet .ms-close {
+    background: transparent; border: none;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    font-size: 22px; line-height: 1;
+    color: var(--element-muted);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0;
+  }
+  .mobile-sheet .ms-close:hover { color: var(--element-ink); background: var(--element-offwhite); }
+
+  .mobile-sheet .ms-body {
+    padding: 10px 16px 20px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    flex: 1 1 auto;
+  }
+
+  /* When existing panels are reparented into a sheet body, strip their
+     absolute/fixed positioning and original chrome so they render as
+     inline content inside the sheet. */
+  .mobile-sheet .ms-body .info-panel,
+  .mobile-sheet .ms-body .timeline-panel,
+  .mobile-sheet .ms-body .dispatch-panel,
+  .mobile-sheet .ms-body .legend {
+    position: static !important;
+    top: auto !important; left: auto !important; right: auto !important; bottom: auto !important;
+    transform: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    max-height: none !important;
+    width: 100% !important;
+    border: none !important;
+    display: block !important;
+    overflow: visible !important;
+  }
+  /* Hide the original collapse toggles (replaced by the sheet itself). */
+  .mobile-sheet .ms-body .info-toggle,
+  .mobile-sheet .ms-body .legend-toggle,
+  .mobile-sheet .ms-body .timeline-collapse-handle { display: none !important; }
+  /* Force contents to be expanded when inside a sheet. */
+  .mobile-sheet .ms-body .info-content,
+  .mobile-sheet .ms-body .legend-content,
+  .mobile-sheet .ms-body .timeline-content { display: block !important; }
+  /* Inside a sheet, the info-panel's own h4/subtitle are redundant with ms-title. */
+  .mobile-sheet .ms-body .info-panel h4,
+  .mobile-sheet .ms-body .info-panel .subtitle,
+  .mobile-sheet .ms-body .timeline-panel h4,
+  .mobile-sheet .ms-body .dispatch-panel h4 { display: none !important; }
+
+  /* Dispatch panel inside the Layer sheet — show it only when Routes layer is active. */
+  .mobile-sheet .ms-body .dispatch-panel { display: none !important; }
+  body.routes-active .mobile-sheet .ms-body .dispatch-panel { display: block !important; }
+
+  /* Section dividers inside the Layer sheet between Layer picker, Dispatch, and Legend. */
+  .ms-section-title {
+    font-size: 10px;
+    color: var(--element-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    margin: 12px 0 6px;
+    padding-top: 10px;
+    border-top: 1px solid var(--element-border);
+  }
+  .ms-section-title:first-child { margin-top: 0; padding-top: 0; border-top: none; }
 }
 </style>
 </head>
@@ -749,54 +1148,71 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 
 <div id="map"></div>
+
+<!-- Mobile-only top strip — JS relocates the company chip row (All / GTA / Tents / East / West) here on mobile init.
+     Hidden on desktop so the chips stay inside the info-panel at top-left. -->
+<div id="mobile-top-bar" aria-hidden="true"></div>
+
 <div class="timeline-panel" id="timeline-panel" style="display:none;">
-  <h4>Revenue & Contracts Timeline (2025–2026)</h4>
-  <div class="range-display" id="range-display">All Weeks</div>
-  <div class="slider-row">
-    <label>From</label>
-    <input type="range" id="slider-from" min="0" max="104" value="0" oninput="updateTimeline()">
-  </div>
-  <div class="slider-row">
-    <label>To</label>
-    <input type="range" id="slider-to" min="0" max="104" value="104" oninput="updateTimeline()">
-  </div>
-  <div class="range-labels" style="font-weight:600;">
-    <span>Jan 2025</span>
-    <span>Jul 2025</span>
-    <span>Jan 2026</span>
-    <span>Dec 2026</span>
-  </div>
-  <div class="quick-jump">
-    <div class="quick-jump-label">Quick Select:</div>
-    <div class="quick-jump-row">
-      <div class="qj-btn" onclick="quickJump('all')">All</div>
-      <div class="qj-btn" onclick="quickJump('2025')">2025</div>
-      <div class="qj-btn" onclick="quickJump('2026')">2026</div>
-      <div class="qj-btn" onclick="quickJump('q1')">Q1 2026</div>
-      <div class="qj-btn" onclick="quickJump('q2')">Q2 2026</div>
-      <div class="qj-btn" onclick="quickJump('month')">This Month</div>
-      <div class="qj-btn" onclick="quickJump('week')">This Week</div>
+  <!-- Hidden sliders — retained so existing updateTimeline() / quickJump() / setContractFilter() logic keeps working without rewrite. -->
+  <input type="range" id="slider-from" min="0" max="104" value="0" oninput="updateTimeline()" style="display:none;">
+  <input type="range" id="slider-to"   min="0" max="104" value="104" oninput="updateTimeline()" style="display:none;">
+
+  <div class="tl-body">
+    <h4 id="tl-title">Timeframe</h4>
+    <div class="range-display" id="range-display">All Weeks</div>
+
+    <!-- UNIFIED DATE RANGE — same UX for Revenue + Routes.
+         Preset chips (Today / This Week / YTD) cover the common quick-views;
+         anything else (MTD, last qtr, custom windows) is handled via the
+         From/To date pickers directly — keeps the chip row uncluttered.
+         Step arrows move the range by 1 day (Routes) or 1 week (Revenue).
+         On Routes layer, selecting a range shows routes for the "To" date (single-day view under the hood). -->
+    <div class="tl-section" id="tl-daterange">
+      <div class="tl-chip-row" id="tl-preset-chips">
+        <div class="qj-btn" data-preset="today"    onclick="quickJump('today')">Today</div>
+        <div class="qj-btn" data-preset="week"     onclick="quickJump('week')">This Week</div>
+        <div class="qj-btn" data-preset="thisYear" onclick="quickJump('thisYear')">YTD</div>
+      </div>
+
+      <div class="tl-range-row" style="margin-top:6px;">
+        <button class="tl-step" id="tl-step-prev" onclick="stepTimelineRange(-1)" title="Shift range back">&#9664;</button>
+        <div class="tl-range-inputs">
+          <div class="tl-range-col">
+            <label for="tl-from-input">From</label>
+            <input type="date" id="tl-from-input" onchange="setTimelineRange(this.value, document.getElementById('tl-to-input').value)">
+          </div>
+          <div class="tl-range-col">
+            <label for="tl-to-input">To</label>
+            <input type="date" id="tl-to-input" onchange="setTimelineRange(document.getElementById('tl-from-input').value, this.value)">
+          </div>
+        </div>
+        <button class="tl-step" id="tl-step-next" onclick="stepTimelineRange(1)" title="Shift range forward">&#9654;</button>
+      </div>
+
+      <!-- Legacy ID retained so any external code referencing dp-date-input still works; mirrors tl-to-input. -->
+      <input type="date" id="dp-date-input" style="display:none;" onchange="setDispatchDate(this.value)">
     </div>
-  </div>
-  <div class="rev-total" id="rev-total"></div>
-  <div class="off-map-stat hidden" id="off-map-stat" title="Revenue from POR rows that couldn't be placed on the map because the delivery address had no resolvable postal code (private estates, parks, customer pickups, etc.). Included in the POR-grand-total line so numbers tie back to the source.">
-    Off-map (no FSA): <span class="omv" id="off-map-value">—</span>
-  </div>
-  <div class="future-indicator" id="future-indicator">Showing 2026 Contract Data</div>
-  <div class="contract-filter" id="contract-filter">
-    <div style="font-size:10px;color:#666;font-weight:600;margin-bottom:2px;">Contract Status Filter:</div>
-    <div class="contract-filter-row">
-      <div class="cf-btn cf-all" id="cf-all" onclick="setContractFilter('all')">All</div>
-      <div class="cf-btn" id="cf-closed" onclick="setContractFilter('closed')">Closed</div>
-      <div class="cf-btn" id="cf-open" onclick="setContractFilter('open')">Open</div>
+
+    <div class="rev-total" id="rev-total"></div>
+    <div class="off-map-stat hidden" id="off-map-stat" title="Revenue from POR rows that couldn't be placed on the map because the delivery address had no resolvable postal code. Included in the POR-grand-total line so numbers tie back to the source.">
+      Off-map (no FSA): <span class="omv" id="off-map-value">—</span>
     </div>
-    <div style="font-size:10px;color:#666;font-weight:600;margin-top:6px;margin-bottom:2px;">Map View:</div>
-    <div class="contract-filter-row">
-      <div class="cf-btn cf-all" id="rv-view-address" onclick="setRevView('address')" title="Per-FSA in Toronto, zone-level outside — as granular as the data allows.">Address</div>
-      <div class="cf-btn" id="rv-view-city" onclick="setRevView('city')" title="Collapse all Toronto FSAs into a single Toronto bubble.">By city</div>
+    <div class="future-indicator" id="future-indicator">Showing 2026 Contract Data</div>
+
+    <div class="contract-filter" id="contract-filter">
+      <div style="font-size:10px;color:#666;font-weight:600;margin-bottom:2px;">Contract Status:</div>
+      <div class="contract-filter-row">
+        <div class="cf-btn cf-all" id="cf-all" onclick="setContractFilter('all')">All</div>
+        <div class="cf-btn" id="cf-closed" onclick="setContractFilter('closed')">Closed</div>
+        <div class="cf-btn" id="cf-open" onclick="setContractFilter('open')">Open</div>
+      </div>
     </div>
-    <div style="font-size:10px;color:#666;font-weight:600;margin-top:6px;margin-bottom:2px;">Day of Week:</div>
-    <div class="contract-filter-row">
+
+    <!-- Hidden DoW + Map-View controls: the filter logic behind them still runs (default=all days, default=address view) so aggregation is unchanged. -->
+    <div style="display:none;">
+      <div class="cf-btn cf-all" id="rv-view-address" onclick="setRevView('address')">Address</div>
+      <div class="cf-btn" id="rv-view-city" onclick="setRevView('city')">By city</div>
       <div class="cf-btn active" id="dow-all" onclick="toggleDayOfWeek('__ALL__')">All</div>
       <div class="cf-btn active" id="dow-mon" onclick="toggleDayOfWeek(0)">M</div>
       <div class="cf-btn active" id="dow-tue" onclick="toggleDayOfWeek(1)">T</div>
@@ -807,18 +1223,13 @@ document.addEventListener('DOMContentLoaded', function() {
       <div class="cf-btn active" id="dow-sun" onclick="toggleDayOfWeek(6)">S</div>
     </div>
   </div>
+</div><!-- /.timeline-panel -->
 
-<!-- ===== DISPATCH ROUTES PANEL (top-right) — visible only when Routes layer is on ===== -->
+<!-- ===== DISPATCH ROUTES PANEL (top-left) — visible only when Routes layer is on.
+     Date picker lives in timeline-panel now; this panel holds trucks + filters + stats. ===== -->
 <div class="dispatch-panel" id="dispatch-panel">
   <h4>Dispatch Routes</h4>
   <div class="subtitle" id="dp-subtitle">Loading&hellip;</div>
-
-  <div class="dp-label">Date</div>
-  <div class="dp-date-row">
-    <button id="dp-prev" onclick="stepDispatchDate(-1)" title="Previous day">&#9664;</button>
-    <input type="date" id="dp-date-input" onchange="setDispatchDate(this.value)">
-    <button id="dp-next" onclick="stepDispatchDate(1)" title="Next day">&#9654;</button>
-  </div>
 
   <div class="dp-label" style="display:flex;justify-content:space-between;align-items:baseline;">
     <span>Trucks</span>
@@ -834,19 +1245,73 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="dp-legend-item"><span class="dp-legend-dot" style="background:#c87f0a;"></span>Pickup</div>
   </div>
 
-  <div class="dp-label">Also show</div>
-  <div class="dp-chip-row">
-    <div class="dp-chip" id="dp-chip-S" onclick="toggleDispatchClass('S')">Subrent</div>
-    <div class="dp-chip" id="dp-chip-T" onclick="toggleDispatchClass('T')">Transfer</div>
-  </div>
-
-  <div class="dp-label">Map view</div>
-  <div class="dp-chip-row" style="margin-bottom:4px;">
-    <div class="dp-chip active" id="dp-view-address" onclick="setDispatchView('address')" title="One dot per unique address. Stops stacked at the same site show a count badge.">Address</div>
-    <div class="dp-chip" id="dp-view-city" onclick="setDispatchView('city')" title="Group stops by city/town. Marker sits at the centroid of all stops in that city.">By city</div>
+  <!-- Address/By-city toggle removed — defaults to 'address' view. The underlying setDispatchView logic still runs. -->
+  <div style="display:none;">
+    <div class="dp-chip active" id="dp-view-address" onclick="setDispatchView('address')">Address</div>
+    <div class="dp-chip" id="dp-view-city" onclick="setDispatchView('city')">By city</div>
   </div>
 
   <div class="dp-stats" id="dp-stats"></div>
+</div>
+
+<!-- ===== MOBILE BOTTOM-SHEET SYSTEM =====
+     Hidden on desktop (see CSS). Rendered unconditionally so the mobile-init
+     block can reparent existing Layer / BU / Timeline panels into these
+     sheet bodies on pages that load at ≤768px. -->
+<div id="mobile-sheet-backdrop" onclick="closeMobileSheet()" aria-hidden="true"></div>
+<div id="mobile-fab-stack" aria-hidden="true">
+  <button class="mfab" data-sheet="layer" aria-label="Layers" title="Layers">
+    <!-- layers icon -->
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2 1 8l11 6 11-6-11-6zm0 8.5L4.5 7 12 3.7 19.5 7 12 10.5zM1 13l11 6 11-6-2-1.1-9 4.9-9-4.9L1 13zm0 5 11 6 11-6-2-1.1-9 4.9-9-4.9L1 18z"/></svg>
+  </button>
+  <button class="mfab" data-sheet="bu" aria-label="Business Unit" title="Business Unit">
+    <!-- building icon -->
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 21V5l8-3 8 3v16h-5v-6h-6v6H4zm4-9h2v2H8v-2zm0-4h2v2H8V8zm6 4h2v2h-2v-2zm0-4h2v2h-2V8z"/></svg>
+  </button>
+  <button class="mfab" data-sheet="tl" aria-label="Timeframe" title="Timeframe">
+    <!-- calendar icon -->
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 2v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2H7zm12 6v12H5V8h14zM7 11h5v5H7v-5z"/></svg>
+  </button>
+  <button class="mfab" data-sheet="truck" aria-label="Truck filter" title="Truck filter">
+    <!-- truck icon -->
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5h11v9h1.5l2.5-3H22v6h-1.2a2.8 2.8 0 0 1-5.6 0H9.8a2.8 2.8 0 0 1-5.6 0H3V5zm2 2v7h.34a2.8 2.8 0 0 1 3.32 0H12V7H5zm11 4.5V13h3.1l-.85-1.5H16zM7 15.2a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6zm10 0a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6z"/></svg>
+  </button>
+</div>
+
+<div class="mobile-sheet" id="mobile-sheet-layer" role="dialog" aria-modal="true" aria-labelledby="ms-title-layer" aria-hidden="true">
+  <div class="ms-handle"></div>
+  <div class="ms-header">
+    <div class="ms-title" id="ms-title-layer">Layers &amp; Legend</div>
+    <button class="ms-close" onclick="closeMobileSheet()" aria-label="Close">&times;</button>
+  </div>
+  <div class="ms-body" id="ms-body-layer"></div>
+</div>
+
+<div class="mobile-sheet" id="mobile-sheet-bu" role="dialog" aria-modal="true" aria-labelledby="ms-title-bu" aria-hidden="true">
+  <div class="ms-handle"></div>
+  <div class="ms-header">
+    <div class="ms-title" id="ms-title-bu">Business Unit</div>
+    <button class="ms-close" onclick="closeMobileSheet()" aria-label="Close">&times;</button>
+  </div>
+  <div class="ms-body" id="ms-body-bu"></div>
+</div>
+
+<div class="mobile-sheet" id="mobile-sheet-tl" role="dialog" aria-modal="true" aria-labelledby="ms-title-tl" aria-hidden="true">
+  <div class="ms-handle"></div>
+  <div class="ms-header">
+    <div class="ms-title" id="ms-title-tl">Timeframe</div>
+    <button class="ms-close" onclick="closeMobileSheet()" aria-label="Close">&times;</button>
+  </div>
+  <div class="ms-body" id="ms-body-tl"></div>
+</div>
+
+<div class="mobile-sheet" id="mobile-sheet-truck" role="dialog" aria-modal="true" aria-labelledby="ms-title-truck" aria-hidden="true">
+  <div class="ms-handle"></div>
+  <div class="ms-header">
+    <div class="ms-title" id="ms-title-truck">Filter by Truck</div>
+    <button class="ms-close" onclick="closeMobileSheet()" aria-label="Close">&times;</button>
+  </div>
+  <div class="ms-body" id="ms-body-truck"></div>
 </div>
 
 
@@ -1238,8 +1703,54 @@ const maxRev = 100000;
 // ===== EVENT DATA BY FSA =====
 // eventsByFSA removed — now using unified contractWeekly
 
-// Revenue circle markers — solid, sized by revenue
-const revMarkerGroup = L.layerGroup();
+// Revenue circle markers — solid, sized by revenue.
+// Wrapped in a Leaflet.markercluster group so dense regions (GTA) cluster at low zoom
+// and fan out at higher zooms where each FSA bubble needs to stay clickable.
+// Compact currency formatter for cluster labels.
+// Examples: 720 → "$720", 4800 → "$4.8K", 704408 → "$704K", 1254000 → "$1.3M".
+function _fmtRevCompact(v) {
+  if (!v || v < 1000)       return '$' + Math.round(v);
+  if (v < 10000)            return '$' + (Math.round(v / 100) / 10) + 'K';   // one decimal under $10K
+  if (v < 1000000)          return '$' + Math.round(v / 1000) + 'K';
+  if (v < 10000000)         return '$' + (Math.round(v / 100000) / 10) + 'M'; // one decimal under $10M
+  return '$' + Math.round(v / 1000000) + 'M';
+}
+const revMarkerGroup = (typeof L.markerClusterGroup === 'function')
+  ? L.markerClusterGroup({
+      disableClusteringAtZoom: 9,   // zoom ≥ 9 → show every bubble individually
+      spiderfyOnMaxZoom: false,     // not needed — de-overlap fan already handles stacked FSAs
+      showCoverageOnHover: false,   // don't flash a polygon of child markers
+      chunkedLoading: true,         // don't block the main thread when rendering thousands of markers
+      maxClusterRadius: 50,         // moderately tight — gives the GTA a handful of clusters, not one giant blob
+      iconCreateFunction: function(cluster) {
+        // Sum revenue AND unique-event count across all children.
+        // Each bubble marker is tagged with _rev and _evCount at render time.
+        // (Custom names avoid clashing with Leaflet's internal _events dict,
+        //  which it uses for event-listener storage — clobbering it breaks
+        //  markercluster's .on('dragstart',...) bind.)
+        const children = cluster.getAllChildMarkers();
+        let sumRev = 0, sumEvents = 0;
+        for (let i = 0; i < children.length; i++) {
+          sumRev    += (children[i]._rev    || 0);
+          sumEvents += (children[i]._evCount || 0);
+        }
+        // Size by REVENUE, not count — so a single $5M venue reads as prominently as 50 small ones.
+        const sizeClass = sumRev < 100000 ? 'sm'
+                        : sumRev < 1000000 ? 'md'
+                        : 'lg';
+        const label = _fmtRevCompact(sumRev);
+        const eventLabel = sumEvents === 1 ? '1 event' : sumEvents.toLocaleString() + ' events';
+        return L.divIcon({
+          html: '<div class="el-cluster ' + sizeClass + '">' +
+                  '<div class="el-cluster-rev">' + label + '</div>' +
+                  '<div class="el-cluster-count">' + eventLabel + '</div>' +
+                '</div>',
+          className: '',  // suppress default .leaflet-div-icon styling
+          iconSize: null
+        });
+      }
+    })
+  : L.layerGroup();  // graceful fallback if the plugin failed to load
 const revLayerGroup = revMarkerGroup;
 
 // ===== CONTROLS =====
@@ -1652,6 +2163,22 @@ function updateTimeline() {
     document.getElementById('range-display').textContent = startShort + ' \u2013 ' + endShort + yearSuffix + ' (' + (endIdx - startIdx + 1) + ' weeks)';
   }
 
+  // Keep the unified From/To inputs in sync with slider state — covers cases where
+  // updateTimeline() is called directly (e.g. by setContractFilter) rather than via setTimelineRange.
+  try {
+    const fromInp = document.getElementById('tl-from-input');
+    const toInp   = document.getElementById('tl-to-input');
+    if (fromInp && toInp && typeof _wkIdxToMondayDate === 'function' && typeof _dateToIsoDate === 'function') {
+      const fMon = _wkIdxToMondayDate(startIdx);
+      const tMon = _wkIdxToMondayDate(endIdx);
+      if (fMon) fromInp.value = _dateToIsoDate(fMon);
+      if (tMon) {
+        const tSun = new Date(tMon); tSun.setDate(tSun.getDate() + 6);
+        toInp.value = _dateToIsoDate(tSun);
+      }
+    }
+  } catch (e) { /* best-effort sync — never block the main aggregation */ }
+
   // ===== ACCUMULATE =====
   // Fast path (dowFilter = all 7): use pre-aggregated contractWeekly (week-level sums).
   // Slow path (dowFilter restricted): iterate contractEvents (per-event detail) and
@@ -1900,11 +2427,23 @@ function updateTimeline() {
     const minR = 5, maxR = 30;
     const radius = Math.min(maxR, minR + (rev / maxRev) * (maxR - minR));
 
-    const marker = L.circleMarker([loc.lat, loc.lng], {
-      radius: radius,
-      fillColor: revColor(rev), color: revStroke(rev),
-      weight: 1.5, fillOpacity: 0.75, opacity: 0.9
-    }).addTo(revLayerGroup);
+    // Use L.marker + divIcon (not circleMarker) so Leaflet.markercluster can group these.
+    // Styling matches the previous circleMarker: colored fill, stroked border, 85% opacity.
+    const diameter = Math.round(radius * 2);
+    const fillC   = revColor(rev);
+    const strokeC = revStroke(rev);
+    const marker = L.marker([loc.lat, loc.lng], {
+      icon: L.divIcon({
+        className: 'rev-bubble-wrap',
+        html: '<div class="rev-bubble" style="width:' + diameter + 'px;height:' + diameter + 'px;background:' + fillC + ';border-color:' + strokeC + ';"></div>',
+        iconSize: [diameter, diameter],
+        iconAnchor: [diameter / 2, diameter / 2]
+      })
+    });
+    // Tag the marker with its revenue + unique event count so the cluster iconCreateFunction can sum them.
+    marker._rev = rev;
+    marker._evCount = loc.events || 0;
+    revLayerGroup.addLayer(marker);
 
     // Venue table
     const venueArr = Object.entries(loc.venues).sort((a,b) => b[1].rev - a[1].rev);
@@ -2138,63 +2677,150 @@ fetch('delivery_data.json?v=' + Date.now(), { cache: 'no-store' })
   });
 // Toggle function
 // Quick-jump to preset date ranges
-window.quickJump = function(preset) {
-  // Helper: find the weekKeys index for a given ISO week string
+// ===== UNIFIED DATE-RANGE HELPERS =====
+// ISO week string ("YYYY-Www") from a JS Date — proper ISO-8601 rules (Thursday anchor).
+function _dateToIsoWk(d) {
+  const iso = new Date(d.getTime());
+  iso.setDate(iso.getDate() + 3 - ((iso.getDay() + 6) % 7));
+  const yearStart = new Date(iso.getFullYear(), 0, 4);
+  const weekNum = 1 + Math.round(((iso - yearStart) / 86400000 - 3 + ((yearStart.getDay() + 6) % 7)) / 7);
+  return iso.getFullYear() + '-W' + String(weekNum).padStart(2, '0');
+}
+// Format a Date as YYYY-MM-DD (local time, matching <input type="date">).
+function _dateToIsoDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + day;
+}
+// Parse a YYYY-MM-DD string as a local Date (avoids UTC drift that `new Date('2026-04-20')` introduces).
+function _parseIsoDate(s) {
+  if (!s) return null;
+  const parts = s.split('-');
+  if (parts.length !== 3) return null;
+  return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+}
+// Map an ISO week index (into weekKeys) to the Monday date of that week.
+function _wkIdxToMondayDate(idx) {
+  if (idx < 0 || idx >= weekKeys.length) return null;
+  const wk = weekKeys[idx];  // e.g. "2026-W17"
+  const m = wk.match(/^(\d{4})-W(\d{2})$/);
+  if (!m) return null;
+  const year = parseInt(m[1]), week = parseInt(m[2]);
+  // ISO week 1 contains Jan 4. Monday of ISO week N = Jan 4's Monday + (N-1)*7 days.
+  const jan4 = new Date(year, 0, 4);
+  const jan4DoW = (jan4.getDay() + 6) % 7;  // 0 = Monday
+  const wk1Monday = new Date(year, 0, 4 - jan4DoW);
+  const target = new Date(wk1Monday);
+  target.setDate(target.getDate() + (week - 1) * 7);
+  return target;
+}
+// Given from/to dates (YYYY-MM-DD strings), set the hidden sliders + update panel + re-render.
+window.setTimelineRange = function(fromIso, toIso) {
   const findIdx = (wk) => { const i = weekKeys.indexOf(wk); return i >= 0 ? i : -1; };
-  // Helper: ISO week string from a Date
-  const dateToWk = (d) => {
-    const jan1 = new Date(d.getFullYear(), 0, 1);
-    const days = Math.floor((d - jan1) / 86400000);
-    const wk = Math.ceil((days + jan1.getDay() + 1) / 7);
-    // Use proper ISO calc
-    const iso = new Date(d.getTime());
-    iso.setDate(iso.getDate() + 3 - ((iso.getDay() + 6) % 7));
-    const yearStart = new Date(iso.getFullYear(), 0, 4);
-    const weekNum = 1 + Math.round(((iso - yearStart) / 86400000 - 3 + ((yearStart.getDay() + 6) % 7)) / 7);
-    return iso.getFullYear() + '-W' + String(weekNum).padStart(2, '0');
-  };
+  const fromDate = _parseIsoDate(fromIso);
+  const toDate   = _parseIsoDate(toIso);
+  if (!fromDate || !toDate) return;
+  // If user inverts range, swap silently.
+  let fD = fromDate, tD = toDate;
+  if (fD > tD) { const tmp = fD; fD = tD; tD = tmp; }
 
-  let fromIdx = 0, toIdx = weekKeys.length - 1;
-  const today = new Date();
-
-  if (preset === 'all') {
-    fromIdx = 0; toIdx = weekKeys.length - 1;
-  } else if (preset === '2025') {
-    fromIdx = findIdx('2025-W01');
-    // Find last 2025 week
-    for (let i = weekKeys.length - 1; i >= 0; i--) { if (weekKeys[i].startsWith('2025')) { toIdx = i; break; } }
-  } else if (preset === '2026') {
-    // Find first 2026 week
-    for (let i = 0; i < weekKeys.length; i++) { if (weekKeys[i].startsWith('2026')) { fromIdx = i; break; } }
-    toIdx = weekKeys.length - 1;
-  } else if (preset === 'q1') {
-    const s = findIdx('2026-W01'); if (s >= 0) fromIdx = s;
-    const e = findIdx('2026-W13'); if (e >= 0) toIdx = e;
-  } else if (preset === 'q2') {
-    const s = findIdx('2026-W14'); if (s >= 0) fromIdx = s;
-    const e = findIdx('2026-W26'); if (e >= 0) toIdx = e; else toIdx = weekKeys.length - 1;
-  } else if (preset === 'month') {
-    // Current month: find all weeks that overlap this month
-    const y = today.getFullYear(), m = today.getMonth();
-    const firstDay = new Date(y, m, 1);
-    const lastDay = new Date(y, m + 1, 0);
-    const startWk = dateToWk(firstDay);
-    const endWk = dateToWk(lastDay);
-    const s = findIdx(startWk); if (s >= 0) fromIdx = s;
-    const e = findIdx(endWk); if (e >= 0) toIdx = e; else toIdx = weekKeys.length - 1;
-  } else if (preset === 'week') {
-    const wk = dateToWk(today);
-    const i = findIdx(wk);
-    if (i >= 0) { fromIdx = i; toIdx = i; }
-  }
+  const fromWk = _dateToIsoWk(fD);
+  const toWk   = _dateToIsoWk(tD);
+  let fromIdx = findIdx(fromWk);
+  let toIdx   = findIdx(toWk);
+  if (fromIdx < 0) fromIdx = 0;
+  if (toIdx   < 0) toIdx   = weekKeys.length - 1;
 
   document.getElementById('slider-from').value = fromIdx;
-  document.getElementById('slider-to').value = toIdx;
-  updateTimeline();
+  document.getElementById('slider-to').value   = toIdx;
+  // Sync the visible inputs (may already be set, but user typed only one)
+  document.getElementById('tl-from-input').value = _dateToIsoDate(fD);
+  document.getElementById('tl-to-input').value   = _dateToIsoDate(tD);
+  // Mirror into legacy dp-date-input so dispatch-panel code that reads it still works.
+  const dpInput = document.getElementById('dp-date-input');
+  if (dpInput) dpInput.value = _dateToIsoDate(tD);
 
-  // Highlight the active button
-  document.querySelectorAll('.qj-btn').forEach(b => b.classList.remove('qj-active'));
-  event.target.classList.add('qj-active');
+  // Clear any active chip highlight — user just picked a custom range.
+  document.querySelectorAll('.tl-chip-row .qj-btn').forEach(b => b.classList.remove('qj-active'));
+
+  updateTimeline();
+  // If Routes layer is on, also sync dispatch date (uses the To date).
+  if (typeof dispatchVisible !== 'undefined' && dispatchVisible && typeof setDispatchDate === 'function') {
+    setDispatchDate(_dateToIsoDate(tD));
+  }
+};
+// Step BOTH from/to by +/- N days (Routes mode) or by +/- 7 days if range > 1 day (Revenue mode).
+window.stepTimelineRange = function(delta) {
+  const fromIso = document.getElementById('tl-from-input').value;
+  const toIso   = document.getElementById('tl-to-input').value;
+  const fD = _parseIsoDate(fromIso);
+  const tD = _parseIsoDate(toIso);
+  if (!fD || !tD) return;
+  // Step granularity: if single-day range, step by 1 day; else step by 1 week.
+  const singleDay = fromIso === toIso;
+  const stepDays = singleDay ? 1 : 7;
+  fD.setDate(fD.getDate() + delta * stepDays);
+  tD.setDate(tD.getDate() + delta * stepDays);
+  setTimelineRange(_dateToIsoDate(fD), _dateToIsoDate(tD));
+};
+
+window.quickJump = function(preset) {
+  const today = new Date();
+  let fromDate = null, toDate = null;
+
+  if (preset === 'all') {
+    // Full data window — map the first/last weekKey back to dates.
+    fromDate = _wkIdxToMondayDate(0) || today;
+    const lastMon = _wkIdxToMondayDate(weekKeys.length - 1) || today;
+    toDate = new Date(lastMon); toDate.setDate(toDate.getDate() + 6);
+  } else if (preset === 'today') {
+    fromDate = new Date(today); toDate = new Date(today);
+  } else if (preset === 'week') {
+    // Current ISO week: Monday → Sunday of today's week.
+    const dow = (today.getDay() + 6) % 7;  // 0 = Monday
+    fromDate = new Date(today); fromDate.setDate(fromDate.getDate() - dow);
+    toDate   = new Date(fromDate); toDate.setDate(toDate.getDate() + 6);
+  } else if (preset === 'month') {
+    // Month-to-date.
+    fromDate = new Date(today.getFullYear(), today.getMonth(), 1);
+    toDate   = new Date(today);
+  } else if (preset === 'thisQtr') {
+    const qStartMonth = Math.floor(today.getMonth() / 3) * 3;
+    fromDate = new Date(today.getFullYear(), qStartMonth, 1);
+    toDate   = new Date(today.getFullYear(), qStartMonth + 3, 0);  // last day of quarter
+  } else if (preset === 'lastQtr') {
+    const qStartMonth = Math.floor(today.getMonth() / 3) * 3;
+    const prevStart = new Date(today.getFullYear(), qStartMonth - 3, 1);
+    fromDate = prevStart;
+    toDate   = new Date(prevStart.getFullYear(), prevStart.getMonth() + 3, 0);
+  } else if (preset === '2025' || preset === 'lastYear') {
+    const y = today.getFullYear() - 1;
+    fromDate = new Date(y, 0, 1);
+    toDate   = new Date(y, 11, 31);
+  } else if (preset === '2026' || preset === 'thisYear') {
+    // YTD: Jan 1 of current year → today.
+    fromDate = new Date(today.getFullYear(), 0, 1);
+    toDate   = new Date(today);
+  } else if (preset === 'q1') {
+    fromDate = new Date(today.getFullYear(), 0, 1);
+    toDate   = new Date(today.getFullYear(), 2, 31);
+  } else if (preset === 'q2') {
+    fromDate = new Date(today.getFullYear(), 3, 1);
+    toDate   = new Date(today.getFullYear(), 5, 30);
+  }
+  if (!fromDate || !toDate) return;
+
+  setTimelineRange(_dateToIsoDate(fromDate), _dateToIsoDate(toDate));
+
+  // Highlight the active chip. Safe if called programmatically (no event).
+  document.querySelectorAll('.tl-chip-row .qj-btn').forEach(b => b.classList.remove('qj-active'));
+  if (typeof event !== 'undefined' && event && event.target && event.target.classList) {
+    event.target.classList.add('qj-active');
+  } else {
+    const chip = document.querySelector('.tl-chip-row .qj-btn[data-preset="' + preset + '"]');
+    if (chip) chip.classList.add('qj-active');
+  }
 };
 
 
@@ -2487,6 +3113,105 @@ window.showContractDetail = function(contractNum, detailId) {
     h += _row('Pickup',   pickup,   info.pd || info.sd || null);
   })();
 
+  // --- Multi-truck indicator + per-truck delivery rate ---
+  // Only meaningful for contracts inside the dispatch window (~90d back / 30d
+  // fwd). Uses:
+  //   dispatchData.contract_trucks[#] — trucks dispatched for THIS contract
+  //   dispatchData.event_trucks[date|addr_key] — all trucks at the same
+  //     (date, address), including linked sub-contracts (e.g. L10976 + 691155
+  //     at 200 University Ave Apr 15).
+  // Per-truck rate = this contract's Delivery_Fee (info.df) ÷ truck count.
+  // Truck count = unique DELIVERY trucks at the event group (not pickups).
+  (function renderMultiTruck() {
+    if (!dispatchData) return;
+    const ct = (dispatchData.contract_trucks || {})[contractNum] || [];
+    if (!ct.length) return;
+    // This contract's delivery trucks (unique names)
+    const ownDelRows = ct.filter(function(t) { return t[3] === 'D'; });
+    const ownDelTrucks = [];
+    const seen = {};
+    ownDelRows.forEach(function(t) {
+      const n = t[1] || '';
+      if (n && !seen[n]) { seen[n] = true; ownDelTrucks.push(n); }
+    });
+    // Event-level trucks (includes linked contracts at same date+addr)
+    // Mirrors process_dispatch.py _addr_key: first 3 tokens of UPPER addr;
+    // fallback to first 40 chars of UPPER cust when addr is empty.
+    const disp = dispatchByContract[contractNum];
+    const firstDel = disp && disp.deliveries && disp.deliveries[0];
+    let eventTrucks = [];
+    if (firstDel && firstDel.date) {
+      let key = '';
+      const a = (firstDel.addr || '').toUpperCase().trim();
+      if (a) {
+        const parts = a.replace(/,/g, ' ').split(/\s+/).filter(Boolean).slice(0, 3);
+        key = parts.join(' ');
+      } else {
+        key = (firstDel.cust || '').toUpperCase().trim().slice(0, 40);
+      }
+      if (key) {
+        const ek = firstDel.date + '|' + key;
+        eventTrucks = (dispatchData.event_trucks || {})[ek] || [];
+      }
+    }
+    // Total unique delivery trucks at the event = max of (own, event-wide).
+    // event_trucks is emitted only when >1 truck (see process_dispatch.py),
+    // so if it's non-empty, it already tells us this is a multi-truck event.
+    const allDelAtEvent = {};
+    ownDelTrucks.forEach(function(n) { allDelAtEvent[n] = true; });
+    eventTrucks.forEach(function(n) { if (n) allDelAtEvent[n] = true; });
+    const truckCount = Object.keys(allDelAtEvent).length;
+    if (truckCount <= 1) return;  // single truck — not notable
+
+    const fee = +info.df || 0;
+    const perTruck = fee > 0 ? Math.round(fee / truckCount) : 0;
+
+    h += '<div class="cd-multi-truck">';
+    h += '<div class="mt-banner">\u26A0 ' + truckCount + ' trucks dispatched to this event</div>';
+    if (fee > 0) {
+      h += '<div class="mt-row"><span class="cd-label">Delivery fee</span>' +
+           '<span class="cd-value">$' + fee.toLocaleString() + '</span></div>';
+    }
+    if (perTruck > 0) {
+      h += '<div class="mt-row"><span class="cd-label">Per-truck rate</span>' +
+           '<span class="cd-value">$' + perTruck.toLocaleString() + ' / truck</span></div>';
+    }
+    // Truck list — this contract's own dispatched trips, then linked-contract
+    // trucks (trucks seen at the event but not on this contract).
+    h += '<div class="mt-trucks">';
+    const _fmtShort = function(iso) {
+      if (!iso) return '';
+      const d = new Date(iso + 'T00:00:00');
+      return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+    };
+    const _clsLabel = function(c) {
+      if (c === 'D') return 'delivery';
+      if (c === 'P') return 'pickup';
+      return c || '';
+    };
+    ct.forEach(function(t) {
+      h += '<div class="mt-truck">' +
+           '<span class="mt-date">' + _fmtShort(t[0]) + '</span>' +
+           '<span class="mt-tname">' + (t[1] || '\u2014') + '</span>' +
+           '<span class="mt-meta">(' + _clsLabel(t[3]) +
+             (t[2] ? ' \u00B7 #' + t[2] : '') + ')</span>' +
+           '</div>';
+    });
+    // Linked-contract trucks — trucks at the event that aren't on this
+    // contract's own trip list (e.g. a sub-contract like L10976 shipped).
+    const own = {}; ownDelTrucks.forEach(function(n) { own[n] = true; });
+    const linked = eventTrucks.filter(function(n) { return n && !own[n]; });
+    linked.forEach(function(n) {
+      h += '<div class="mt-truck">' +
+           '<span class="mt-date">' + (firstDel ? _fmtShort(firstDel.date) : '') + '</span>' +
+           '<span class="mt-tname">' + n + '</span>' +
+           '<span class="mt-meta">(delivery \u00B7 linked contract)</span>' +
+           '</div>';
+    });
+    h += '</div>';
+    h += '</div>';
+  })();
+
   // What's on the contract — rough category-level quantities from POR's
   // category columns (sorted by qty desc). POR doesn't split revenue per
   // category cleanly, so this is quantity-only.
@@ -2688,7 +3413,29 @@ window.toggleLayer = function(which) {
 function _syncTimelinePanelVisibility() {
   const panel = document.getElementById('timeline-panel');
   if (!panel) return;
-  panel.style.display = (revVisible || dispatchVisible) ? 'block' : 'none';
+  // On mobile (sheet system active), the sheet controls visibility — we
+  // never hide the panel node itself, otherwise the Timeline sheet would
+  // render empty when only a Pricing layer is active. Keep it display:block
+  // and let the sheet open/close state own the UX.
+  if (document.body.classList.contains('mobile-sheets')) {
+    panel.style.display = 'block';
+  } else {
+    panel.style.display = (revVisible || dispatchVisible) ? 'block' : 'none';
+  }
+
+  // Unified timeline: same From/To + chips UI for both modes.
+  // Title + contract-filter visibility are the only mode-aware bits.
+  const titleEl = document.getElementById('tl-title');
+  const cfEl    = document.getElementById('contract-filter');
+
+  if (dispatchVisible) {
+    if (titleEl) titleEl.textContent = revVisible ? 'Date Range' : 'Route Date';
+    // Contract-status filter only applies to Revenue; hide it in pure Routes mode.
+    if (cfEl)    cfEl.style.display   = revVisible ? 'block' : 'none';
+  } else if (revVisible) {
+    if (titleEl) titleEl.textContent = 'Date Range';
+    if (cfEl)    cfEl.style.display   = 'block';
+  }
 }
 
 // ===== DISPATCH ROUTES: data load + controls + rendering =====
@@ -2714,6 +3461,7 @@ function _buildDispatchByContract(data) {
           parr: s.parr || '',
           aarr: s.aarr || '',
           addr: s.addr || '',
+          cust: s.cust || '',
           ot:   s.ot   || '',
           store: s.store || ''
         };
@@ -2743,13 +3491,15 @@ function ensureDispatchData() {
     .then(function(data) {
       dispatchData = data;
       _buildDispatchByContract(data);
-      // Default date: yesterday, else latest available date in data
-      const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-      const ymd = yesterday.toISOString().slice(0, 10);
+      // Default date: TODAY. Falls back to most recent date ≤ today if today
+      // isn't in the dataset (e.g. refresh hasn't run yet), else the latest
+      // date available. Previously defaulted to yesterday — changed per
+      // operations request so the Routes view lands on the current day.
+      const today = new Date();
+      const ymd = today.toISOString().slice(0, 10);
       const dates = data.dates || [];
       if (dates.indexOf(ymd) >= 0) dispatchDate = ymd;
       else {
-        // pick most recent date ≤ yesterday, else latest in dataset
         let pick = null;
         for (const d of dates) { if (d <= ymd) pick = d; else break; }
         dispatchDate = pick || (dates.length ? dates[dates.length - 1] : ymd);
@@ -2874,15 +3624,10 @@ window.stepDispatchDate = function(delta) {
   setDispatchDate(iso);
 };
 
-window.toggleDispatchClass = function(cls) {
-  // D and P are always on — only S and T toggle.
-  if (cls === 'D' || cls === 'P') return;
-  if (dispatchClassFilter.has(cls)) dispatchClassFilter.delete(cls);
-  else dispatchClassFilter.add(cls);
-  const chip = document.getElementById('dp-chip-' + cls);
-  if (chip) chip.classList.toggle('active', dispatchClassFilter.has(cls));
-  buildDispatchLayer();
-};
+// toggleDispatchClass handler retired — Subrent/Transfer chips removed from UI
+// (Apr 2026). dispatchClassFilter now permanently holds {'D','P'} so S/T stops
+// are filtered out of the map. Kept as a no-op stub for any stale onclick refs.
+window.toggleDispatchClass = function(_cls) { /* no-op */ };
 
 // Switch map aggregation mode: 'address' (one marker per lat/lng, with stack
 // count) or 'city' (one marker per city, at centroid).
@@ -3181,13 +3926,23 @@ function _renderSingleStopPopup(s, r, stopNum, color) {
   else if (ontimeRaw.indexOf('early') >= 0) ontimeBadge = '<span style="color:#2171b5;font-weight:600;">Early</span>';
   else if (s.ot) ontimeBadge = '<span style="color:#888;">' + _esc(s.ot) + '</span>';
 
-  const cInfo = s.con ? contractInfo[s.con] : null;
-  const contractBlock = cInfo ? _renderStopContractBlock(s.con, cInfo) : '';
+  // Clickable contract link — opens the same drill-down used by the Revenue
+  // layer. detailId lives inside the popup so the card renders inline.
+  let contractRow = '';
+  if (s.con) {
+    const did = 'rc_' + s.con + '_' + Math.random().toString(36).slice(2, 6);
+    contractRow =
+      '<div class="sp-row"><span class="sp-label">Contract</span><span class="sp-value">' +
+        '<span class="contract-num-link" onclick="event.stopPropagation();showContractDetail(\'' +
+        _esc(s.con) + '\',\'' + did + '\')">' + _esc(s.con) + '</span>' +
+      '</span></div>' +
+      '<div class="cd-inline" id="' + did + '"></div>';
+  }
 
   return '<div class="stop-popup">' +
     '<div class="sp-title">Stop #' + stopNum + (r && r.truck ? ' · ' + _esc(r.truck) : '') + '</div>' +
     '<div class="sp-type" style="background:' + color + ';">' + _esc(TRIP_CLASS_LABELS[s.cls] || s.tt) + '</div>' +
-    (s.con ? '<div class="sp-row"><span class="sp-label">Contract</span><span class="sp-value">' + _esc(s.con) + '</span></div>' : '') +
+    contractRow +
     (s.cust ? '<div class="sp-row"><span class="sp-label">Customer</span><span class="sp-value">' + _esc(s.cust) + '</span></div>' : '') +
     (s.store ? '<div class="sp-row"><span class="sp-label">Store</span><span class="sp-value">' + _esc(s.store) + '</span></div>' : '') +
     (s.rev ? '<div class="sp-row"><span class="sp-label">Revenue (stop)</span><span class="sp-value">$' + s.rev.toLocaleString('en-CA', {maximumFractionDigits:0}) + '</span></div>' : '') +
@@ -3195,7 +3950,6 @@ function _renderSingleStopPopup(s, r, stopNum, color) {
     (s.aarr ? '<div class="sp-row"><span class="sp-label">Actual arrival</span><span class="sp-value">' + _esc(s.aarr) + '</span></div>' : '') +
     (ontimeBadge ? '<div class="sp-row"><span class="sp-label">On-time</span><span class="sp-value">' + ontimeBadge + '</span></div>' : '') +
     (s.addr ? '<div class="sp-row"><span class="sp-label">Address</span><span class="sp-value" style="max-width:160px;word-break:break-word;">' + _esc(s.addr) + '</span></div>' : '') +
-    contractBlock +
     '</div>';
 }
 
@@ -3253,17 +4007,26 @@ function _renderBucketPopup(b, color) {
       const tLabel = TRIP_CLASS_LABELS[s.cls] || s.tt || '';
       const revStr = s.rev ? ' · $' + Math.round(s.rev).toLocaleString('en-CA') : '';
       const custStr = s.cust ? _esc(s.cust) : '';
-      const conStr = s.con ? _esc(s.con) : '';
+      // Clickable contract number — opens the full contract drill-down inline.
+      // did scoped per-row so multiple contracts in one bucket don't collide.
+      let conCell = '';
+      let conDetailRow = '';
+      if (s.con) {
+        const did = 'rcb_' + s.con + '_' + Math.random().toString(36).slice(2, 6);
+        conCell = ' · <span class="contract-num-link" onclick="event.stopPropagation();showContractDetail(\'' +
+                  _esc(s.con) + '\',\'' + did + '\')">' + _esc(s.con) + '</span>';
+        conDetailRow = '<div class="cd-inline" id="' + did + '" style="margin-left:24px;"></div>';
+      }
       const addrLine = (view === 'city' && s.addr) ? ('<div style="color:var(--element-muted);font-size:10px;">' + _esc(s.addr) + '</div>') : '';
       rowsHtml +=
         '<div style="padding:4px 0;border-bottom:1px solid var(--element-border);display:flex;gap:6px;align-items:flex-start;">' +
           '<span style="flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:' + cColor + ';color:#fff;font-size:10px;font-weight:700;">' + x.stopNum + '</span>' +
           '<div style="flex:1;min-width:0;">' +
-            '<div style="font-size:11px;font-weight:600;color:var(--element-ink);">' + _esc(tLabel) + (conStr ? ' · ' + conStr : '') + revStr + '</div>' +
+            '<div style="font-size:11px;font-weight:600;color:var(--element-ink);">' + _esc(tLabel) + conCell + revStr + '</div>' +
             (custStr ? '<div style="font-size:10px;color:var(--element-muted);">' + custStr + '</div>' : '') +
             addrLine +
           '</div>' +
-        '</div>';
+        '</div>' + conDetailRow;
     });
   });
   const addrBlock = (isCA && bucketAddr)
@@ -3385,13 +4148,179 @@ setTimeout(function(){ map.invalidateSize(); }, 100);
   new LocateControl().addTo(map);
 })();
 
+// ===== MOBILE BOTTOM-SHEET WIRING =====
+// Opens/closes the 3 sheets (Layer, BU, Timeline). Exposed on window so the
+// onclick handlers inside the sheet HTML can invoke them.
+window.openMobileSheet = function(key) {
+  var body = document.body;
+  var sheets = document.querySelectorAll('.mobile-sheet');
+  var fabs = document.querySelectorAll('.mfab');
+  var target = document.getElementById('mobile-sheet-' + key);
+  if (!target) return;
+  var alreadyOpen = target.classList.contains('ms-open');
+  // Close all sheets + deactivate all FABs first (single-open invariant).
+  sheets.forEach(function(s) { s.classList.remove('ms-open'); s.setAttribute('aria-hidden', 'true'); });
+  fabs.forEach(function(f) { f.classList.remove('active'); });
+  if (alreadyOpen) {
+    body.classList.remove('ms-sheet-open');
+    return;
+  }
+  target.classList.add('ms-open');
+  target.setAttribute('aria-hidden', 'false');
+  var fab = document.querySelector('.mfab[data-sheet="' + key + '"]');
+  if (fab) fab.classList.add('active');
+  body.classList.add('ms-sheet-open');
+};
+window.closeMobileSheet = function() {
+  document.querySelectorAll('.mobile-sheet').forEach(function(s) {
+    s.classList.remove('ms-open');
+    s.setAttribute('aria-hidden', 'true');
+  });
+  document.querySelectorAll('.mfab').forEach(function(f) { f.classList.remove('active'); });
+  document.body.classList.remove('ms-sheet-open');
+};
+
 // ===== MOBILE ENHANCEMENTS =====
 (function() {
   var isMobile = window.innerWidth <= 768;
   if (!isMobile) return;
 
+  // ----- SHEET SETUP: reparent existing panels into sheet bodies -----
+  // Done BEFORE the legacy collapse handlers below, so those handlers skip
+  // the (now-removed) panels. We reuse the existing DOM nodes rather than
+  // cloning them so all onclick handlers (toggleLayer, toggleCompany,
+  // setContractFilter, quickJump, stepTimelineRange, etc.) remain wired.
+  var bodyEl = document.body;
+  var sheetLayerBody = document.getElementById('ms-body-layer');
+  var sheetBUBody    = document.getElementById('ms-body-bu');
+  var sheetTLBody    = document.getElementById('ms-body-tl');
+  var sheetTruckBody = document.getElementById('ms-body-truck');
+
+  var infoPanelEl  = document.querySelector('.info-panel');
+  var tPanel       = document.getElementById('timeline-panel');
+  var dispatchEl   = document.getElementById('dispatch-panel');
+  // legendDiv is the bottom-left Leaflet control (declared in the script above).
+
+  var sheetsEnabled = !!(sheetLayerBody && sheetBUBody && sheetTLBody);
+  if (sheetsEnabled) {
+    bodyEl.classList.add('mobile-sheets');
+
+    // --- Layer sheet: Layer toggles + Dispatch (Routes-only) + Legend ---
+    if (infoPanelEl) {
+      // info-panel has two .toggle-row children:
+      //   [0] = layer toggles (New/Old/Revenue/Routes)
+      //   [1] = business-unit / company chips
+      var rows = infoPanelEl.querySelectorAll('.toggle-row');
+      if (rows.length >= 1) {
+        var layerTitle = document.createElement('div');
+        layerTitle.className = 'ms-section-title';
+        layerTitle.textContent = 'Layer';
+        sheetLayerBody.appendChild(layerTitle);
+        sheetLayerBody.appendChild(rows[0]);
+      }
+      if (rows.length >= 2) {
+        var buTitle = document.createElement('div');
+        buTitle.className = 'ms-section-title';
+        buTitle.textContent = 'Business Unit';
+        sheetBUBody.appendChild(buTitle);
+        // Grab the preceding .co-label for context, if present
+        var coLabel = infoPanelEl.querySelector('.co-label');
+        if (coLabel) sheetBUBody.appendChild(coLabel);
+        sheetBUBody.appendChild(rows[1]);
+      }
+    }
+    // Dispatch (Routes) panel — goes into Layer sheet. CSS hides it unless
+    // body.routes-active is set, so it only surfaces when Routes is the
+    // active layer. (toggleLayer() below sets/clears that class.)
+    if (dispatchEl) {
+      // First, peel out the Trucks label + #dp-truck-list into the Truck
+      // sheet so the dedicated Truck FAB opens a focused filter view.
+      // Reparent the DOM nodes (not clones) so existing onclick handlers
+      // on the truck pills (setDispatchTruck, setAllTrucks, etc.) remain wired.
+      if (sheetTruckBody) {
+        var truckLabelRow = dispatchEl.querySelector('.dp-label'); // first .dp-label = "Trucks"
+        var truckListEl = dispatchEl.querySelector('#dp-truck-list');
+        if (truckLabelRow) sheetTruckBody.appendChild(truckLabelRow);
+        if (truckListEl) sheetTruckBody.appendChild(truckListEl);
+      }
+      var dispatchTitle = document.createElement('div');
+      dispatchTitle.className = 'ms-section-title';
+      dispatchTitle.textContent = 'Routes';
+      dispatchTitle.setAttribute('data-section', 'routes');
+      // Wrap both title + panel so CSS can hide them together.
+      var dispatchWrap = document.createElement('div');
+      dispatchWrap.className = 'dispatch-panel-wrap';
+      dispatchWrap.appendChild(dispatchTitle);
+      dispatchWrap.appendChild(dispatchEl);
+      sheetLayerBody.appendChild(dispatchWrap);
+      // Force the panel to render inside the sheet (the .show gate is unused now).
+      dispatchEl.classList.add('show');
+    }
+    // Legend — relocate the existing Leaflet-generated legendDiv into the sheet.
+    if (typeof legendDiv !== 'undefined' && legendDiv) {
+      var legendTitle = document.createElement('div');
+      legendTitle.className = 'ms-section-title';
+      legendTitle.textContent = 'Legend';
+      sheetLayerBody.appendChild(legendTitle);
+      sheetLayerBody.appendChild(legendDiv);
+    }
+
+    // --- Timeline sheet ---
+    if (tPanel) {
+      // tPanel may have its own h4 / subtitle wrapper; we drop it straight in
+      // since the sheet provides its own header.
+      tPanel.style.display = 'block';  // override the inline display:none on the element
+      sheetTLBody.appendChild(tPanel);
+    }
+
+    // --- FAB click wiring ---
+    document.querySelectorAll('.mfab').forEach(function(fab) {
+      fab.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var key = fab.getAttribute('data-sheet');
+        window.openMobileSheet(key);
+      });
+    });
+
+    // --- Swipe-down to dismiss (simple: touch delta on the ms-handle) ---
+    document.querySelectorAll('.mobile-sheet').forEach(function(sheet) {
+      var handle = sheet.querySelector('.ms-handle');
+      if (!handle) return;
+      var startY = null;
+      handle.addEventListener('touchstart', function(e) {
+        if (e.touches && e.touches.length === 1) startY = e.touches[0].clientY;
+      }, { passive: true });
+      handle.addEventListener('touchmove', function(e) {
+        if (startY == null || !e.touches || !e.touches.length) return;
+        var dy = e.touches[0].clientY - startY;
+        if (dy > 60) {
+          window.closeMobileSheet();
+          startY = null;
+        }
+      }, { passive: true });
+      handle.addEventListener('touchend', function() { startY = null; });
+    });
+
+    // --- Keep body.routes-active in sync with active layer ---
+    // Hook into toggleLayer by watching for the Routes toggle-btn's active class.
+    // Uses a MutationObserver so any code path that activates Routes updates
+    // the sheet visibility without requiring a rewrite of toggleLayer.
+    var routesBtn = document.getElementById('btn-dispatch');
+    if (routesBtn) {
+      var syncRoutesActive = function() {
+        // Routes button uses 'active-rev' (not 'active') when the layer is on.
+        var isOn = routesBtn.classList.contains('active-rev') ||
+                   routesBtn.classList.contains('active');
+        if (isOn) bodyEl.classList.add('routes-active');
+        else bodyEl.classList.remove('routes-active');
+      };
+      syncRoutesActive();
+      new MutationObserver(syncRoutesActive).observe(routesBtn, { attributes: true, attributeFilter: ['class'] });
+    }
+  }
+
   // 1. Make legend collapsible on mobile
-  if (legendDiv) {
+  if (!sheetsEnabled && legendDiv) {
     // Wrap existing content
     var existingHTML = legendDiv.innerHTML;
     legendDiv.innerHTML = '<button class="legend-toggle">Legend</button><div class="legend-content">' + existingHTML + '</div>';
@@ -3442,36 +4371,51 @@ setTimeout(function(){ map.invalidateSize(); }, 100);
     };
   }
 
-  // 1b. Make info-panel (pricing/heatmap layer toggles) collapsible on mobile
-  var infoPanelEl = document.querySelector('.info-panel');
-  if (infoPanelEl && !infoPanelEl.querySelector('.info-toggle')) {
-    var infoExistingHTML = infoPanelEl.innerHTML;
-    infoPanelEl.innerHTML = '<button class="info-toggle" type="button">Layers & Heatmap</button><div class="info-content">' + infoExistingHTML + '</div>';
-    infoPanelEl.querySelector('.info-toggle').addEventListener('click', function(e) {
-      e.stopPropagation();
-      infoPanelEl.classList.toggle('info-collapsed');
-    });
-  }
-
-  // 2. Make timeline panel collapsible on mobile
-  var tPanel = document.getElementById('timeline-panel');
-  if (tPanel) {
-    // Add drag handle and wrap content
-    var handle = document.createElement('div');
-    handle.className = 'timeline-collapse-handle';
-    var contentWrap = document.createElement('div');
-    contentWrap.className = 'timeline-content';
-    // Move all existing children into the wrapper
-    while (tPanel.firstChild) {
-      contentWrap.appendChild(tPanel.firstChild);
+  // 1b/1c/2. Legacy mobile handlers (info-panel collapse, top-bar chip relocation,
+  // timeline collapse handle). Skipped when the sheet system is active — the
+  // panels are already reparented into sheet bodies, so collapsing them in
+  // place would be a no-op at best and a layout bug at worst.
+  if (!sheetsEnabled) {
+    // 1b. Make info-panel collapsible on mobile
+    if (infoPanelEl && !infoPanelEl.querySelector('.info-toggle')) {
+      var infoExistingHTML = infoPanelEl.innerHTML;
+      infoPanelEl.innerHTML = '<button class="info-toggle" type="button">Layers & Heatmap</button><div class="info-content">' + infoExistingHTML + '</div>';
+      infoPanelEl.querySelector('.info-toggle').addEventListener('click', function(e) {
+        e.stopPropagation();
+        infoPanelEl.classList.toggle('info-collapsed');
+      });
+      // Start collapsed on mobile — keeps the map as the hero. User taps "Layers & Heatmap" to expand.
+      infoPanelEl.classList.add('info-collapsed');
     }
-    tPanel.appendChild(handle);
-    tPanel.appendChild(contentWrap);
 
-    handle.addEventListener('click', function() {
-      tPanel.classList.toggle('timeline-collapsed');
-    });
-  }
+    // 1c. Relocate the company chip row to the fixed top bar (legacy fallback).
+    var topBar = document.getElementById('mobile-top-bar');
+    if (topBar && infoPanelEl) {
+      var toggleRows = infoPanelEl.querySelectorAll('.toggle-row');
+      if (toggleRows.length >= 2) {
+        var coRow = toggleRows[1];
+        while (coRow.firstChild) {
+          topBar.appendChild(coRow.firstChild);
+        }
+      }
+    }
+
+    // 2. Make timeline panel collapsible on mobile (legacy fallback)
+    if (tPanel) {
+      var handle = document.createElement('div');
+      handle.className = 'timeline-collapse-handle';
+      var contentWrap = document.createElement('div');
+      contentWrap.className = 'timeline-content';
+      while (tPanel.firstChild) {
+        contentWrap.appendChild(tPanel.firstChild);
+      }
+      tPanel.appendChild(handle);
+      tPanel.appendChild(contentWrap);
+      handle.addEventListener('click', function() {
+        tPanel.classList.toggle('timeline-collapsed');
+      });
+    }
+  } // end !sheetsEnabled
 
   // 3. Close popups on map tap (better mobile UX)
   map.on('click', function() {

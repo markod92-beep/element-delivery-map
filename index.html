@@ -1032,11 +1032,20 @@ body {
   }
   .mobile-sheet.ms-open { transform: translateY(0); }
 
+  /* Visible bar is 36x4, but the tap target extends 12px above/below
+     (invisible via transparent border) for a ~44px touch area. */
   .mobile-sheet .ms-handle {
     width: 36px; height: 4px; border-radius: 2px;
     background: var(--element-offwhite-tint);
-    margin: 8px auto 4px;
+    margin: 0 auto;
     flex-shrink: 0;
+    border-top: 12px solid transparent;
+    border-bottom: 12px solid transparent;
+    background-clip: padding-box;
+    cursor: pointer;
+  }
+  .mobile-sheet .ms-handle:active {
+    background-color: var(--element-teal);
   }
   .mobile-sheet .ms-header {
     display: flex; align-items: center; justify-content: space-between;
@@ -4282,10 +4291,16 @@ window.closeMobileSheet = function() {
       });
     });
 
-    // --- Swipe-down to dismiss (simple: touch delta on the ms-handle) ---
+    // --- Tap-to-close + swipe-down-to-dismiss on the ms-handle ---
     document.querySelectorAll('.mobile-sheet').forEach(function(sheet) {
       var handle = sheet.querySelector('.ms-handle');
       if (!handle) return;
+      // Tap (click) on the handle closes the sheet.
+      handle.style.cursor = 'pointer';
+      handle.addEventListener('click', function(e) {
+        e.stopPropagation();
+        window.closeMobileSheet();
+      });
       var startY = null;
       handle.addEventListener('touchstart', function(e) {
         if (e.touches && e.touches.length === 1) startY = e.touches[0].clientY;

@@ -969,6 +969,28 @@ body {
   /* Truck FAB is Routes-only — hidden unless Routes layer is active. */
   .mfab[data-sheet="truck"] { display: none; }
   body.routes-active .mfab[data-sheet="truck"] { display: flex; }
+
+  /* Routes-only mode (Routes on, Revenue off): collapse the From/To range picker
+     into a single Date picker. Routes is inherently a one-day view, so showing
+     a week range was confusing — users were picking week presets expecting a
+     single day. */
+  body.routes-active:not(.rev-on) #tl-daterange .tl-range-col:first-child { display: none; }
+  body.routes-active:not(.rev-on) #tl-daterange .tl-range-col:last-child label::before {
+    content: "Date";
+  }
+  body.routes-active:not(.rev-on) #tl-daterange .tl-range-col:last-child label {
+    font-size: 0;  /* hide the original "To" text, show only the ::before "Date" */
+  }
+  body.routes-active:not(.rev-on) #tl-daterange .tl-range-col:last-child label::before {
+    font-size: 11px;
+    display: inline-block;
+  }
+  /* Hide range-only presets (This Week / YTD) — they don't map to a single day.
+     "Today" chip still makes sense. */
+  body.routes-active:not(.rev-on) #tl-preset-chips .qj-btn[data-preset="week"],
+  body.routes-active:not(.rev-on) #tl-preset-chips .qj-btn[data-preset="thisYear"] {
+    display: none;
+  }
   .mfab {
     width: 44px; height: 44px;
     border-radius: 50%;
@@ -2733,6 +2755,12 @@ window.setTimelineRange = function(fromIso, toIso) {
   // If user inverts range, swap silently.
   let fD = fromDate, tD = toDate;
   if (fD > tD) { const tmp = fD; fD = tD; tD = tmp; }
+  // Routes-only mode is a single-day view — collapse any range into one day
+  // (using the "To" date). Prevents chips like "This Week" from leaving the
+  // Routes view stuck on a 7-day range where only the last day is meaningful.
+  if (typeof dispatchVisible !== 'undefined' && dispatchVisible && !revVisible) {
+    fD = new Date(tD);
+  }
 
   const fromWk = _dateToIsoWk(fD);
   const toWk   = _dateToIsoWk(tD);
@@ -3400,6 +3428,12 @@ window.toggleLayer = function(which) {
       ensureDispatchData().then(function() {
         map.addLayer(dispatchLayerGroup);
         buildDispatchLayer();
+        // Snap timeline to single-day (today) when Routes turns on — if the
+        // user had a multi-day range from Revenue mode, collapse it now so the
+        // calendar UX reflects Routes' one-day semantics.
+        if (dispatchDate && typeof setTimelineRange === 'function') {
+          setTimelineRange(dispatchDate, dispatchDate);
+        }
       }).catch(function(err) {
         console.error('Dispatch data load failed:', err);
         document.getElementById('dp-subtitle').textContent = 'Failed to load dispatch data.';

@@ -179,6 +179,73 @@ body {
   display: none;
 }
 .dispatch-panel.show { display: block; }
+
+/* Key Venues / Key Caterers sidebar — same visual treatment as the dispatch
+   panel so the map's left column feels consistent no matter which layer is
+   active. Lives in the same top-left column as dispatch-panel. When BOTH
+   panels are visible (Routes + Key Venues/Caterers all on), the venues panel
+   shifts right via body.has-dispatch to avoid overlap. */
+.key-loc-panel {
+  position: absolute; top: 320px; left: 12px; right: auto; z-index: 999;
+  background: var(--element-white); padding: 12px 14px; border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(28, 59, 66, 0.15);
+  border: 1px solid var(--element-border);
+  font-size: 12px; width: 280px; max-height: calc(100vh - 340px); overflow-y: auto;
+  display: none;
+}
+.key-loc-panel.show { display: block; }
+body.has-dispatch .key-loc-panel { left: 304px; }
+.key-loc-panel h4 { font-size: 13px; color: var(--element-teal); margin: 0 0 4px; font-weight: 700; }
+.key-loc-panel .subtitle { color: var(--element-muted); font-size: 11px; margin-bottom: 8px; }
+.key-loc-panel .kl-section { margin-top: 10px; }
+.key-loc-panel .kl-section:first-child { margin-top: 0; }
+.key-loc-panel .kl-section-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 10px; color: var(--element-muted);
+  text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;
+  margin: 0 0 4px;
+}
+.key-loc-panel .kl-region {
+  font-size: 10px; color: var(--element-muted);
+  text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;
+  margin: 8px 0 3px; padding-top: 6px;
+  border-top: 1px solid var(--element-border);
+}
+.key-loc-panel .kl-region:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+.key-loc-panel .kl-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 6px; border-radius: 6px; cursor: pointer;
+  font-size: 11px; line-height: 1.25;
+  border: 1px solid transparent; transition: background 0.12s ease;
+}
+.key-loc-panel .kl-row:hover { background: var(--element-offwhite); border-color: var(--element-offwhite-tint); }
+.key-loc-panel .kl-row.on { background: var(--element-teal); color: var(--element-white); border-color: var(--element-teal); }
+.key-loc-panel .kl-row.on .kl-meta { color: rgba(255,255,255,0.85); }
+.key-loc-panel .kl-row.ghosted .kl-name { color: var(--element-muted); }
+.key-loc-panel .kl-swatch {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(28,59,66,0.2);
+}
+.key-loc-panel .kl-rank {
+  flex-shrink: 0; min-width: 22px; text-align: right;
+  font-weight: 700; color: var(--element-teal);
+}
+.key-loc-panel .kl-row.on .kl-rank { color: var(--element-white); }
+.key-loc-panel .kl-name {
+  flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: 500;
+}
+.key-loc-panel .kl-meta {
+  flex-shrink: 0; color: var(--element-muted);
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.01em;
+}
+.key-loc-panel .kl-mini-link {
+  font-size: 11px; color: var(--element-teal); text-decoration: none; font-weight: 600;
+}
+.key-loc-panel .kl-mini-link:hover { text-decoration: underline; }
+.key-loc-panel .kl-empty {
+  padding: 6px; color: var(--element-muted); font-style: italic; font-size: 11px;
+}
 .dispatch-panel h4 { font-size: 13px; color: var(--element-teal); margin-bottom: 4px; font-weight: 700; }
 .dispatch-panel .subtitle { color: var(--element-muted); font-size: 11px; margin-bottom: 8px; }
 .dispatch-panel .dp-label { font-size: 10px; color: var(--element-muted); margin: 8px 0 4px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
@@ -1318,6 +1385,28 @@ document.addEventListener('DOMContentLoaded', function() {
   </div>
 
   <div class="dp-stats" id="dp-stats"></div>
+</div>
+
+<!-- ===== KEY VENUES / KEY CATERERS PANEL (top-left) — visible only when
+     one or both of those layers is on. Lists ranked entries per region
+     (populated client-side from venues_data.json). Clicking a venue row
+     pans the map + opens the venue popup; clicking a caterer row solos
+     the map to just that caterer's bubbles. ===== -->
+<div class="key-loc-panel" id="key-loc-panel">
+  <div class="kl-section" id="kl-venues-section" style="display:none;">
+    <div class="kl-section-head">
+      <span>Key Venues</span>
+      <span><a href="#" class="kl-mini-link" onclick="zoomToAllVenues();return false;">Zoom</a></span>
+    </div>
+    <div id="kl-venues-list"></div>
+  </div>
+  <div class="kl-section" id="kl-caterers-section" style="display:none;">
+    <div class="kl-section-head">
+      <span>Key Caterers</span>
+      <span><a href="#" class="kl-mini-link" onclick="resetCatererSolo();return false;">All</a></span>
+    </div>
+    <div id="kl-caterers-list"></div>
+  </div>
 </div>
 
 <!-- ===== MOBILE BOTTOM-SHEET SYSTEM =====
@@ -2742,6 +2831,7 @@ function updateTimeline() {
   if (typeof venuesVisible !== 'undefined' && venuesVisible &&
       typeof buildVenuesLayer === 'function') {
     buildVenuesLayer();
+    if (typeof renderVenuesSidebar === 'function') renderVenuesSidebar();
   }
 
   // Same pattern for Key Caterers — top-15 caterers are fixed (pipeline),
@@ -2749,6 +2839,7 @@ function updateTimeline() {
   if (typeof caterersVisible !== 'undefined' && caterersVisible &&
       typeof buildCaterersLayer === 'function') {
     buildCaterersLayer();
+    if (typeof renderCaterersSidebar === 'function') renderCaterersSidebar();
   }
 }
 
@@ -3573,6 +3664,9 @@ window.toggleLayer = function(which) {
       panel.classList.remove('show');
     }
     _syncTimelinePanelVisibility();
+    // Dispatch panel visibility affects the venues/caterers panel offset,
+    // so re-sync that too whenever routes toggles.
+    if (typeof _syncSidePanelVisibility === 'function') _syncSidePanelVisibility();
   } else if (which === 'venues') {
     // Key Venues is additive — stacks with any other layer. Ranking is
     // fixed (top 30 by TTM rental); the timeline window only resizes the
@@ -3585,6 +3679,9 @@ window.toggleLayer = function(which) {
       ensureVenuesData().then(function() {
         map.addLayer(venuesLayerGroup);
         buildVenuesLayer();
+        if (typeof renderVenuesSidebar === 'function') renderVenuesSidebar();
+        _syncTimelinePanelVisibility();
+        _syncSidePanelVisibility && _syncSidePanelVisibility();
       }).catch(function(err) {
         console.error('Venues data load failed:', err);
         venuesVisible = false;
@@ -3595,6 +3692,8 @@ window.toggleLayer = function(which) {
       map.removeLayer(venuesLayerGroup);
       vbtn.className = 'toggle-btn';
       vbtn.textContent = 'Key Venues';
+      _syncTimelinePanelVisibility();
+      _syncSidePanelVisibility && _syncSidePanelVisibility();
     }
   } else if (which === 'caterers') {
     // Key Caterers is additive — stacks with any other layer. Ranking is
@@ -3609,6 +3708,9 @@ window.toggleLayer = function(which) {
       ensureVenuesData().then(function() {
         map.addLayer(caterersLayerGroup);
         buildCaterersLayer();
+        if (typeof renderCaterersSidebar === 'function') renderCaterersSidebar();
+        _syncTimelinePanelVisibility();
+        _syncSidePanelVisibility && _syncSidePanelVisibility();
       }).catch(function(err) {
         console.error('Caterers data load failed:', err);
         caterersVisible = false;
@@ -3619,6 +3721,10 @@ window.toggleLayer = function(which) {
       map.removeLayer(caterersLayerGroup);
       cbtn.className = 'toggle-btn';
       cbtn.textContent = 'Key Caterers';
+      // Reset any solo filter so the next open isn't stuck on one caterer
+      catererSoloId = null;
+      _syncTimelinePanelVisibility();
+      _syncSidePanelVisibility && _syncSidePanelVisibility();
     }
   }
   updateLegend();
@@ -3638,7 +3744,13 @@ function _syncTimelinePanelVisibility() {
   if (document.body.classList.contains('mobile-sheets')) {
     panel.style.display = 'block';
   } else {
-    panel.style.display = (revVisible || dispatchVisible) ? 'block' : 'none';
+    // Key Venues + Key Caterers also need the timeline (bubble sizing +
+    // popup contract window scope to the slider), so show the panel any
+    // time one of the four data layers is active.
+    const needTimeline = revVisible || dispatchVisible ||
+                         (typeof venuesVisible !== 'undefined' && venuesVisible) ||
+                         (typeof caterersVisible !== 'undefined' && caterersVisible);
+    panel.style.display = needTimeline ? 'block' : 'none';
   }
 
   // Unified timeline: same From/To + chips UI for both modes.
@@ -3653,6 +3765,11 @@ function _syncTimelinePanelVisibility() {
   } else if (revVisible) {
     if (titleEl) titleEl.textContent = 'Date Range';
     if (cfEl)    cfEl.style.display   = 'block';
+  } else if ((typeof venuesVisible !== 'undefined' && venuesVisible) ||
+             (typeof caterersVisible !== 'undefined' && caterersVisible)) {
+    // Venues/Caterers-only mode: simple date-range framing, no contract filter.
+    if (titleEl) titleEl.textContent = 'Date Range';
+    if (cfEl)    cfEl.style.display   = 'none';
   }
 }
 
@@ -4525,6 +4642,203 @@ window._venueOpenRoute = function(isoDate) {
   return false;
 };
 
+// ============================================================
+// KEY-LOCATIONS SIDEBAR (venues + caterers lists in the left panel)
+// ============================================================
+
+// Caterer "solo" state — when set to a rank id (e.g. "c003"), the caterers
+// layer only renders that caterer's bubbles. null = all caterers visible.
+let catererSoloId = null;
+
+// Region display order in the sidebar — mirrors REGION_ORDER in process_venues.py.
+const KL_REGION_ORDER = ['GTA', 'GTA Tents', 'East', 'West', 'Unknown'];
+
+// Show/hide the combined panel + each section based on layer visibility.
+// Also toggles a body class so CSS can offset the panel when Routes is on.
+function _syncSidePanelVisibility() {
+  const panel = document.getElementById('key-loc-panel');
+  const vSec  = document.getElementById('kl-venues-section');
+  const cSec  = document.getElementById('kl-caterers-section');
+  if (!panel) return;
+  const vOn = typeof venuesVisible !== 'undefined' && venuesVisible;
+  const cOn = typeof caterersVisible !== 'undefined' && caterersVisible;
+  panel.classList.toggle('show', vOn || cOn);
+  if (vSec) vSec.style.display = vOn ? 'block' : 'none';
+  if (cSec) cSec.style.display = cOn ? 'block' : 'none';
+
+  // Body class lets CSS shift the panel right when the dispatch panel
+  // (Routes layer) is also visible — prevents stacking.
+  const dOn = typeof dispatchVisible !== 'undefined' && dispatchVisible;
+  document.body.classList.toggle('has-dispatch', dOn);
+}
+
+// Compact money formatter shared by both sidebar lists
+function _klFmtMoney(n) {
+  if (!n || n <= 0) return '$0';
+  if (n < 1000) return '$' + Math.round(n);
+  return '$' + (n / 1000).toFixed(n < 10000 ? 1 : 0) + 'k';
+}
+
+// Count a venue's contracts that fall in the current timeline window.
+function _venueCountInWindow(v, win) {
+  if (!v || !v.contracts) return 0;
+  return v.contracts.filter(function(c) { return _venuesInWindow(c, win); }).length;
+}
+
+// Count a caterer's contracts in the window across ALL its locations.
+function _catererCountInWindow(c, win) {
+  if (!c || !c.locations) return 0;
+  let n = 0;
+  c.locations.forEach(function(loc) {
+    (loc.contracts || []).forEach(function(row) {
+      if (_venuesInWindow(row, win)) n++;
+    });
+  });
+  return n;
+}
+
+// Render the venues section — grouped by region, sorted by region_rank.
+// Rows show rank (regional), name, and count-in-window badge.
+function renderVenuesSidebar() {
+  const container = document.getElementById('kl-venues-list');
+  if (!container) return;
+  if (!venuesData || !venuesData.venues || !venuesData.venues.length) {
+    container.innerHTML = '<div class="kl-empty">No venues available.</div>';
+    return;
+  }
+  const win = _venuesGetWindow();
+  const byRegion = {};
+  venuesData.venues.forEach(function(v) {
+    const r = v.region || 'Unknown';
+    (byRegion[r] = byRegion[r] || []).push(v);
+  });
+
+  // Ordered region list: KL_REGION_ORDER first, then any stragglers.
+  const regions = KL_REGION_ORDER.filter(function(r) { return byRegion[r]; })
+    .concat(Object.keys(byRegion).filter(function(r) { return KL_REGION_ORDER.indexOf(r) < 0; }));
+
+  let html = '';
+  regions.forEach(function(region) {
+    const list = byRegion[region].slice().sort(function(a, b) {
+      return (a.region_rank || 0) - (b.region_rank || 0);
+    });
+    html += '<div class="kl-region">' + _esc(region) + '</div>';
+    list.forEach(function(v) {
+      const cnt = _venueCountInWindow(v, win);
+      const ghostCls = cnt === 0 ? ' ghosted' : '';
+      const metaTxt = cnt === 0 ? '0 in win' : (cnt + ' in win');
+      const safeId = _esc(v.id || '');
+      html += '<div class="kl-row' + ghostCls + '" ' +
+        'onclick="focusVenue(\'' + safeId + '\')" ' +
+        'title="' + _esc(v.display_name) + ' — TTM rental ' + _klFmtMoney(v.ttm_revenue) + '">' +
+        '<span class="kl-rank">#' + (v.region_rank || v.rank) + '</span>' +
+        '<span class="kl-name">' + _esc(v.display_name) + '</span>' +
+        '<span class="kl-meta">' + metaTxt + '</span>' +
+        '</div>';
+    });
+  });
+  container.innerHTML = html;
+}
+
+// Pan/zoom the map to a venue and open its popup. Invoked from sidebar click.
+window.focusVenue = function(venueId) {
+  if (!venuesData || !venuesData.venues) return;
+  const v = venuesData.venues.find(function(x) { return x.id === venueId; });
+  if (!v || !v.lat || !v.lng) return;
+  // Ensure the layer is on (edge case: user toggled off while sidebar lingered)
+  if (!venuesVisible) toggleLayer('venues');
+  map.setView([v.lat, v.lng], Math.max(map.getZoom(), 13), { animate: true });
+  const win = _venuesGetWindow();
+  const inWin = (v.contracts || []).filter(function(c) { return _venuesInWindow(c, win); });
+  const html = _buildVenuePopupHtml(v, inWin);
+  L.popup({ maxWidth: 560, autoPan: true })
+    .setLatLng([v.lat, v.lng])
+    .setContent(html)
+    .openOn(map);
+};
+
+// Fit map to all venues. Used by the "Zoom" link in the venues section head.
+window.zoomToAllVenues = function() {
+  if (!venuesData || !venuesData.venues || !venuesData.venues.length) return;
+  const pts = venuesData.venues
+    .filter(function(v) { return v.lat && v.lng; })
+    .map(function(v) { return [v.lat, v.lng]; });
+  if (!pts.length) return;
+  map.fitBounds(pts, { padding: [40, 40] });
+};
+
+// Render the caterers section — grouped by region, colored swatch per caterer.
+// Clicking a row solos the map to that caterer. Clicking again (or "All") resets.
+function renderCaterersSidebar() {
+  const container = document.getElementById('kl-caterers-list');
+  if (!container) return;
+  if (!venuesData || !venuesData.caterers || !venuesData.caterers.length) {
+    container.innerHTML = '<div class="kl-empty">No caterers available.</div>';
+    return;
+  }
+  const win = _venuesGetWindow();
+  const byRegion = {};
+  venuesData.caterers.forEach(function(c) {
+    const r = c.region || 'Unknown';
+    (byRegion[r] = byRegion[r] || []).push(c);
+  });
+  const regions = KL_REGION_ORDER.filter(function(r) { return byRegion[r]; })
+    .concat(Object.keys(byRegion).filter(function(r) { return KL_REGION_ORDER.indexOf(r) < 0; }));
+
+  let html = '';
+  regions.forEach(function(region) {
+    const list = byRegion[region].slice().sort(function(a, b) {
+      return (a.region_rank || 0) - (b.region_rank || 0);
+    });
+    html += '<div class="kl-region">' + _esc(region) + '</div>';
+    list.forEach(function(c) {
+      const cnt = _catererCountInWindow(c, win);
+      const ghostCls = cnt === 0 ? ' ghosted' : '';
+      const onCls = (catererSoloId === c.id) ? ' on' : '';
+      const safeId = _esc(c.id || '');
+      const metaTxt = cnt === 0 ? '0 in win' : (cnt + ' in win');
+      html += '<div class="kl-row' + ghostCls + onCls + '" ' +
+        'onclick="soloCaterer(\'' + safeId + '\')" ' +
+        'title="' + _esc(c.display_name) + ' — TTM rental ' + _klFmtMoney(c.ttm_revenue) +
+        ' (click to filter map)">' +
+        '<span class="kl-swatch" style="background:' + (c.color || '#999') + ';"></span>' +
+        '<span class="kl-rank">#' + (c.region_rank || c.rank) + '</span>' +
+        '<span class="kl-name">' + _esc(c.display_name) + '</span>' +
+        '<span class="kl-meta">' + metaTxt + '</span>' +
+        '</div>';
+    });
+  });
+  container.innerHTML = html;
+}
+
+// Filter the caterers layer to just one caterer. Clicking the same caterer
+// again clears the filter (mirrors the mutually-exclusive truck solo UX).
+window.soloCaterer = function(catererId) {
+  if (!catererId) return;
+  catererSoloId = (catererSoloId === catererId) ? null : catererId;
+  if (typeof buildCaterersLayer === 'function') buildCaterersLayer();
+  renderCaterersSidebar();
+  // Zoom to the soloed caterer's footprint so the user doesn't lose context.
+  if (catererSoloId && venuesData && venuesData.caterers) {
+    const c = venuesData.caterers.find(function(x) { return x.id === catererSoloId; });
+    const pts = (c && c.locations || []).filter(function(l) { return l.lat && l.lng; })
+                                          .map(function(l) { return [l.lat, l.lng]; });
+    if (pts.length === 1) {
+      map.setView(pts[0], Math.max(map.getZoom(), 11), { animate: true });
+    } else if (pts.length > 1) {
+      map.fitBounds(pts, { padding: [40, 40] });
+    }
+  }
+};
+
+// Clear any active caterer solo and rebuild the layer.
+window.resetCatererSolo = function() {
+  if (catererSoloId === null) return;
+  catererSoloId = null;
+  if (typeof buildCaterersLayer === 'function') buildCaterersLayer();
+  renderCaterersSidebar();
+};
+
 // Main Key Venues render. Rebuilds all bubbles from scratch — top 30 set is
 // small (~30) so full rebuild on slider change is fine and avoids diff logic.
 function buildVenuesLayer() {
@@ -4698,6 +5012,9 @@ function buildCaterersLayer() {
   const win = _venuesGetWindow();
 
   venuesData.caterers.forEach(function(c) {
+    // Honor the sidebar "solo" filter — when a caterer is soloed, hide all
+    // other caterers' bubbles. null = show everyone (default).
+    if (catererSoloId && c.id !== catererSoloId) return;
     const color = c.color || '#0B4F6C';
     (c.locations || []).forEach(function(loc) {
       if (!loc.lat || !loc.lng) return;

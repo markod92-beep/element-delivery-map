@@ -1837,8 +1837,15 @@ const revMarkerGroup = (typeof L.markerClusterGroup === 'function')
 const revLayerGroup = revMarkerGroup;
 
 // ===== CONTROLS =====
-// State for layer visibility (declared early so legend can read on init)
+// State for layer visibility (declared early so legend can read on init).
+// These MUST be declared before legend.addTo(map) ~line 1994, otherwise
+// updateLegend()'s `typeof venuesVisible` / `typeof caterersVisible` guards
+// will throw a ReferenceError (TDZ — typeof on a `let` before its declaration
+// does NOT return 'undefined', it throws). The actual assignments below still
+// win at normal script execution order; we're just escaping the TDZ.
 let newVisible = true, oldVisible = false, revVisible = false, pickupVisible = false;
+let venuesVisible = false;
+let caterersVisible = false;
 const pickupLayerGroup = L.layerGroup();
 
 // ===== DISPATCH ROUTES STATE =====
@@ -4380,7 +4387,10 @@ function _renderStopContractBlock(contractNum, info) {
 // top-30 set stays recognizable on the map even when the slider is narrow.
 // ============================================================
 
-let venuesVisible = false;
+// venuesVisible is hoisted earlier in the file (near other layer-visibility
+// flags) so legend init doesn't hit a TDZ ReferenceError via
+// `typeof venuesVisible`. Reassign here is a no-op but keeps intent local.
+venuesVisible = false;
 let venuesData = null;
 let venuesLoading = null;
 const venuesLayerGroup = L.layerGroup();
@@ -4583,7 +4593,8 @@ function buildVenuesLayer() {
 // dispatch lat/lng are dropped from rendering, counted in ranking).
 // ============================================================
 
-let caterersVisible = false;
+// caterersVisible is hoisted earlier in the file — see note on venuesVisible.
+caterersVisible = false;
 const caterersLayerGroup = L.layerGroup();
 
 // Radius for a caterer bubble at `count` contracts in window. Smaller

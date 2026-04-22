@@ -542,14 +542,16 @@ body.has-dispatch .key-loc-panel { left: 304px; }
 .qj-btn.qj-active { background: var(--element-teal); color: var(--element-white); border-color: var(--element-teal); }
 
 /* Mode-based chip gating — applies on desktop + mobile:
-   - Routes-only mode: show Yesterday/Today/Tomorrow (single-day presets only).
-     Week/YTD/Last Year don't map to a single day.
-   - Revenue-only mode: show This Week / YTD / Last Year. Yesterday/Today/Tomorrow
-     are too narrow for revenue data (aggregated weekly in contractWeekly). */
-body.routes-active:not(.rev-on) #tl-preset-chips .qj-rev-only { display: none; }
+   - Routes active (alone OR combined with Revenue): show only Yesterday/Today/
+     Tomorrow. Routes is inherently a single-day view, so This Week / YTD / Last
+     Year have no meaning here — hiding unconditionally when Routes is on keeps
+     the UX honest.
+   - Revenue-only mode: show This Week / YTD / Last Year. Yesterday/Today/
+     Tomorrow are too narrow for revenue data (aggregated weekly in
+     contractWeekly). */
+body.routes-active #tl-preset-chips .qj-rev-only { display: none; }
 body.rev-on:not(.routes-active) #tl-preset-chips .qj-routes-only { display: none; }
 body.rev-on:not(.routes-active) #tl-preset-chips .qj-btn[data-preset="today"] { display: none; }
-/* Both modes on: show everything (user can pick either paradigm). */
 
 /* Routes-only mode: collapse From/To range picker into a single prominent "Date"
    field. Routes is a one-day view — the range was confusing users. The ◀/▶ step
@@ -2069,9 +2071,9 @@ function _decodePolyline(str) {
 
 // Return the set of company buckets a route "belongs to":
 //   - Real route: use the truck's home-store code (hs). Single-value set.
-//   - Virtual route (annotate_unassigned.py synthetic): no hs — fall back to
-//     the stops' store codes so the "No truck assigned" pins still filter by
-//     the contract's owning company. Multi-valued when stops mix companies.
+//   - Virtual route (annotate_unassigned.py synthetic): annotate now splits
+//     synth routes per region and stamps route.co with the bucket name, so
+//     prefer that. Falls back to stops' store codes for older payloads.
 function _routeCompanies(route) {
   const out = new Set();
   if (!route.virtual && route.hs) {
@@ -2079,6 +2081,12 @@ function _routeCompanies(route) {
     if (co) out.add(co);
     return out;
   }
+  // Virtual route — prefer the per-route bucket stamp set by annotate_unassigned.py.
+  if (route.virtual && route.co) {
+    out.add(route.co);
+    return out;
+  }
+  // Legacy fallback: derive from stops' store codes.
   (route.stops || []).forEach(function(s) {
     const co = DISPATCH_STORE_TO_CO[s.store];
     if (co) out.add(co);
@@ -2672,10 +2680,19 @@ function updateTimeline() {
   // Handles cases like M5H / M5X where adjacent downtown FSAs have near-identical
   // centroids and render directly on top of each other. Clusters them and arranges
   // on a small ring around the cluster's mean centroid.
+  //
+  // V:* override keys are EXCLUDED from deoverlap — they're curated precise coords
+  // (actual venue lat/lng), so shifting them onto a ring would a) break alignment
+  // with the Venues layer (which renders V:* at their true coord, so the heatmap
+  // bubble and venue marker for the same place would land in different spots),
+  // and b) defeat the purpose of having per-venue overrides. Only imprecise FSA
+  // centroids need spreading.
   (function deoverlapBubbles() {
     const THRESH = 0.003;   // cluster if lat & lng both within ~300m (Toronto lat)
     const SPREAD = 0.006;   // ring radius from cluster center (~650m)
-    const entries = Object.entries(allLocations).filter(function(e){ return e[1].rev > 0; });
+    const entries = Object.entries(allLocations).filter(function(e){
+      return e[1].rev > 0 && !e[0].startsWith('V:');
+    });
     const seen = new Set();
     for (let i = 0; i < entries.length; i++) {
       const k1 = entries[i][0], l1 = entries[i][1];
@@ -3681,6 +3698,9 @@ window.toggleLayer = function(which) {
     if (revVisible) { map.addLayer(revLayerGroup); document.getElementById('btn-rev').className='toggle-btn active-rev'; document.getElementById('btn-rev').innerHTML='&#10004; Revenue Heatmap'; document.body.classList.add('rev-on'); }
     else { map.removeLayer(revLayerGroup); document.getElementById('btn-rev').className='toggle-btn'; document.getElementById('btn-rev').textContent='Revenue Heatmap'; document.body.classList.remove('rev-on'); }
     _syncTimelinePanelVisibility();
+    // If Venues is also on, rebuild so V:* bubbles move into/out of the
+    // pixel-offset position beside the heatmap bubble at the same coord.
+    if (venuesVisible && typeof buildVenuesLayer === 'function') buildVenuesLayer();
   } else if (which === 'dispatch') {
     const turningOn = !dispatchVisible;
     // Radio-button behavior: if turning Routes ON and Revenue Heatmap is
@@ -3692,6 +3712,9 @@ window.toggleLayer = function(which) {
       rbtn.className = 'toggle-btn';
       rbtn.textContent = 'Revenue Heatmap';
       document.body.classList.remove('rev-on');
+      // Rev just turned off — if Venues is on, drop the pixel offset so
+      // bubbles return to their true coord (no heatmap bubble to clear).
+      if (venuesVisible && typeof buildVenuesLayer === 'function') buildVenuesLayer();
     }
     dispatchVisible = turningOn;
     const btn = document.getElementById('btn-dispatch');
@@ -4612,6 +4635,30 @@ function _venueBubbleRadius(count) {
   return Math.min(28, r);
 }
 
+// When the Revenue heatmap is also on, a V:* venue (e.g. ROM) has a
+// heatmap bubble AND a Venues bubble at the exact same coord — they stack
+// and only the top one is clickable. Shift the Venues bubble ~36px right
+// of the true coord in SCREEN space so both sit side-by-side with a small
+// gap. Using pixel space (latLngToContainerPoint → containerPointToLatLng)
+// keeps the visual gap constant across zoom levels — at zoom 18 the lat/lng
+// delta is tiny, at zoom 5 it's large, but the pixel distance is fixed.
+//
+// The offset is only applied when revVisible is true (otherwise the venue
+// sits at its true coord). Venues layer rebuilds on zoomend so the offset
+// recomputes for the new projection.
+function _venueOffsetLatLng(lat, lng) {
+  if (typeof revVisible === 'undefined' || !revVisible) return [lat, lng];
+  if (!map || typeof map.latLngToContainerPoint !== 'function') return [lat, lng];
+  try {
+    const OFFSET_PX_X = 36;   // clears max 30px heatmap radius + ~6px gap
+    const p = map.latLngToContainerPoint([lat, lng]);
+    const shifted = map.containerPointToLatLng([p.x + OFFSET_PX_X, p.y]);
+    return [shifted.lat, shifted.lng];
+  } catch (e) {
+    return [lat, lng];
+  }
+}
+
 // Render the popup body for a venue. Lists contracts in the timeline window,
 // sorted by date desc, with a route link when the contract maps to a
 // dispatch stop. Keeps the DOM structure consistent with other map popups.
@@ -4916,7 +4963,12 @@ function buildVenuesLayer() {
     const count = inWin.length;
     const ghosted = count === 0;
 
-    const marker = L.circleMarker([v.lat, v.lng], {
+    // Shift right in screen space when the heatmap is also on — otherwise
+    // both bubbles render at the same V:* coord and stack, making only
+    // the top one clickable. No-op when heatmap is off.
+    const [mLat, mLng] = _venueOffsetLatLng(v.lat, v.lng);
+
+    const marker = L.circleMarker([mLat, mLng], {
       radius:      _venueBubbleRadius(count),
       fillColor:   ghosted ? '#ffffff' : TEAL,
       color:       TEAL,
@@ -4946,6 +4998,18 @@ function buildVenuesLayer() {
     });
 
     marker.addTo(venuesLayerGroup);
+  });
+}
+
+// Rebuild venues on zoom so the pixel-space offset (_venueOffsetLatLng)
+// recomputes for the new projection. Without this the offset baked in at
+// zoom=10 would drift as the user zooms in/out — bubbles would either
+// drift apart visually or slide back onto the heatmap bubble.
+// Also rebuilds when only revVisible flips, so toggling the heatmap while
+// venues are on moves them into/out of the offset position.
+if (map && typeof map.on === 'function') {
+  map.on('zoomend', function() {
+    if (venuesVisible) buildVenuesLayer();
   });
 }
 

@@ -541,11 +541,42 @@ body.has-dispatch .key-loc-panel { left: 304px; }
 }
 .qj-btn.qj-active { background: var(--element-teal); color: var(--element-white); border-color: var(--element-teal); }
 
-/* Revenue-only mode (Revenue on, Routes off): hide the "Today" chip — Revenue
-   data is weekly-aggregated in contractWeekly, so "Today" can't meaningfully
-   narrow the view and would just collapse to the containing week. "This Week"
-   and "YTD" are the useful presets here. Applies on desktop + mobile. */
+/* Mode-based chip gating — applies on desktop + mobile:
+   - Routes-only mode: show Yesterday/Today/Tomorrow (single-day presets only).
+     Week/YTD/Last Year don't map to a single day.
+   - Revenue-only mode: show This Week / YTD / Last Year. Yesterday/Today/Tomorrow
+     are too narrow for revenue data (aggregated weekly in contractWeekly). */
+body.routes-active:not(.rev-on) #tl-preset-chips .qj-rev-only { display: none; }
+body.rev-on:not(.routes-active) #tl-preset-chips .qj-routes-only { display: none; }
 body.rev-on:not(.routes-active) #tl-preset-chips .qj-btn[data-preset="today"] { display: none; }
+/* Both modes on: show everything (user can pick either paradigm). */
+
+/* Routes-only mode: collapse From/To range picker into a single prominent "Date"
+   field. Routes is a one-day view — the range was confusing users. The ◀/▶ step
+   buttons already auto-detect single-day mode and step by 1 day (see stepTimelineRange). */
+body.routes-active:not(.rev-on) #tl-daterange .tl-range-col:first-child { display: none; }
+body.routes-active:not(.rev-on) #tl-daterange .tl-range-col:last-child label {
+  font-size: 0;  /* hide the original "To" text, show only the ::before "Date" */
+}
+body.routes-active:not(.rev-on) #tl-daterange .tl-range-col:last-child label::before {
+  content: "Date";
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--element-teal);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: inline-block;
+}
+body.routes-active:not(.rev-on) #tl-daterange .tl-range-col:last-child input[type="date"] {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 6px 8px;
+}
+body.routes-active:not(.rev-on) #tl-daterange .tl-step {
+  min-width: 32px;
+  font-size: 14px;
+  font-weight: 700;
+}
 
 /* ===== UNIFIED TIMELINE — shared by Revenue + Routes layers ===== */
 .tl-chip-row {
@@ -1070,28 +1101,9 @@ body.rev-on:not(.routes-active) #tl-preset-chips .qj-btn[data-preset="today"] { 
   .mfab[data-sheet="truck"] { display: none; }
   body.routes-active .mfab[data-sheet="truck"] { display: flex; }
 
-  /* Routes-only mode (Routes on, Revenue off): collapse the From/To range picker
-     into a single Date picker. Routes is inherently a one-day view, so showing
-     a week range was confusing — users were picking week presets expecting a
-     single day. */
-  body.routes-active:not(.rev-on) #tl-daterange .tl-range-col:first-child { display: none; }
-  body.routes-active:not(.rev-on) #tl-daterange .tl-range-col:last-child label::before {
-    content: "Date";
-  }
-  body.routes-active:not(.rev-on) #tl-daterange .tl-range-col:last-child label {
-    font-size: 0;  /* hide the original "To" text, show only the ::before "Date" */
-  }
-  body.routes-active:not(.rev-on) #tl-daterange .tl-range-col:last-child label::before {
-    font-size: 11px;
-    display: inline-block;
-  }
-  /* Hide range-only presets (This Week / YTD) — they don't map to a single day.
-     "Today" chip still makes sense. */
-  body.routes-active:not(.rev-on) #tl-preset-chips .qj-btn[data-preset="week"],
-  body.routes-active:not(.rev-on) #tl-preset-chips .qj-btn[data-preset="thisYear"],
-  body.routes-active:not(.rev-on) #tl-preset-chips .qj-btn[data-preset="lastYear"] {
-    display: none;
-  }
+  /* Routes-only date-collapse now handled globally (see "Mode-based chip gating"
+     section above). Range-only preset hiding now handled globally via .qj-rev-only
+     class. */
   .mfab {
     width: 44px; height: 44px;
     border-radius: 50%;
@@ -1302,10 +1314,14 @@ document.addEventListener('DOMContentLoaded', function() {
          On Routes layer, selecting a range shows routes for the "To" date (single-day view under the hood). -->
     <div class="tl-section" id="tl-daterange">
       <div class="tl-chip-row" id="tl-preset-chips">
+        <!-- Routes-mode chips: quick one-day jumps. Hidden on Revenue-only. -->
+        <div class="qj-btn qj-routes-only" data-preset="yesterday" onclick="quickJump('yesterday')">Yesterday</div>
         <div class="qj-btn" data-preset="today"    onclick="quickJump('today')">Today</div>
-        <div class="qj-btn" data-preset="week"     onclick="quickJump('week')">This Week</div>
-        <div class="qj-btn" data-preset="thisYear" onclick="quickJump('thisYear')">YTD</div>
-        <div class="qj-btn" data-preset="lastYear" onclick="quickJump('lastYear')">Last Year</div>
+        <div class="qj-btn qj-routes-only" data-preset="tomorrow" onclick="quickJump('tomorrow')">Tomorrow</div>
+        <!-- Revenue-mode chips: range presets. Hidden on Routes-only. -->
+        <div class="qj-btn qj-rev-only" data-preset="week"     onclick="quickJump('week')">This Week</div>
+        <div class="qj-btn qj-rev-only" data-preset="thisYear" onclick="quickJump('thisYear')">YTD</div>
+        <div class="qj-btn qj-rev-only" data-preset="lastYear" onclick="quickJump('lastYear')">Last Year</div>
       </div>
 
       <div class="tl-range-row" style="margin-top:6px;">
@@ -1991,6 +2007,28 @@ const DISPATCH_STORE_TO_CO = {
   'A&B': 'West',        'LW':  'West',
 };
 
+// Truck's HOME STORE -> company bucket. This is what drives the "which
+// business unit is driving this route" filter. Previously we derived a
+// route's company from each STOP's store code, but a stop's store reflects
+// the CONTRACT's home branch (which account books the revenue), not the
+// truck's home depot — so a GTA truck doing a pickup on a West-booked
+// contract would leak into the West filter. Using the route's own hs keeps
+// the filter tied to the physical truck dispatch.
+//
+// Codes match HOME_STORE_COORDS below (sourced from Element's store
+// register). Defunct codes are included so historical data still classifies.
+const DISPATCH_HS_TO_CO = {
+  '001': 'GTA',        // 501 Consumers
+  '002': 'GTA',        // 210 Wicksteed
+  '003': 'East',       // Dartmouth NS
+  '004': 'GTA Tents',  // 210 Wicksteed Tents
+  '005': 'West',       // Burnaby BC
+  '006': 'GTA',        // Stoney Creek
+  '007': 'West',       // Vancouver BC
+  '008': 'GTA',        // Premium (defunct)
+  '009': 'GTA',        // Rangemore (defunct)
+};
+
 // Home store (hs) → warehouse anchor. Used as a fallback when POR's per-route
 // StartStore / StopStore coords are missing or get rejected by the sanity
 // check in process_dispatch.py. Addresses sourced from Element's store SKU
@@ -2029,9 +2067,18 @@ function _decodePolyline(str) {
   return out;
 }
 
-// Return the set of company buckets a route touches, based on its stops' stores.
+// Return the set of company buckets a route "belongs to":
+//   - Real route: use the truck's home-store code (hs). Single-value set.
+//   - Virtual route (annotate_unassigned.py synthetic): no hs — fall back to
+//     the stops' store codes so the "No truck assigned" pins still filter by
+//     the contract's owning company. Multi-valued when stops mix companies.
 function _routeCompanies(route) {
   const out = new Set();
+  if (!route.virtual && route.hs) {
+    const co = DISPATCH_HS_TO_CO[route.hs];
+    if (co) out.add(co);
+    return out;
+  }
   (route.stops || []).forEach(function(s) {
     const co = DISPATCH_STORE_TO_CO[s.store];
     if (co) out.add(co);
@@ -2040,10 +2087,13 @@ function _routeCompanies(route) {
 }
 
 // Does a route match the currently-active company filter? Match = any overlap.
-// If no stores on the route are in the bucket map (edge case), route is shown.
+// If no company signal at all (route has no hs AND no recognized stop stores),
+// we HIDE the route — previously we showed it, which leaked un-classified
+// routes into every filter. Un-classified routes are vanishingly rare; better
+// to hide than to leak cross-region noise.
 function _routeMatchesCompany(route) {
   const cos = _routeCompanies(route);
-  if (cos.size === 0) return true;
+  if (cos.size === 0) return false;
   for (const co of cos) if (companyFilter.has(co)) return true;
   return false;
 }
@@ -3032,6 +3082,12 @@ window.quickJump = function(preset) {
     toDate = new Date(lastMon); toDate.setDate(toDate.getDate() + 6);
   } else if (preset === 'today') {
     fromDate = new Date(today); toDate = new Date(today);
+  } else if (preset === 'yesterday') {
+    const d = new Date(today); d.setDate(d.getDate() - 1);
+    fromDate = new Date(d); toDate = new Date(d);
+  } else if (preset === 'tomorrow') {
+    const d = new Date(today); d.setDate(d.getDate() + 1);
+    fromDate = new Date(d); toDate = new Date(d);
   } else if (preset === 'week') {
     // Current ISO week: Monday → Sunday of today's week.
     const dow = (today.getDay() + 6) % 7;  // 0 = Monday
@@ -5272,22 +5328,23 @@ window.closeMobileSheet = function() {
       handle.addEventListener('touchend', function() { startY = null; });
     });
 
-    // --- Keep body.routes-active in sync with active layer ---
-    // Hook into toggleLayer by watching for the Routes toggle-btn's active class.
-    // Uses a MutationObserver so any code path that activates Routes updates
-    // the sheet visibility without requiring a rewrite of toggleLayer.
-    var routesBtn = document.getElementById('btn-dispatch');
-    if (routesBtn) {
-      var syncRoutesActive = function() {
-        // Routes button uses 'active-rev' (not 'active') when the layer is on.
-        var isOn = routesBtn.classList.contains('active-rev') ||
-                   routesBtn.classList.contains('active');
-        if (isOn) bodyEl.classList.add('routes-active');
-        else bodyEl.classList.remove('routes-active');
-      };
-      syncRoutesActive();
-      new MutationObserver(syncRoutesActive).observe(routesBtn, { attributes: true, attributeFilter: ['class'] });
-    }
+  }
+
+  // --- Keep body.routes-active in sync with active layer (desktop + mobile) ---
+  // Watches the Routes toggle-btn's class so any code path that activates Routes
+  // updates the body class. Used by CSS rules to gate timeline chip/date UX
+  // between Routes-only, Revenue-only, and combined modes.
+  var routesBtn = document.getElementById('btn-dispatch');
+  if (routesBtn) {
+    var syncRoutesActive = function() {
+      // Routes button uses 'active-rev' (not 'active') when the layer is on.
+      var isOn = routesBtn.classList.contains('active-rev') ||
+                 routesBtn.classList.contains('active');
+      if (isOn) bodyEl.classList.add('routes-active');
+      else bodyEl.classList.remove('routes-active');
+    };
+    syncRoutesActive();
+    new MutationObserver(syncRoutesActive).observe(routesBtn, { attributes: true, attributeFilter: ['class'] });
   }
 
   // 1. Make legend collapsible on mobile

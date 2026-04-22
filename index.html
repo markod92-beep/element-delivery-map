@@ -232,6 +232,33 @@ body {
   width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
   border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(28,59,66,0.2);
 }
+/* Delivery/Pickup revenue mini-stack inside each truck pill.
+   Keeps the pill one-line; the D / P labels de-clutter visually with a dot
+   separator. Inherits pill color (white when selected, ink otherwise). */
+.dispatch-panel .dp-truck-rev {
+  display: inline-flex; align-items: baseline; gap: 3px;
+  margin-left: 6px; padding-left: 7px;
+  border-left: 1px solid rgba(28,59,66,0.18);
+  font-size: 10.5px; font-weight: 600; line-height: 1;
+  letter-spacing: 0.01em; opacity: 0.92;
+}
+.dispatch-panel .dp-truck-row.on .dp-truck-rev {
+  border-left-color: rgba(255,255,255,0.35);
+}
+.dispatch-panel .dp-rev-d { color: inherit; }
+.dispatch-panel .dp-rev-p { color: inherit; opacity: 0.85; }
+.dispatch-panel .dp-rev-sep { opacity: 0.45; }
+#ms-body-truck .dp-truck-rev {
+  display: inline-flex; align-items: baseline; gap: 3px;
+  margin-left: 6px; padding-left: 7px;
+  border-left: 1px solid rgba(28,59,66,0.18);
+  font-size: 10.5px; font-weight: 600; line-height: 1;
+  letter-spacing: 0.01em; opacity: 0.92;
+}
+#ms-body-truck .dp-truck-row.on .dp-truck-rev { border-left-color: rgba(255,255,255,0.35); }
+#ms-body-truck .dp-rev-d { color: inherit; }
+#ms-body-truck .dp-rev-p { color: inherit; opacity: 0.85; }
+#ms-body-truck .dp-rev-sep { opacity: 0.45; }
 .dispatch-panel .dp-mini-link {
   font-size: 10px; color: var(--element-teal); text-decoration: none; margin: 0 2px;
 }
@@ -446,6 +473,12 @@ body {
   .qj-btn:hover { background: var(--element-mint); border-color: var(--element-teal); }
 }
 .qj-btn.qj-active { background: var(--element-teal); color: var(--element-white); border-color: var(--element-teal); }
+
+/* Revenue-only mode (Revenue on, Routes off): hide the "Today" chip — Revenue
+   data is weekly-aggregated in contractWeekly, so "Today" can't meaningfully
+   narrow the view and would just collapse to the containing week. "This Week"
+   and "YTD" are the useful presets here. Applies on desktop + mobile. */
+body.rev-on:not(.routes-active) #tl-preset-chips .qj-btn[data-preset="today"] { display: none; }
 
 /* ===== UNIFIED TIMELINE — shared by Revenue + Routes layers ===== */
 .tl-chip-row {
@@ -988,7 +1021,8 @@ body {
   /* Hide range-only presets (This Week / YTD) — they don't map to a single day.
      "Today" chip still makes sense. */
   body.routes-active:not(.rev-on) #tl-preset-chips .qj-btn[data-preset="week"],
-  body.routes-active:not(.rev-on) #tl-preset-chips .qj-btn[data-preset="thisYear"] {
+  body.routes-active:not(.rev-on) #tl-preset-chips .qj-btn[data-preset="thisYear"],
+  body.routes-active:not(.rev-on) #tl-preset-chips .qj-btn[data-preset="lastYear"] {
     display: none;
   }
   .mfab {
@@ -1204,6 +1238,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="qj-btn" data-preset="today"    onclick="quickJump('today')">Today</div>
         <div class="qj-btn" data-preset="week"     onclick="quickJump('week')">This Week</div>
         <div class="qj-btn" data-preset="thisYear" onclick="quickJump('thisYear')">YTD</div>
+        <div class="qj-btn" data-preset="lastYear" onclick="quickJump('lastYear')">Last Year</div>
       </div>
 
       <div class="tl-range-row" style="margin-top:6px;">
@@ -1583,8 +1618,25 @@ function getBandFromRate(rate) {
 }
 
 // ===== WAREHOUSE MARKER =====
-const warehouse = L.marker([43.7745, -79.2358],{
-  icon: L.divIcon({className:'warehouse-icon',html:'<div style="display:flex;align-items:center;gap:4px;background:#1C3B42;color:#fff;padding:5px 11px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap;border:2px solid #fff;box-shadow:0 3px 10px rgba(28,59,66,0.35);letter-spacing:0.02em;"><span style="font-size:15px;">&#127981;</span> 601 Milner Ave</div>',iconSize:[0,0],iconAnchor:[-5,15]})
+// 601 Milner Ave, Scarborough ON M1B 3A7 — Element's main GTA warehouse.
+// Coords verified against Google Maps street address (not FSA centroid).
+// Marker = small teal anchor dot AT the exact point + legible label tag
+// beside it. iconAnchor positions the dot (11px circle centered on lat/lng);
+// the label floats to the right with its own box so the point is unambiguous.
+const warehouse = L.marker([43.77913, -79.22245], {
+  icon: L.divIcon({
+    className: 'warehouse-icon',
+    html:
+      '<div style="position:relative;">' +
+        '<span style="position:absolute;left:0;top:0;width:14px;height:14px;border-radius:50%;background:#1C3B42;border:2.5px solid #fff;box-shadow:0 2px 6px rgba(28,59,66,0.45);"></span>' +
+        '<div style="position:absolute;left:20px;top:-4px;display:flex;align-items:center;gap:5px;background:#1C3B42;color:#fff;padding:5px 11px;border-radius:999px;font-size:12.5px;font-weight:700;white-space:nowrap;border:2px solid #fff;box-shadow:0 3px 10px rgba(28,59,66,0.4);letter-spacing:0.01em;font-family:inherit;">' +
+          '<span style="font-size:15px;line-height:1;">&#127981;</span>' +
+          '<span>601 Milner Ave</span>' +
+        '</div>' +
+      '</div>',
+    iconSize:   [0, 0],
+    iconAnchor: [7, 7]   // center of the 14px anchor dot
+  })
 }).addTo(map);
 
 // ===== NEW PRICING LAYER (Voronoi Polygons) =====
@@ -1911,6 +1963,8 @@ infoControl.onAdd = function() {
     '<div class="toggle-btn" id="btn-old" onclick="toggleLayer(\'old\')">Old Pricing (101)</div>' +
     '<div class="toggle-btn" id="btn-rev" onclick="toggleLayer(\'rev\')">Revenue Heatmap</div>' +
     '<div class="toggle-btn" id="btn-dispatch" onclick="toggleLayer(\'dispatch\')">Routes</div>' +
+    '<div class="toggle-btn" id="btn-venues" onclick="toggleLayer(\'venues\')">Key Venues</div>' +
+    '<div class="toggle-btn" id="btn-caterers" onclick="toggleLayer(\'caterers\')">Key Caterers</div>' +
     '</div>' +
     '<div class="co-label">Company</div>' +
     '<div class="toggle-row" style="flex-wrap:wrap;gap:6px;">' +
@@ -1978,6 +2032,29 @@ function updateLegend() {
   }
 
 
+  // Key Venues legend (single teal color, bubble size = contracts in window)
+  if (typeof venuesVisible !== 'undefined' && venuesVisible) {
+    if (html) html += '<hr>';
+    html += '<h4>Key Venues</h4>' +
+      '<div class="legend-item"><div class="legend-dot" style="background:#0B4F6C;opacity:0.55;border-color:#0B4F6C;"></div>Top 15 by TTM rental</div>' +
+      '<div class="legend-item"><div class="legend-dot" style="background:#ffffff;border:1.5px dashed #0B4F6C;"></div>No contracts in window</div>' +
+      '<div style="font-size:11px;color:#888;margin-top:4px;">Bubble size = contracts in window</div>';
+  }
+
+  // Key Caterers legend — one swatch per caterer, colored to match bubbles.
+  if (typeof caterersVisible !== 'undefined' && caterersVisible &&
+      typeof venuesData !== 'undefined' && venuesData && venuesData.caterers) {
+    if (html) html += '<hr>';
+    html += '<h4>Key Caterers</h4>' +
+      '<div style="font-size:11px;color:#888;margin-bottom:4px;">Top 15 by TTM rental. Bubble = delivery location.</div>';
+    venuesData.caterers.forEach(function(c) {
+      html += '<div class="legend-item" style="font-size:11px;">' +
+        '<div class="legend-dot" style="background:' + c.color + ';opacity:0.65;border-color:' + c.color + ';"></div>' +
+        '#' + c.rank + ' ' + c.display_name +
+        '</div>';
+    });
+  }
+
   if (!html) html = '<h4>Toggle a layer above</h4>';
   legendDiv.innerHTML = html;
 }
@@ -2008,33 +2085,43 @@ window.getContractEvents = function(cityKey, customerName) {
   const endMonday = wkToMonday(endWk);
   const endDate = new Date(endMonday.getTime() + 6 * 86400000).toISOString().slice(0, 10);
   
-  // Look up contract events — handle ZONE: keys by searching all CITY: keys that map to this zone
+  // Look up contract events — handle ZONE: keys by collecting events from ALL
+  // FSAs and CITY: keys that map to this zone. We must NOT fall back to "first
+  // matching FSA anywhere" because customers like Duet Events or Element-Leaside
+  // have events across many FSAs (Vaughan, Toronto, Niagara, etc.) — returning
+  // the first match would show events from the wrong region in the popup.
   let custEvents = null;
   const directData = contractEvents[cityKey];
   if (directData && directData[customerName]) {
     custEvents = directData[customerName];
   } else if (cityKey.startsWith('ZONE:')) {
-    // Search all CITY: keys that map to this zone
     const zoneName = cityKey.slice(5);
+    const collected = [];
+    // CITY: keys that map to this zone
     for (const [ck, zn] of Object.entries(cityKeyToZone)) {
       if (zn === zoneName) {
         const cd = contractEvents[ck];
-        if (cd && cd[customerName]) { custEvents = cd[customerName]; break; }
+        if (cd && cd[customerName]) collected.push(...cd[customerName]);
       }
     }
-    // Also check FSA keys (Toronto FSA keys in contractEvents)
-    if (!custEvents) {
-      for (const [locKey, locData] of Object.entries(contractEvents)) {
-        if (!locKey.startsWith('CITY:') && locData[customerName]) {
-          custEvents = locData[customerName]; break;
-        }
+    // FSA keys that map to this zone (e.g. L0S → Niagara, L2G → Niagara Falls)
+    for (const [fsa, zn] of Object.entries(fsaToZone)) {
+      if (zn === zoneName) {
+        const cd = contractEvents[fsa];
+        if (cd && cd[customerName]) collected.push(...cd[customerName]);
       }
     }
+    if (collected.length) custEvents = collected;
   } else {
-    // Try searching all contractEvents for this customer
-    for (const locData of Object.values(contractEvents)) {
-      if (locData[customerName]) { custEvents = locData[customerName]; break; }
-    }
+    // FSA locKey (possibly comma-joined for combined bubbles). Collect events
+    // from each component FSA so combined bubbles show their full event list.
+    const fsaList = cityKey.split(',').map(s => s.trim()).filter(Boolean);
+    const collected = [];
+    fsaList.forEach(fsa => {
+      const cd = contractEvents[fsa];
+      if (cd && cd[customerName]) collected.push(...cd[customerName]);
+    });
+    if (collected.length) custEvents = collected;
   }
   if (!custEvents || custEvents.length === 0) return '<div style="padding:8px;font-size:11px;color:#888;text-align:center;background:#f8f8f8;border-radius:4px;margin:4px 0;">No contract data available for this customer</div>';
   
@@ -2194,18 +2281,37 @@ function updateTimeline() {
     document.getElementById('range-display').textContent = startShort + ' \u2013 ' + endShort + yearSuffix + ' (' + (endIdx - startIdx + 1) + ' weeks)';
   }
 
-  // Keep the unified From/To inputs in sync with slider state — covers cases where
-  // updateTimeline() is called directly (e.g. by setContractFilter) rather than via setTimelineRange.
+  // Keep the unified From/To inputs in sync with slider state — but ONLY when
+  // the current input values fall OUTSIDE the slider's week range (i.e. stale
+  // from a prior view). When the inputs already land inside the correct week
+  // window, leave them alone — otherwise we clobber precise day values that
+  // setTimelineRange() just wrote (e.g. "Today" = 2026-04-20 / 2026-04-20
+  // would get overwritten to Mon/Sun of this week, breaking the single-day
+  // Routes view and making the step-arrow jump by 7 days instead of 1).
   try {
     const fromInp = document.getElementById('tl-from-input');
     const toInp   = document.getElementById('tl-to-input');
     if (fromInp && toInp && typeof _wkIdxToMondayDate === 'function' && typeof _dateToIsoDate === 'function') {
       const fMon = _wkIdxToMondayDate(startIdx);
       const tMon = _wkIdxToMondayDate(endIdx);
-      if (fMon) fromInp.value = _dateToIsoDate(fMon);
-      if (tMon) {
+      if (fMon && tMon) {
         const tSun = new Date(tMon); tSun.setDate(tSun.getDate() + 6);
-        toInp.value = _dateToIsoDate(tSun);
+        const mondayIso = _dateToIsoDate(fMon);
+        const sundayIso = _dateToIsoDate(tSun);
+        const curFromIso = fromInp.value;
+        const curToIso   = toInp.value;
+        // "Consistent" = both current inputs are non-empty AND fall inside
+        // [mondayIso, sundayIso] (the week range the sliders now represent).
+        const consistent = (
+          curFromIso && curToIso &&
+          curFromIso >= mondayIso && curFromIso <= sundayIso &&
+          curToIso   >= mondayIso && curToIso   <= sundayIso &&
+          curFromIso <= curToIso
+        );
+        if (!consistent) {
+          fromInp.value = mondayIso;
+          toInp.value   = sundayIso;
+        }
       }
     }
   } catch (e) { /* best-effort sync — never block the main aggregation */ }
@@ -2622,6 +2728,21 @@ function updateTimeline() {
 
   // Update pickup layer
   if (pickupVisible) buildPickupLayer();
+
+  // Update Key Venues layer — bubbles resize based on contracts in the
+  // current timeline window; top-30 set itself is fixed (computed at
+  // pipeline time). Guarded so we don't re-render until the layer is on.
+  if (typeof venuesVisible !== 'undefined' && venuesVisible &&
+      typeof buildVenuesLayer === 'function') {
+    buildVenuesLayer();
+  }
+
+  // Same pattern for Key Caterers — top-15 caterers are fixed (pipeline),
+  // but bubble sizes + popup contract tables scope to the timeline window.
+  if (typeof caterersVisible !== 'undefined' && caterersVisible &&
+      typeof buildCaterersLayer === 'function') {
+    buildCaterersLayer();
+  }
 }
 
 
@@ -3445,6 +3566,53 @@ window.toggleLayer = function(which) {
       panel.classList.remove('show');
     }
     _syncTimelinePanelVisibility();
+  } else if (which === 'venues') {
+    // Key Venues is additive — stacks with any other layer. Ranking is
+    // fixed (top 30 by TTM rental); the timeline window only resizes the
+    // bubbles and filters the popup contract table.
+    venuesVisible = !venuesVisible;
+    const vbtn = document.getElementById('btn-venues');
+    if (venuesVisible) {
+      vbtn.className = 'toggle-btn active-rev';
+      vbtn.innerHTML = '&#10004; Key Venues';
+      ensureVenuesData().then(function() {
+        map.addLayer(venuesLayerGroup);
+        buildVenuesLayer();
+      }).catch(function(err) {
+        console.error('Venues data load failed:', err);
+        venuesVisible = false;
+        vbtn.className = 'toggle-btn';
+        vbtn.textContent = 'Key Venues';
+      });
+    } else {
+      map.removeLayer(venuesLayerGroup);
+      vbtn.className = 'toggle-btn';
+      vbtn.textContent = 'Key Venues';
+    }
+  } else if (which === 'caterers') {
+    // Key Caterers is additive — stacks with any other layer. Ranking is
+    // fixed (top 15 caterers by TTM rental); each caterer renders as a set of
+    // colored bubbles (one per delivery location). Timeline window resizes the
+    // bubbles and filters the popup contract table.
+    caterersVisible = !caterersVisible;
+    const cbtn = document.getElementById('btn-caterers');
+    if (caterersVisible) {
+      cbtn.className = 'toggle-btn active-rev';
+      cbtn.innerHTML = '&#10004; Key Caterers';
+      ensureVenuesData().then(function() {
+        map.addLayer(caterersLayerGroup);
+        buildCaterersLayer();
+      }).catch(function(err) {
+        console.error('Caterers data load failed:', err);
+        caterersVisible = false;
+        cbtn.className = 'toggle-btn';
+        cbtn.textContent = 'Key Caterers';
+      });
+    } else {
+      map.removeLayer(caterersLayerGroup);
+      cbtn.className = 'toggle-btn';
+      cbtn.textContent = 'Key Caterers';
+    }
   }
   updateLegend();
 };
@@ -3576,9 +3744,22 @@ function updateDispatchTruckOptions(preserveSelection) {
   if (!dispatchData || !dispatchDate) return;
   const allRoutes = (dispatchData.routes || {})[dispatchDate] || [];
   const routes = allRoutes.filter(_routeMatchesCompany);
-  // Map truck -> color so the chip swatch matches the map polyline
+  // Map truck -> color so the chip swatch matches the map polyline.
+  // Also roll up per-truck revenue split by stop class:
+  //   'D' (Delivery) and 'P' (Pickup) — we filter S/T upstream.
   const truckColor = {};
-  routes.forEach(function(r) { if (!truckColor[r.truck]) truckColor[r.truck] = r.color; });
+  const truckDelRev = {};  // $ revenue from 'D' stops
+  const truckPickRev = {}; // $ revenue from 'P' stops
+  routes.forEach(function(r) {
+    if (!truckColor[r.truck]) truckColor[r.truck] = r.color;
+    if (truckDelRev[r.truck]  === undefined) truckDelRev[r.truck]  = 0;
+    if (truckPickRev[r.truck] === undefined) truckPickRev[r.truck] = 0;
+    (r.stops || []).forEach(function(s) {
+      const rev = (typeof s.rev === 'number') ? s.rev : 0;
+      if (s.cls === 'D')      truckDelRev[r.truck]  += rev;
+      else if (s.cls === 'P') truckPickRev[r.truck] += rev;
+    });
+  });
   const trucks = Object.keys(truckColor).sort();
   dispatchTrucksInScope = trucks.slice();
 
@@ -3604,15 +3785,33 @@ function updateDispatchTruckOptions(preserveSelection) {
     list.innerHTML = '<div style="padding:6px;color:var(--element-muted);font-size:11px;">No routes on this date for the selected business unit(s).</div>';
     return;
   }
+  // Compact money formatter — "$1.2k" / "$850" / "$12.4k" keeps the pill tight
+  // while still giving Mark a spendable-at-a-glance number.
+  const fmtMoney = function(n) {
+    if (!n || n <= 0) return '$0';
+    if (n < 1000) return '$' + Math.round(n);
+    return '$' + (n / 1000).toFixed(n < 10000 ? 1 : 0) + 'k';
+  };
   list.innerHTML = trucks.map(function(t, idx) {
     const onCls = dispatchTrucks.has(t) ? ' on' : '';
     // Attribute-safe truck name for the data-* hook
     const safeAttr = t.replace(/"/g, '&quot;').replace(/&/g, '&amp;');
+    const dRev = truckDelRev[t]  || 0;
+    const pRev = truckPickRev[t] || 0;
+    const tipTitle = 'Click to show only this truck — Delivery rental $' +
+      Math.round(dRev).toLocaleString() + ' / Pickup rental $' +
+      Math.round(pRev).toLocaleString() +
+      ' (rental only — delivery fees excluded)';
     return '<div class="dp-truck-row' + onCls + '" data-truck="' + safeAttr + '" ' +
            'onclick="soloDispatchTruck(this.getAttribute(\'data-truck\'))" ' +
-           'title="Click to show only this truck">' +
+           'title="' + tipTitle + '">' +
       '<span class="dp-truck-swatch" style="background:' + truckColor[t] + ';"></span>' +
-      '<span>' + _esc(t) + '</span>' +
+      '<span class="dp-truck-name">' + _esc(t) + '</span>' +
+      '<span class="dp-truck-rev" aria-label="Delivery / Pickup revenue">' +
+        '<span class="dp-rev-d" title="Delivery revenue">D ' + fmtMoney(dRev) + '</span>' +
+        '<span class="dp-rev-sep">\u00b7</span>' +
+        '<span class="dp-rev-p" title="Pickup revenue">P ' + fmtMoney(pRev) + '</span>' +
+      '</span>' +
     '</div>';
   }).join('');
 }
@@ -3749,14 +3948,24 @@ function buildDispatchLayer(fitBounds) {
     });
     if (!visibleStops.length) return;
 
+    // Virtual routes = synthetic "No truck assigned" groups built by
+    // annotate_unassigned.py for scheduled D/P stops that weren't dispatched
+    // to any real truck. These aren't real routes, so we skip the polyline
+    // and depot anchors — only the stop pins render. Still bucketed through
+    // the normal marker pipeline below so clicks, drilldowns, and S/T filters
+    // behave identically.
+    const isVirtual = !!r.virtual;
+
     // Resolve depot coords: prefer POR's per-route StartStore/StopStore (if
     // process_dispatch.py emitted them), else fall back to the home-store
     // lookup (r.hs). hs=000 is already dropped upstream, so any non-null hs
-    // here is meaningful.
-    const hsLookup = (r.hs && HOME_STORE_COORDS[r.hs]) || null;
-    const startCoord = (r.start && r.start.length === 2) ? [r.start[0], r.start[1]]
+    // here is meaningful. Virtual routes have no depot — skip entirely.
+    const hsLookup = (!isVirtual && r.hs && HOME_STORE_COORDS[r.hs]) || null;
+    const startCoord = isVirtual ? null
+                      : (r.start && r.start.length === 2) ? [r.start[0], r.start[1]]
                       : hsLookup ? [hsLookup.lat, hsLookup.lng] : null;
-    const stopCoord  = (r.stop  && r.stop.length  === 2) ? [r.stop[0],  r.stop[1]]
+    const stopCoord  = isVirtual ? null
+                      : (r.stop  && r.stop.length  === 2) ? [r.stop[0],  r.stop[1]]
                       : hsLookup ? [hsLookup.lat, hsLookup.lng] : null;
     const depotLabel = hsLookup ? hsLookup.name : (r.hs ? 'home store ' + r.hs : 'home store —');
 
@@ -3765,18 +3974,22 @@ function buildDispatchLayer(fitBounds) {
     // stop-to-stop lines if the fetch never succeeded or the processor was run
     // without that flag. Straight fallback still includes the depot endpoints
     // so the line visually opens and closes at the warehouse.
+    // Virtual routes skip polyline entirely — there's no truck, so connecting
+    // the pins would imply a dispatched sequence that doesn't exist.
     const allSortedStops = (r.stops || []).slice().sort(function(a, b) { return a.seq - b.seq; });
     let polyLatlngs = null;
-    if (r.geom) {
-      const decoded = _decodePolyline(r.geom);
-      if (decoded.length >= 2) polyLatlngs = decoded;
+    if (!isVirtual) {
+      if (r.geom) {
+        const decoded = _decodePolyline(r.geom);
+        if (decoded.length >= 2) polyLatlngs = decoded;
+      }
+      if (!polyLatlngs) {
+        polyLatlngs = allSortedStops.map(function(s) { return [s.ll[0], s.ll[1]]; });
+        if (startCoord) polyLatlngs.unshift(startCoord);
+        if (stopCoord)  polyLatlngs.push(stopCoord);
+      }
     }
-    if (!polyLatlngs) {
-      polyLatlngs = allSortedStops.map(function(s) { return [s.ll[0], s.ll[1]]; });
-      if (startCoord) polyLatlngs.unshift(startCoord);
-      if (stopCoord)  polyLatlngs.push(stopCoord);
-    }
-    if (polyLatlngs.length >= 2) {
+    if (polyLatlngs && polyLatlngs.length >= 2) {
       const line = L.polyline(polyLatlngs, {
         color: r.color,
         weight: 3,
@@ -3982,13 +4195,25 @@ function _renderSingleStopPopup(s, r, stopNum, color) {
       '<div class="cd-inline" id="' + did + '"></div>';
   }
 
+  // Pull contract-level totals (rental + delivery fee) from the shared
+  // contractInfo map. Falls back to stop-level s.rev if the contract isn't
+  // indexed (e.g. out-of-window contracts that have a dispatch route but no
+  // delivery_data.json entry).
+  const _ci    = (s.con && contractInfo[s.con]) || null;
+  const _tt    = _ci && typeof _ci.tt === 'number' ? _ci.tt : (s.rev || 0);
+  const _df    = _ci && typeof _ci.df === 'number' ? _ci.df : 0;
+  const _order = _tt + _df;  // Total customer pays pre-tax (rental + delivery fee)
+  const fmt$   = function(n) { return '$' + Math.round(n).toLocaleString('en-CA'); };
+
   return '<div class="stop-popup">' +
     '<div class="sp-title">Stop #' + stopNum + (r && r.truck ? ' · ' + _esc(r.truck) : '') + '</div>' +
     '<div class="sp-type" style="background:' + color + ';">' + _esc(TRIP_CLASS_LABELS[s.cls] || s.tt) + '</div>' +
     contractRow +
     (s.cust ? '<div class="sp-row"><span class="sp-label">Customer</span><span class="sp-value">' + _esc(s.cust) + '</span></div>' : '') +
     (s.store ? '<div class="sp-row"><span class="sp-label">Store</span><span class="sp-value">' + _esc(s.store) + '</span></div>' : '') +
-    (s.rev ? '<div class="sp-row"><span class="sp-label">Revenue (stop)</span><span class="sp-value">$' + s.rev.toLocaleString('en-CA', {maximumFractionDigits:0}) + '</span></div>' : '') +
+    (_tt    ? '<div class="sp-row"><span class="sp-label" title="Contract rental revenue (excludes delivery fee)">Rental</span><span class="sp-value">' + fmt$(_tt) + '</span></div>' : '') +
+    (_df    ? '<div class="sp-row"><span class="sp-label" title="Delivery fee charged on this contract">Delivery fee</span><span class="sp-value">' + fmt$(_df) + '</span></div>' : '') +
+    (_order ? '<div class="sp-row" style="border-top:1px solid var(--element-border);padding-top:4px;margin-top:2px;"><span class="sp-label" style="font-weight:700;">Order total</span><span class="sp-value" style="font-weight:700;">' + fmt$(_order) + '</span></div>' : '') +
     (s.parr ? '<div class="sp-row"><span class="sp-label">Promised arrival</span><span class="sp-value">' + _esc(s.parr) + '</span></div>' : '') +
     (s.aarr ? '<div class="sp-row"><span class="sp-label">Actual arrival</span><span class="sp-value">' + _esc(s.aarr) + '</span></div>' : '') +
     (ontimeBadge ? '<div class="sp-row"><span class="sp-label">On-time</span><span class="sp-value">' + ontimeBadge + '</span></div>' : '') +
@@ -4048,7 +4273,18 @@ function _renderBucketPopup(b, color) {
       const s = x.s;
       const cColor = TRIP_CLASS_COLORS[s.cls] || '#6B7A7E';
       const tLabel = TRIP_CLASS_LABELS[s.cls] || s.tt || '';
-      const revStr = s.rev ? ' · $' + Math.round(s.rev).toLocaleString('en-CA') : '';
+      // Contract-level rental + delivery fee breakdown (shows what the customer
+      // actually pays pre-tax). Fall back to stop-level s.rev if the contract
+      // isn't in contractInfo (out-of-window or filtered).
+      const _ci = (s.con && contractInfo[s.con]) || null;
+      const _tt = _ci && typeof _ci.tt === 'number' ? _ci.tt : (s.rev || 0);
+      const _df = _ci && typeof _ci.df === 'number' ? _ci.df : 0;
+      const _order = _tt + _df;
+      let revStr = '';
+      if (_order) {
+        revStr = ' · $' + Math.round(_order).toLocaleString('en-CA') + ' order';
+        if (_df > 0) revStr += ' <span style="color:var(--element-muted);font-weight:400;">($' + Math.round(_tt).toLocaleString('en-CA') + ' rental + $' + Math.round(_df).toLocaleString('en-CA') + ' fee)</span>';
+      }
       const custStr = s.cust ? _esc(s.cust) : '';
       // Clickable contract number — opens the full contract drill-down inline.
       // did scoped per-row so multiple contracts in one bucket don't collide.
@@ -4130,6 +4366,364 @@ function _renderStopContractBlock(contractNum, info) {
   if (info.dn) h += '<div style="margin-top:4px;padding:4px 8px;background:var(--element-mint);border-radius:4px;font-size:11px;">' + _esc(info.dn) + '</div>';
   h += '</div>';
   return h;
+}
+
+// ============================================================
+// KEY VENUES LAYER — top 30 venues by trailing-24-month rental revenue.
+//
+// Ranking is fixed (computed in process_venues.py at pipeline time). The
+// timeline slider only:
+//   - resizes bubbles (variable by contract count in the selected window)
+//   - filters the popup contract table
+//
+// Zero-in-window venues render ghosted (outline only, low opacity) so the
+// top-30 set stays recognizable on the map even when the slider is narrow.
+// ============================================================
+
+let venuesVisible = false;
+let venuesData = null;
+let venuesLoading = null;
+const venuesLayerGroup = L.layerGroup();
+
+function ensureVenuesData() {
+  if (venuesData) return Promise.resolve(venuesData);
+  if (venuesLoading) return venuesLoading;
+  venuesLoading = fetch('venues_data.json?v=' + Date.now(), { cache: 'no-store' })
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(data) { venuesData = data; return data; })
+    .catch(function(err) {
+      console.warn('venues_data.json unavailable:', err.message);
+      venuesLoading = null;   // allow retry on next toggle
+      throw err;
+    });
+  return venuesLoading;
+}
+
+// Pull the current timeline window as ISO strings. Falls back to the full
+// data window if the inputs haven't been rendered yet (shouldn't happen
+// once the Revenue or Routes layer has been toggled at least once, but the
+// Key Venues layer can be the first thing a user clicks).
+function _venuesGetWindow() {
+  const fromInp = document.getElementById('tl-from-input');
+  const toInp   = document.getElementById('tl-to-input');
+  const from = fromInp && fromInp.value ? fromInp.value : null;
+  const to   = toInp   && toInp.value   ? toInp.value   : null;
+  return { from: from, to: to };
+}
+
+function _venuesInWindow(contract, win) {
+  const d = contract && contract.date;
+  if (!d) return false;
+  if (win.from && d < win.from) return false;
+  if (win.to   && d > win.to)   return false;
+  return true;
+}
+
+// Radius curve for the variable-by-contracts-in-window sizing. Using a
+// square-root scale so a 1-contract venue is clearly visible and a
+// 50-contract venue doesn't dominate the map. Ghosted state uses a small
+// fixed radius so the top-30 set stays recognizable even at narrow windows.
+function _venueBubbleRadius(count) {
+  if (!count || count <= 0) return 6;   // ghosted
+  const r = 7 + Math.sqrt(count) * 2.8;
+  return Math.min(28, r);
+}
+
+// Render the popup body for a venue. Lists contracts in the timeline window,
+// sorted by date desc, with a route link when the contract maps to a
+// dispatch stop. Keeps the DOM structure consistent with other map popups.
+function _buildVenuePopupHtml(v, contractsInWin) {
+  const fmt$ = function(n) { return '$' + Math.round(n || 0).toLocaleString('en-CA'); };
+  const fmtDate = function(iso) {
+    if (!iso || iso.startsWith('1899') || iso.startsWith('1900')) return '';
+    const d = new Date(iso + 'T00:00:00');
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: '2-digit' });
+  };
+
+  // Header block — rank, display name, TTM stats, coord source badge.
+  let header = '<div class="sp-title" style="font-size:14px;">' +
+    '<span style="display:inline-block;min-width:22px;color:var(--element-teal,#0B4F6C);font-weight:700;">#' + v.rank + '</span>' +
+    _esc(v.display_name) +
+    '</div>';
+  if (v.address) {
+    header += '<div style="font-size:11px;color:#6B7A7E;margin-bottom:4px;">' + _esc(v.address) + '</div>';
+  }
+  header += '<div class="sp-row"><span class="sp-label">TTM rental</span><span class="sp-value">' + fmt$(v.ttm_revenue) + '</span></div>';
+  header += '<div class="sp-row"><span class="sp-label">TTM contracts</span><span class="sp-value">' + v.ttm_contract_count + '</span></div>';
+
+  // Contract table scoped to the timeline window.
+  let tableBody = '';
+  if (contractsInWin.length === 0) {
+    tableBody = '<div style="padding:10px 0;color:#6B7A7E;font-style:italic;font-size:12px;">No contracts in the selected date range.</div>';
+  } else {
+    tableBody =
+      '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--element-border,#d9d9d9);">' +
+      '<div style="font-size:10px;color:var(--element-muted,#6B7A7E);text-transform:uppercase;letter-spacing:0.08em;font-weight:600;margin-bottom:4px;">' +
+      contractsInWin.length + ' contract' + (contractsInWin.length === 1 ? '' : 's') + ' in window' +
+      '</div>' +
+      '<div style="max-height:260px;overflow-y:auto;">' +
+      '<table style="width:100%;border-collapse:collapse;font-size:11px;">' +
+      '<thead><tr style="border-bottom:1px solid #ddd;color:#6B7A7E;">' +
+        '<th style="text-align:left;padding:3px 4px;">Con #</th>' +
+        '<th style="text-align:left;padding:3px 4px;">Customer</th>' +
+        '<th style="text-align:left;padding:3px 4px;">Date</th>' +
+        '<th style="text-align:right;padding:3px 4px;">Rental</th>' +
+        '<th style="text-align:right;padding:3px 4px;">Fee</th>' +
+        '<th style="text-align:right;padding:3px 4px;">Total</th>' +
+        '<th style="text-align:center;padding:3px 4px;">Route</th>' +
+      '</tr></thead><tbody>';
+    contractsInWin.forEach(function(c) {
+      const order = (c.tt || 0) + (c.df || 0);
+      let routeCell = '<span style="color:#ccc;">—</span>';
+      if (c.route && c.route.date) {
+        // Clicking the route link toggles the Routes layer to the route's date.
+        routeCell = '<a href="#" onclick="return _venueOpenRoute(\'' +
+          _esc(c.route.date) + '\')" style="color:var(--element-teal,#0B4F6C);text-decoration:none;font-weight:600;">View</a>';
+      }
+      const conCell = '<span class="contract-num-link" onclick="event.stopPropagation();showContractDetail(\'' +
+        _esc(c.con) + '\',\'vd_' + _esc(c.con) + '\')">' + _esc(c.con) + '</span>';
+      tableBody +=
+        '<tr style="border-bottom:1px solid #f0f0f0;">' +
+          '<td style="padding:3px 4px;">' + conCell + '</td>' +
+          '<td style="padding:3px 4px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + _esc(c.cust) + '">' + _esc(c.cust) + '</td>' +
+          '<td style="padding:3px 4px;white-space:nowrap;">' + fmtDate(c.date) + '</td>' +
+          '<td style="padding:3px 4px;text-align:right;white-space:nowrap;">' + fmt$(c.tt) + '</td>' +
+          '<td style="padding:3px 4px;text-align:right;white-space:nowrap;">' + fmt$(c.df) + '</td>' +
+          '<td style="padding:3px 4px;text-align:right;white-space:nowrap;font-weight:600;">' + fmt$(order) + '</td>' +
+          '<td style="padding:3px 4px;text-align:center;">' + routeCell + '</td>' +
+        '</tr>';
+    });
+    tableBody += '</tbody></table></div></div>';
+  }
+
+  return '<div class="stop-popup" style="min-width:420px;max-width:540px;">' + header + tableBody + '</div>';
+}
+
+// Activate the Routes layer and snap to a specific date. Used by the "View"
+// route links inside venue popups so Mark can drill from a venue to the
+// actual truck route in one click.
+window._venueOpenRoute = function(isoDate) {
+  if (!isoDate) return false;
+  if (typeof dispatchVisible !== 'undefined' && !dispatchVisible) {
+    toggleLayer('dispatch');
+  }
+  // setTimeline drives dispatchDate via its sync hook; do both to be safe.
+  if (typeof setTimelineRange === 'function') setTimelineRange(isoDate, isoDate);
+  if (typeof setDispatchDate === 'function') setDispatchDate(isoDate);
+  map.closePopup();
+  return false;
+};
+
+// Main Key Venues render. Rebuilds all bubbles from scratch — top 30 set is
+// small (~30) so full rebuild on slider change is fine and avoids diff logic.
+function buildVenuesLayer() {
+  if (!venuesData || !venuesData.venues) return;
+  // Unbind + clear for memory hygiene (same pattern as revLayerGroup).
+  venuesLayerGroup.eachLayer(function(layer) {
+    if (layer.unbindPopup) layer.unbindPopup();
+    if (layer.unbindTooltip) layer.unbindTooltip();
+    if (layer.off) layer.off();
+  });
+  venuesLayerGroup.clearLayers();
+
+  const win = _venuesGetWindow();
+  const TEAL = '#0B4F6C';
+
+  venuesData.venues.forEach(function(v) {
+    if (!v.lat || !v.lng) return;
+    const inWin = (v.contracts || []).filter(function(c) { return _venuesInWindow(c, win); });
+    const count = inWin.length;
+    const ghosted = count === 0;
+
+    const marker = L.circleMarker([v.lat, v.lng], {
+      radius:      _venueBubbleRadius(count),
+      fillColor:   ghosted ? '#ffffff' : TEAL,
+      color:       TEAL,
+      weight:      ghosted ? 1.5 : 2,
+      fillOpacity: ghosted ? 0.0 : 0.55,
+      opacity:     ghosted ? 0.45 : 0.95,
+      dashArray:   ghosted ? '3,3' : null,
+      className:   'key-venue-bubble' + (ghosted ? ' ghosted' : ''),
+    });
+
+    // Tooltip = rank + name + count-in-window. Lightweight hover summary.
+    marker.bindTooltip(
+      '<strong>#' + v.rank + ' ' + _esc(v.display_name) + '</strong><br>' +
+      (count === 0
+        ? '<span style="color:#6B7A7E;">No contracts in window</span>'
+        : count + ' contract' + (count === 1 ? '' : 's') + ' in window'),
+      { direction: 'top', offset: [0, -4] }
+    );
+
+    // Full popup — bound on click so we don't build the table for every bubble.
+    marker.on('click', function(e) {
+      const html = _buildVenuePopupHtml(v, inWin);
+      L.popup({ maxWidth: 560, autoPan: true })
+        .setLatLng(e.latlng)
+        .setContent(html)
+        .openOn(map);
+    });
+
+    marker.addTo(venuesLayerGroup);
+  });
+}
+
+// ============================================================
+// KEY CATERERS LAYER — top 15 caterer-customers by trailing-24-month rental.
+//
+// Unlike Key Venues (one bubble per fixed location), each caterer has many
+// bubbles — one per delivery lat/lng — each colored with the caterer's
+// palette color. Ranking is fixed (pipeline). Timeline window:
+//   - resizes bubbles (variable by location's contract count in window)
+//   - filters popup contract tables
+//   - ghosts zero-in-window locations (outline only)
+//
+// Coord coverage is ~12% (dispatch-precise only — contracts without
+// dispatch lat/lng are dropped from rendering, counted in ranking).
+// ============================================================
+
+let caterersVisible = false;
+const caterersLayerGroup = L.layerGroup();
+
+// Radius for a caterer bubble at `count` contracts in window. Smaller
+// baseline than venues because caterers typically have many locations per
+// brand — need finer granularity to distinguish a 1-contract site from a
+// 10-contract recurring venue.
+function _catererBubbleRadius(count) {
+  if (!count || count <= 0) return 4;  // ghosted (outline only)
+  const r = 5 + Math.sqrt(count) * 2.2;
+  return Math.min(22, r);
+}
+
+function _buildCatererPopupHtml(c, loc, contractsInWin) {
+  const fmt$ = function(n) { return '$' + Math.round(n || 0).toLocaleString('en-CA'); };
+  const fmtDate = function(iso) {
+    if (!iso || iso.startsWith('1899') || iso.startsWith('1900')) return '';
+    const d = new Date(iso + 'T00:00:00');
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: '2-digit' });
+  };
+
+  // Representative address = most common `addr` across the contracts at
+  // this location bucket. Falls back to lat/lng if none tagged.
+  let repAddr = '';
+  const addrCounts = {};
+  (loc.contracts || []).forEach(function(row) {
+    if (row.addr) addrCounts[row.addr] = (addrCounts[row.addr] || 0) + 1;
+  });
+  let best = -1;
+  for (const a in addrCounts) {
+    if (addrCounts[a] > best) { best = addrCounts[a]; repAddr = a; }
+  }
+  if (!repAddr) repAddr = loc.lat.toFixed(4) + ', ' + loc.lng.toFixed(4);
+
+  let header = '<div class="sp-title" style="font-size:14px;">' +
+    '<span style="display:inline-block;min-width:22px;color:' + c.color + ';font-weight:700;">#' + c.rank + '</span>' +
+    _esc(c.display_name) +
+    '</div>' +
+    '<div style="font-size:11px;color:#6B7A7E;margin-bottom:4px;">' + _esc(repAddr) + '</div>';
+  header += '<div class="sp-row"><span class="sp-label">Location contracts</span><span class="sp-value">' + loc.contract_count + '</span></div>';
+  header += '<div class="sp-row"><span class="sp-label">Caterer TTM rental</span><span class="sp-value">' + fmt$(c.ttm_revenue) + '</span></div>';
+  header += '<div class="sp-row"><span class="sp-label">Caterer locations</span><span class="sp-value">' + c.unique_locations + '</span></div>';
+
+  let tableBody = '';
+  if (contractsInWin.length === 0) {
+    tableBody = '<div style="padding:10px 0;color:#6B7A7E;font-style:italic;font-size:12px;">No contracts at this location in the selected date range.</div>';
+  } else {
+    tableBody =
+      '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--element-border,#d9d9d9);">' +
+      '<div style="font-size:10px;color:var(--element-muted,#6B7A7E);text-transform:uppercase;letter-spacing:0.08em;font-weight:600;margin-bottom:4px;">' +
+      contractsInWin.length + ' contract' + (contractsInWin.length === 1 ? '' : 's') + ' in window' +
+      '</div>' +
+      '<div style="max-height:260px;overflow-y:auto;">' +
+      '<table style="width:100%;border-collapse:collapse;font-size:11px;">' +
+      '<thead><tr style="border-bottom:1px solid #ddd;color:#6B7A7E;">' +
+        '<th style="text-align:left;padding:3px 4px;">Con #</th>' +
+        '<th style="text-align:left;padding:3px 4px;">End Customer</th>' +
+        '<th style="text-align:left;padding:3px 4px;">Date</th>' +
+        '<th style="text-align:right;padding:3px 4px;">Rental</th>' +
+        '<th style="text-align:right;padding:3px 4px;">Fee</th>' +
+        '<th style="text-align:right;padding:3px 4px;">Total</th>' +
+        '<th style="text-align:center;padding:3px 4px;">Route</th>' +
+      '</tr></thead><tbody>';
+    contractsInWin.forEach(function(row) {
+      const order = (row.tt || 0) + (row.df || 0);
+      let routeCell = '<span style="color:#ccc;">—</span>';
+      if (row.route && row.route.date) {
+        routeCell = '<a href="#" onclick="return _venueOpenRoute(\'' +
+          _esc(row.route.date) + '\')" style="color:var(--element-teal,#0B4F6C);text-decoration:none;font-weight:600;">View</a>';
+      }
+      const conCell = '<span class="contract-num-link" onclick="event.stopPropagation();showContractDetail(\'' +
+        _esc(row.con) + '\',\'cd_' + _esc(row.con) + '\')">' + _esc(row.con) + '</span>';
+      tableBody +=
+        '<tr style="border-bottom:1px solid #f0f0f0;">' +
+          '<td style="padding:3px 4px;">' + conCell + '</td>' +
+          '<td style="padding:3px 4px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + _esc(row.cust) + '">' + _esc(row.cust) + '</td>' +
+          '<td style="padding:3px 4px;white-space:nowrap;">' + fmtDate(row.date) + '</td>' +
+          '<td style="padding:3px 4px;text-align:right;white-space:nowrap;">' + fmt$(row.tt) + '</td>' +
+          '<td style="padding:3px 4px;text-align:right;white-space:nowrap;">' + fmt$(row.df) + '</td>' +
+          '<td style="padding:3px 4px;text-align:right;white-space:nowrap;font-weight:600;">' + fmt$(order) + '</td>' +
+          '<td style="padding:3px 4px;text-align:center;">' + routeCell + '</td>' +
+        '</tr>';
+    });
+    tableBody += '</tbody></table></div></div>';
+  }
+
+  return '<div class="stop-popup" style="min-width:440px;max-width:560px;">' + header + tableBody + '</div>';
+}
+
+// Main Key Caterers render. Iterates top-15 caterers, then each caterer's
+// locations — emits one circleMarker per (caterer, location) tuple.
+function buildCaterersLayer() {
+  if (!venuesData || !venuesData.caterers) return;
+  caterersLayerGroup.eachLayer(function(layer) {
+    if (layer.unbindPopup)   layer.unbindPopup();
+    if (layer.unbindTooltip) layer.unbindTooltip();
+    if (layer.off)           layer.off();
+  });
+  caterersLayerGroup.clearLayers();
+
+  const win = _venuesGetWindow();
+
+  venuesData.caterers.forEach(function(c) {
+    const color = c.color || '#0B4F6C';
+    (c.locations || []).forEach(function(loc) {
+      if (!loc.lat || !loc.lng) return;
+      const inWin = (loc.contracts || []).filter(function(r) { return _venuesInWindow(r, win); });
+      const count = inWin.length;
+      const ghosted = count === 0;
+
+      const marker = L.circleMarker([loc.lat, loc.lng], {
+        radius:      _catererBubbleRadius(count),
+        fillColor:   ghosted ? '#ffffff' : color,
+        color:       color,
+        weight:      ghosted ? 1.2 : 2,
+        fillOpacity: ghosted ? 0.0  : 0.65,
+        opacity:     ghosted ? 0.40 : 0.95,
+        dashArray:   ghosted ? '3,3' : null,
+        className:   'key-caterer-bubble' + (ghosted ? ' ghosted' : ''),
+      });
+
+      marker.bindTooltip(
+        '<strong>#' + c.rank + ' ' + _esc(c.display_name) + '</strong><br>' +
+        (count === 0
+          ? '<span style="color:#6B7A7E;">No contracts in window</span>'
+          : count + ' contract' + (count === 1 ? '' : 's') + ' at this location'),
+        { direction: 'top', offset: [0, -4] }
+      );
+
+      marker.on('click', function(e) {
+        const html = _buildCatererPopupHtml(c, loc, inWin);
+        L.popup({ maxWidth: 580, autoPan: true })
+          .setLatLng(e.latlng)
+          .setContent(html)
+          .openOn(map);
+      });
+
+      marker.addTo(caterersLayerGroup);
+    });
+  });
 }
 
 // Ensure map renders correctly after container becomes visible

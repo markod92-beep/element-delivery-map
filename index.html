@@ -5265,6 +5265,34 @@ window.closeMobileSheet = function() {
   document.body.classList.remove('ms-sheet-open');
 };
 
+// ===== KEEP body.routes-active IN SYNC (desktop + mobile) =====
+// Watches the Routes toggle-btn's class — any code path that activates Routes
+// flips this body class, and the global CSS chip-gating rules (line ~552)
+// use it to hide This Week / YTD / Last Year when Routes is on. MUST live
+// outside the mobile IIFE below — previously nested inside it, which meant
+// desktop users never got the class set and those chips never hid.
+(function() {
+  function wireRoutesActiveObserver() {
+    var routesBtn = document.getElementById('btn-dispatch');
+    if (!routesBtn) return false;
+    var bodyEl = document.body;
+    var syncRoutesActive = function() {
+      // Routes button uses 'active-rev' (not 'active') when the layer is on.
+      var isOn = routesBtn.classList.contains('active-rev') ||
+                 routesBtn.classList.contains('active');
+      if (isOn) bodyEl.classList.add('routes-active');
+      else bodyEl.classList.remove('routes-active');
+    };
+    syncRoutesActive();
+    new MutationObserver(syncRoutesActive).observe(routesBtn, { attributes: true, attributeFilter: ['class'] });
+    return true;
+  }
+  // Try now; if DOM isn't ready (script in <head>), retry on DOMContentLoaded.
+  if (!wireRoutesActiveObserver()) {
+    document.addEventListener('DOMContentLoaded', wireRoutesActiveObserver);
+  }
+})();
+
 // ===== MOBILE ENHANCEMENTS =====
 (function() {
   var isMobile = window.innerWidth <= 768;
@@ -5392,23 +5420,6 @@ window.closeMobileSheet = function() {
       handle.addEventListener('touchend', function() { startY = null; });
     });
 
-  }
-
-  // --- Keep body.routes-active in sync with active layer (desktop + mobile) ---
-  // Watches the Routes toggle-btn's class so any code path that activates Routes
-  // updates the body class. Used by CSS rules to gate timeline chip/date UX
-  // between Routes-only, Revenue-only, and combined modes.
-  var routesBtn = document.getElementById('btn-dispatch');
-  if (routesBtn) {
-    var syncRoutesActive = function() {
-      // Routes button uses 'active-rev' (not 'active') when the layer is on.
-      var isOn = routesBtn.classList.contains('active-rev') ||
-                 routesBtn.classList.contains('active');
-      if (isOn) bodyEl.classList.add('routes-active');
-      else bodyEl.classList.remove('routes-active');
-    };
-    syncRoutesActive();
-    new MutationObserver(syncRoutesActive).observe(routesBtn, { attributes: true, attributeFilter: ['class'] });
   }
 
   // 1. Make legend collapsible on mobile

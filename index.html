@@ -2454,15 +2454,29 @@ Object.assign(fsaToZone, {
 // Sea-to-Sky CITY:* split — pipeline emits these locKeys for V0N events
 // whose address city is parseable. Each routes to its own zone so the
 // heatmap shows distinct bubbles 50+ km apart along the corridor.
+//
+// Also includes CITY:* keys emitted by the customer-hint fallback in
+// process_cmmc.py — out-of-province cities for which we have a zone but
+// no Ontario-style FSA mapping (Halifax, Vancouver). Ottawa already has
+// "CITY:OTTAWA" via the legacy data path so no new entry needed.
 Object.assign(cityKeyToZone, {
+  // Sea-to-Sky corridor
   'CITY:WHISTLER':  'Whistler BC',
   'CITY:PEMBERTON': 'Pemberton BC',
   'CITY:LILLOOET':  'Lillooet BC',
   'CITY:DARCY':     'Pemberton BC',  // tiny community, roll up to Pemberton
   "CITY:D'ARCY":    'Pemberton BC',
-  'CITY:SQUAMISH':  'Squamish BC',  // covers any V0N events whose city tag is
-                                     // Squamish (rare — Squamish is V8B), plus
-                                     // any future V8B fallback through CITY:*.
+  'CITY:SQUAMISH':  'Squamish BC',
+  // Out-of-province customer-hint targets (process_cmmc.py CUSTOMER_CITY_HINTS)
+  'CITY:HALIFAX':   'Halifax NS',
+  'CITY:VANCOUVER': 'Vancouver BC',
+});
+Object.assign(zoneCoords, {
+  // Out-of-province city centroids for customer-hint rescue path. Single
+  // bubble each — these are usually one-off institutional events, not
+  // recurring delivery zones, so FSA-level granularity isn't needed.
+  'Halifax NS':    { lat: 44.6488, lng: -63.5752 },  // Halifax Convention Centre
+  'Vancouver BC':  { lat: 49.2827, lng: -123.1207 }, // downtown Vancouver
 });
 Object.assign(zoneCoords, {
   // Downtown Victoria (Inner Harbour).
@@ -3146,20 +3160,41 @@ function _firstCityForLockey(locKey) {
   return null;
 }
 // One-time pass: synthesize contractCityRef entries for every orphan locKey
-// where we can extract a known city from the contract address. Logs a brief
-// summary (added / unresolved + top unresolved cities) so it's clear when
-// the long tail of orphans needs more zoneCoords entries.
+// where we can extract a known city. Handles two orphan classes:
+//   - FSA orphans: locKey is a non-Toronto FSA not in fsaToZone (e.g. K6V
+//     for Brockville). City hint comes from walking a contract address.
+//   - CITY:* orphans: locKey was emitted by process_cmmc.py for rows where
+//     FSA extraction failed (the $1.48M off-map rescue path). City hint
+//     comes from the locKey itself (after stripping the "CITY:" prefix).
+//     Only treated as orphan if cityKeyToZone has no explicit mapping —
+//     authoritative cityKeyToZone entries (Sea-to-Sky, Ottawa, etc.) handle
+//     those before this pass even sees them.
+// Logs a summary so unresolved tails are visible (top unresolved cities).
 function _backfillOrphanCityRefs() {
   _ensureCityFallbackBuilt();
   let added = 0, missed = 0;
   const exampleMisses = {};  // {NORM_CITY: count}
   for (const locKey in contractEvents) {
     if (contractCityRef[locKey]) continue;            // already authoritative
-    if (locKey.indexOf('CITY:') === 0) continue;       // CITY: keys handled elsewhere
-    const firstFsa = locKey.split(',')[0].trim();
-    if (firstFsa.charAt(0) === 'M') continue;          // Toronto FSA path
-    if (fsaToZone[firstFsa]) continue;                 // mapped via zone
-    const cityHint = _firstCityForLockey(locKey);
+    let cityHint = null;
+    if (locKey.indexOf('CITY:') === 0) {
+      // CITY:* orphan — only if cityKeyToZone doesn't already resolve it
+      // to a known zone with coords. Authoritative entries take precedence.
+      const explicitZone = cityKeyToZone[locKey];
+      if (explicitZone) {
+        const zc = zoneCoords[explicitZone];
+        if (zc) continue;  // explicit cityKeyToZone path handles it
+      }
+      // Strip "CITY:" prefix, normalize for lookup. The pipeline already
+      // uppercased the city when it built the locKey, but normalize anyway
+      // so a future schema tweak (mixed case) still works.
+      cityHint = _normCityName(locKey.slice(5));
+    } else {
+      const firstFsa = locKey.split(',')[0].trim();
+      if (firstFsa.charAt(0) === 'M') continue;        // Toronto FSA path
+      if (fsaToZone[firstFsa]) continue;               // mapped via zone
+      cityHint = _firstCityForLockey(locKey);
+    }
     if (!cityHint) { missed += 1; continue; }
     const found = _CITY_FALLBACK[cityHint];
     if (!found) {
@@ -4424,19 +4459,31 @@ window.setDispatchView = function(mode) {
 //   "123 Main St, Toronto, ON"           (3 segments — province last)
 //   "123 Main St, Toronto, ON M5V 1A1"   (province + postal in same segment)
 //   "4090 Whistler Way, Whistler, BC V0N 1B4"  (BC variant)
-// The previous implementation only skipped a comma-segment when the WHOLE
-// segment matched a 2-letter or FSA-shaped pattern, so combined "BC V0N 1B4"
-// or "ON M5V 1A1" segments leaked through and got returned as the "city" —
-// poisoning the orphan-FSA city-fallback (Whistler bug). We now tokenize each
-// segment by whitespace and filter province/FSA/LDU tokens individually, then
-// reassemble whatever's left as the city. Falls back to the first segment
-// (typically a street address) when no segment yields a clean city.
+// We tokenize each segment by whitespace and filter province/FSA/LDU tokens
+// individually, then reassemble whatever's left as the city.
+//
+// Single-segment guard (added 2026-05-04 after a false-positive audit):
+// "OLYMPIC WAY" or "13601 LESLIE STREET" without commas would otherwise
+// return themselves as "city" — useless for _CITY_FALLBACK lookup and bad
+// signal for downstream merging. We now reject single-segment addresses
+// that contain a street-suffix token (ST/AVE/BLVD/WAY/RD/CHEMIN/RUE…) or
+// an "&" intersection marker. Multi-segment addresses still return the
+// first non-junk segment as before.
+//
+// Keep this list in lockstep with the Python _STREET_SUFFIX_TOKENS in
+// process_cmmc.py — they must agree so the audit's "rescuable" count
+// matches what the pipeline will actually rescue.
+const _STREET_SUFFIX_TOKENS = new Set([
+  'ST','STREET','STR','AVE','AVENUE','AV','BLVD','BOULEVARD','BV',
+  'RD','ROAD','DR','DRIVE','CT','COURT','CRT','PL','PLACE','LN','LANE',
+  'CR','CRES','CRESCENT','HWY','HIGHWAY','PKWY','PARKWAY','TRAIL','TR',
+  'WAY','WY','CIR','CIRCLE','SQ','SQUARE','TER','TERRACE','GATE','GT',
+  'MEWS','BAY','RUE','BOUL','CHEMIN','CH','ROUTE',
+]);
 function _cityFromAddr(addr) {
   if (!addr) return 'Unknown';
   const parts = String(addr).split(',').map(function(p) { return p.trim(); }).filter(Boolean);
   if (!parts.length) return 'Unknown';
-  // Token-level junk filters: 2-letter province codes (ON/BC/QC...), FSA
-  // (M5V, V0N), postal LDU (1A1, 1B4), collapsed full postal (M5V1A1), US zip.
   function _isJunkToken(t) {
     if (!t) return true;
     if (/^[A-Z]{2}$/i.test(t)) return true;
@@ -4446,17 +4493,33 @@ function _cityFromAddr(addr) {
     if (/^\d{5}(-\d{4})?$/.test(t)) return true;
     return false;
   }
-  // Walk from the right (city is typically the penultimate segment).
+  let candidate = null;
   for (let i = parts.length - 1; i >= 0; i--) {
     const tokens = parts[i].split(/\s+/).filter(function(t) { return !_isJunkToken(t); });
     if (!tokens.length) continue;
-    // Leading numeric token = street number, so this is the address line, not
-    // the city. Skip and try the next segment to the left.
     if (/^\d+$/.test(tokens[0])) continue;
-    return tokens.join(' ').toUpperCase();
+    candidate = tokens.join(' ').toUpperCase();
+    break;
   }
-  // Last resort: return the first segment uppercased. Same fallback as before.
-  return parts[0].toUpperCase();
+  if (!candidate) {
+    // Last resort: first segment uppercased (matches old behavior for
+    // pure-street addresses where no city signal exists). Callers that need
+    // strict city-only output should defer to the Python equivalent in
+    // process_cmmc.py, which returns null in this case.
+    return parts[0].toUpperCase();
+  }
+  // Single-segment guard — reject street-only inputs (see comment above).
+  if (parts.length === 1) {
+    if (candidate.indexOf('&') >= 0) return parts[0].toUpperCase();
+    const ctoks = candidate.split(/\s+/);
+    if (ctoks.some(function(t) { return _STREET_SUFFIX_TOKENS.has(t); })) {
+      return parts[0].toUpperCase();
+    }
+    if (candidate.indexOf('(') >= 0 || candidate.indexOf(')') >= 0) {
+      return parts[0].toUpperCase();
+    }
+  }
+  return candidate;
 }
 // Build (or rebuild) dispatch layer from current date / truck / class filter.
 function buildDispatchLayer(fitBounds) {

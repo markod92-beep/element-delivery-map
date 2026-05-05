@@ -546,12 +546,14 @@ body.has-dispatch .key-loc-panel { left: 304px; }
      Tomorrow. Routes is inherently a single-day view, so This Week / YTD / Last
      Year have no meaning here — hiding unconditionally when Routes is on keeps
      the UX honest.
-   - Revenue-only mode: show This Week / YTD / Last Year. Yesterday/Today/
-     Tomorrow are too narrow for revenue data (aggregated weekly in
-     contractWeekly). */
+   - Revenue-only mode: show Today + the range presets (This Week / YTD / Last
+     Year). Today is supported via the day-level aggregation path in
+     updateTimeline (see _currentSingleDayIso), so it's no longer "too narrow"
+     for the heatmap. Yesterday and Tomorrow stay hidden in Revenue-only mode
+     (qj-routes-only) by design — Mark's daily ops workflow only needs Today
+     for the heatmap; Yesterday/Tomorrow are dispatch-planning chips. */
 body.routes-active #tl-preset-chips .qj-rev-only { display: none; }
 body.rev-on:not(.routes-active) #tl-preset-chips .qj-routes-only { display: none; }
-body.rev-on:not(.routes-active) #tl-preset-chips .qj-btn[data-preset="today"] { display: none; }
 
 /* Routes-only mode: collapse From/To range picker into a single prominent "Date"
    field. Routes is a one-day view — the range was confusing users. The ◀/▶ step
@@ -1319,6 +1321,11 @@ document.addEventListener('DOMContentLoaded', function() {
         <!-- Routes-mode chips: quick one-day jumps. Hidden on Revenue-only. -->
         <div class="qj-btn qj-routes-only" data-preset="yesterday" onclick="quickJump('yesterday')">Yesterday</div>
         <div class="qj-btn" data-preset="today"    onclick="quickJump('today')">Today</div>
+        <!-- Tomorrow: Routes-only chip. In Revenue mode the daily-ops workflow
+             only needs Today (via _currentSingleDayIso single-day aggregation);
+             Tomorrow's revenue is uninteresting because contracts haven't fired
+             yet. The single-day aggregation logic still works for Tomorrow if
+             you ever re-enable the chip — just remove qj-routes-only here. -->
         <div class="qj-btn qj-routes-only" data-preset="tomorrow" onclick="quickJump('tomorrow')">Tomorrow</div>
         <!-- Revenue-mode chips: range presets. Hidden on Routes-only. -->
         <div class="qj-btn qj-rev-only" data-preset="week"     onclick="quickJump('week')">This Week</div>
@@ -2235,9 +2242,13 @@ window.getContractEvents = function(cityKey, customerName) {
     const week1Monday = new Date(jan1.getTime() + daysToMonday * 86400000);
     return new Date(week1Monday.getTime() + (w - 1) * 7 * 86400000);
   };
-  const startDate = wkToMonday(startWk).toISOString().slice(0, 10);
+  let startDate = wkToMonday(startWk).toISOString().slice(0, 10);
   const endMonday = wkToMonday(endWk);
-  const endDate = new Date(endMonday.getTime() + 6 * 86400000).toISOString().slice(0, 10);
+  let endDate = new Date(endMonday.getTime() + 6 * 86400000).toISOString().slice(0, 10);
+  // Honor single-day mode: when active, scope the contract drill-down to that
+  // exact day so the popup table matches what's rendered on the heatmap bubble.
+  const _sdIso = (typeof _currentSingleDayIso === 'function') ? _currentSingleDayIso() : null;
+  if (_sdIso) { startDate = _sdIso; endDate = _sdIso; }
   
   // Look up contract events — handle ZONE: keys by collecting events from ALL
   // FSAs and CITY: keys that map to this zone. We must NOT fall back to "first
@@ -2370,9 +2381,13 @@ window.getVenueEvents = function(fsaKey, venueName) {
   const endDate = wkToDate(endWk);
   endDate.setDate(endDate.getDate() + 6); // End of week
   
-  const startStr = startDate.toISOString().slice(0, 10);
-  const endStr = endDate.toISOString().slice(0, 10);
-  
+  let startStr = startDate.toISOString().slice(0, 10);
+  let endStr   = endDate.toISOString().slice(0, 10);
+  // Honor single-day mode (Today / Tomorrow / matching From/To): scope the
+  // venue drill-down to that exact day so the popup matches the heatmap.
+  const _sdIsoV = (typeof _currentSingleDayIso === 'function') ? _currentSingleDayIso() : null;
+  if (_sdIsoV) { startStr = _sdIsoV; endStr = _sdIsoV; }
+
   // Combine events from all FSAs in the key
   let allEvents = [];
   fsaList.forEach(fsa => {
@@ -2406,6 +2421,30 @@ const fsaToZone = {"L7J": "Acton", "L1Z": "Ajax", "L1S": "Ajax", "L1T": "Ajax", 
 const zoneCoords = {"Acton": {"lat": 43.6314, "lng": -80.0389}, "Ajax": {"lat": 43.8583, "lng": -79.0364}, "Alliston": {"lat": 44.1499, "lng": -79.8632}, "Aurora": {"lat": 44.0, "lng": -79.4667}, "Barrie": {"lat": 44.39, "lng": -79.686}, "Bolton": {"lat": 43.8972, "lng": -79.7381}, "Bracebridge": {"lat": 45.0333, "lng": -79.3}, "Brampton": {"lat": 43.6833, "lng": -79.7667}, "Bruce / Grey": {"lat": 44.5667, "lng": -80.9333}, "Burlington": {"lat": 43.325, "lng": -79.8}, "Caledon": {"lat": 43.8667, "lng": -80.0}, "Caledonia": {"lat": 43.067, "lng": -79.95}, "Cambridge": {"lat": 43.3583, "lng": -80.3139}, "Clarington": {"lat": 43.935, "lng": -78.6083}, "Cobourg": {"lat": 43.9667, "lng": -78.1667}, "Collingwood": {"lat": 44.5, "lng": -80.2167}, "Durham / Simcoe": {"lat": 44.4308, "lng": -79.1528}, "East Gwillimbury": {"lat": 44.12, "lng": -79.43}, "Eastern Ontario": {"lat": 44.1667, "lng": -77.3833}, "Gravenhurst": {"lat": 44.9167, "lng": -79.3667}, "Guelph": {"lat": 43.55, "lng": -80.25}, "Halton Hills": {"lat": 43.6469, "lng": -79.91}, "Hamilton": {"lat": 43.2567, "lng": -79.8692}, "Innisfil": {"lat": 44.3, "lng": -79.5833}, "Kawartha Lakes": {"lat": 44.5356, "lng": -78.7369}, "Keswick": {"lat": 44.2436, "lng": -79.4758}, "King City": {"lat": 43.9286, "lng": -79.5282}, "Kitchener-Waterloo": {"lat": 43.4667, "lng": -80.5167}, "Kleinburg": {"lat": 43.8369, "lng": -79.6256}, "Lindsay": {"lat": 44.3541, "lng": -78.7412}, "Maple": {"lat": 43.8539, "lng": -79.5131}, "Markham": {"lat": 43.8833, "lng": -79.25}, "Milton": {"lat": 43.5083, "lng": -79.8833}, "Mississauga": {"lat": 43.6, "lng": -79.65}, "Muskoka": {"lat": 45.3333, "lng": -79.2167}, "Newmarket": {"lat": 44.06, "lng": -79.45}, "Niagara": {"lat": 43.2553, "lng": -79.0717}, "Niagara Falls": {"lat": 43.1167, "lng": -79.0667}, "Norfolk / Haldimand": {"lat": 42.8333, "lng": -80.3}, "Northern Ontario": {"lat": 46.3092, "lng": -79.4614}, "Northumberland": {"lat": 44.0283, "lng": -78.3875}, "Oakville": {"lat": 43.45, "lng": -79.6833}, "Orangeville": {"lat": 43.9167, "lng": -80.1167}, "Orillia": {"lat": 44.6, "lng": -79.4167}, "Oshawa": {"lat": 43.9, "lng": -78.85}, "Parry Sound": {"lat": 45.3333, "lng": -80.0333}, "Perth / Huron": {"lat": 43.3667, "lng": -80.9667}, "Peterborough": {"lat": 44.3, "lng": -78.3167}, "Pickering": {"lat": 43.9069, "lng": -79.1308}, "Richmond Hill": {"lat": 43.8714, "lng": -79.4372}, "Sault Ste. Marie": {"lat": 46.5333, "lng": -84.35}, "Scugog": {"lat": 44.1047, "lng": -78.9442}, "Shelburne": {"lat": 44.0833, "lng": -80.2}, "Simcoe County": {"lat": 44.75, "lng": -79.8833}, "Stouffville": {"lat": 43.9667, "lng": -79.25}, "Thornhill": {"lat": 43.8161, "lng": -79.4244}, "Uxbridge": {"lat": 44.1167, "lng": -79.1333}, "Vaughan": {"lat": 43.8333, "lng": -79.5}, "Whitby": {"lat": 43.88, "lng": -78.9422}, "CITY:JERSEYVILLE": {"lat": 43.2, "lng": -80.117}, "CITY:ORTON": {"lat": 43.739, "lng": -80.206}, "CITY:THORNBURY": {"lat": 44.561, "lng": -80.452}, "CITY:COLDWATER": {"lat": 44.7, "lng": -79.617}, "CITY:VINELAND": {"lat": 43.17, "lng": -79.397}, "CITY:OTTAWA": {"lat": 45.421, "lng": -75.697}, "CITY:PORT CARLING": {"lat": 45.106, "lng": -79.585}, "CITY:GRIMSBY": {"lat": 43.193, "lng": -79.563}, "CITY:MINETT": {"lat": 45.069, "lng": -79.559}, "CITY:ROSSEAU": {"lat": 45.187, "lng": -79.636}};
 const cityKeyToZone = {"CITY:MAPLE": "Maple", "CITY:MISSISSAUGA": "Mississauga", "CITY:NEWMARKET": "Newmarket", "CITY:THORNHILL": "Thornhill", "CITY:JERSEYVILLE": "CITY:JERSEYVILLE", "CITY:BRAMPTON": "Brampton", "CITY:PICKERING": "Pickering", "CITY:OAKVILLE": "Oakville", "CITY:MARKHAM": "Markham", "CITY:HAMILTON": "Hamilton", "CITY:ORTON": "CITY:ORTON", "CITY:NIAGARA FALLS": "Niagara Falls", "CITY:KITCHENER": "Kitchener-Waterloo", "CITY:KING CITY": "King City", "CITY:RICHMOND HILL": "Richmond Hill", "CITY:VAUGHAN": "Vaughan", "CITY:WOODBRIDGE": "Vaughan", "CITY:KLEINBURG": "Kleinburg", "CITY:CONCORD": "Vaughan", "CITY:UXBRIDGE": "Uxbridge", "CITY:AJAX": "Ajax", "CITY:REXDALE": "Brampton", "CITY:THORNBURY": "CITY:THORNBURY", "CITY:SCHOMBERG": "Bolton", "CITY:AURORA": "Aurora", "CITY:MILTON": "Milton", "CITY:CALEDON": "Caledon", "CITY:COLDWATER": "CITY:COLDWATER", "CITY:BELFOUNTAIN": "Caledon", "CITY:ALTON": "Caledon", "CITY:INNISFIL": "Innisfil", "CITY:BURLINGTON": "Burlington", "CITY:WATERLOO": "Kitchener-Waterloo", "CITY:MULMUR": "Shelburne", "CITY:LEFROY": "Innisfil", "CITY:VINELAND": "CITY:VINELAND", "CITY:ANCASTER": "Hamilton", "CITY:CAMBRIDGE": "Cambridge", "CITY:BARRIE": "Barrie", "CITY:OSHAWA": "Oshawa", "CITY:STOUFFVILLE": "Stouffville", "CITY:OTTAWA": "CITY:OTTAWA", "CITY:PORT CARLING": "CITY:PORT CARLING", "CITY:WHITBY": "Whitby", "CITY:WATERDOWN": "Hamilton", "CITY:PORT PERRY": "Scugog", "CITY:BOWMANVILLE": "Clarington", "CITY:GRAVENHURST": "Gravenhurst", "CITY:STONEY CREEK": "Hamilton", "CITY:TERRA COTTA": "Halton Hills", "CITY:GRIMSBY": "CITY:GRIMSBY", "CITY:PORT HOPE": "Northumberland", "CITY:CALEDON VILLAGE": "Caledon", "CITY:HUNTSVILLE": "Muskoka", "CITY:CALEDON EAST": "Caledon", "CITY:MOUNT ALBERT": "East Gwillimbury", "CITY:LAKEFIELD": "Peterborough", "CITY:MINETT": "CITY:MINETT", "CITY:ROSSEAU": "CITY:ROSSEAU", "CITY:COLLINGWOOD": "Collingwood", "CITY:TINY": "Simcoe County", "CITY:MONO": "Orangeville"};
 
+// Out-of-province extension: Greater Victoria, BC.
+// Reason: 2025 had at least one Victoria BC delivery whose V-prefix FSA wasn't
+// in fsaToZone above (which only knows Ontario K/L/M/N/P prefixes), so the
+// updateTimeline aggregator's `else continue` branch silently dropped it from
+// the heatmap. Surfacing the bubble at the actual Victoria coords is more
+// honest than burying it in the off-map total.
+// Coverage: greater Victoria CMA (Victoria, Saanich, Oak Bay, Esquimalt,
+// View Royal, Langford, Colwood, Metchosin). FSAs sourced from Canada Post
+// FSA list. Add more BC FSAs here only if you actually start seeing deliveries
+// elsewhere — keeping this list narrow avoids inadvertently catching unrelated
+// "V" FSAs (Vancouver = V5/V6/V7).
+Object.assign(fsaToZone, {
+  'V8N': 'Victoria BC', 'V8P': 'Victoria BC', 'V8R': 'Victoria BC',
+  'V8S': 'Victoria BC', 'V8T': 'Victoria BC', 'V8V': 'Victoria BC',
+  'V8W': 'Victoria BC', 'V8X': 'Victoria BC', 'V8Y': 'Victoria BC',
+  'V8Z': 'Victoria BC', 'V9A': 'Victoria BC', 'V9B': 'Victoria BC',
+  'V9C': 'Victoria BC', 'V9E': 'Victoria BC',
+});
+Object.assign(zoneCoords, {
+  // Downtown Victoria (Inner Harbour). Single bubble for greater Victoria —
+  // a one-off out-of-province event doesn't need FSA-level granularity.
+  'Victoria BC': { lat: 48.4284, lng: -123.3656 },
+});
+
 
 
 
@@ -2433,6 +2472,15 @@ function updateTimeline() {
     document.getElementById('range-display').textContent = 'All Weeks (2025–2026)';
   } else {
     document.getElementById('range-display').textContent = startShort + ' \u2013 ' + endShort + yearSuffix + ' (' + (endIdx - startIdx + 1) + ' weeks)';
+  }
+  // Single-day mode override: when From === To, replace the week-range label
+  // with a friendly day label (e.g. "Today \u00b7 Mon May 4"). Done as a
+  // post-overwrite so the existing if/else above stays untouched. Single-day
+  // detection (_currentSingleDayIso) is the canonical source of truth here
+  // and is reused by the aggregation dispatch + drill-down popups below.
+  const singleDayIso = _currentSingleDayIso();
+  if (singleDayIso) {
+    document.getElementById('range-display').textContent = _singleDayLabel(singleDayIso);
   }
 
   // Keep the unified From/To inputs in sync with slider state — but ONLY when
@@ -2471,14 +2519,18 @@ function updateTimeline() {
   } catch (e) { /* best-effort sync — never block the main aggregation */ }
 
   // ===== ACCUMULATE =====
-  // Fast path (dowFilter = all 7): use pre-aggregated contractWeekly (week-level sums).
-  // Slow path (dowFilter restricted): iterate contractEvents (per-event detail) and
-  // filter by event date's day-of-week. Slower (~40K events) but still <50ms.
+  // Fast path (dowFilter = all 7, no single-day): use pre-aggregated contractWeekly
+  // (week-level sums).
+  // Slow path (dowFilter restricted OR single-day mode active): iterate
+  // contractEvents (per-event detail) and filter by exact ISO date / day-of-week.
+  // Slower (~40K events) but still <50ms.
+  // Single-day forces the slow path even when DoW is unrestricted because the
+  // weekly aggregate has no concept of individual days within a week.
   const contractCityData = {};
   let hasData = false;
   const dowRestricted = dowFilter.size < 7;
 
-  if (!dowRestricted) {
+  if (!dowRestricted && !singleDayIso) {
     // --- Fast path: week-level accumulation ---
     for (let i = startIdx; i <= endIdx; i++) {
       const wk = weekKeys[i];
@@ -2532,8 +2584,15 @@ function updateTimeline() {
     const endMon = _isoWeekMonday(weekKeys[endIdx]);
     const endSun = new Date(endMon);
     endSun.setUTCDate(endMon.getUTCDate() + 6);
-    const startIso = startMon.toISOString().slice(0, 10);
-    const endIso = endSun.toISOString().slice(0, 10);
+    // Single-day mode collapses the iteration window to one ISO date so the
+    // heatmap reflects exactly that day's events. The week-derived bounds above
+    // remain valid for DoW-filtered (non-single-day) flows.
+    let startIso = startMon.toISOString().slice(0, 10);
+    let endIso   = endSun.toISOString().slice(0, 10);
+    if (singleDayIso) {
+      startIso = singleDayIso;
+      endIso   = singleDayIso;
+    }
 
     for (const [locKey, venues] of Object.entries(contractEvents)) {
       for (const [venue, events] of Object.entries(venues)) {
@@ -2825,11 +2884,12 @@ function updateTimeline() {
   }
 
   // Off-map (no-FSA) revenue for the same week range + company + status filter.
-  // Not DoW-filterable (we don't keep per-event dates for unmapped rows), so we
-  // skip display when DoW is restricted — the mapped total stops being apples-to-
-  // apples with a full-week off-map figure.
+  // Not DoW-filterable and not single-day-filterable (we don't keep per-event
+  // dates for unmapped rows), so we skip display when DoW is restricted OR a
+  // single-day mode is active — the mapped total stops being apples-to-apples
+  // with a full-week off-map figure.
   let offMapRev = 0, offMapFees = 0, offMapEvents = 0, offMapContracts = 0;
-  const offMapApplicable = !dowRestricted && Object.keys(unmappedWeekly).length > 0;
+  const offMapApplicable = !dowRestricted && !singleDayIso && Object.keys(unmappedWeekly).length > 0;
   if (offMapApplicable) {
     const statusWanted = (contractFilter === 'closed') ? ['closed']
                        : (contractFilter === 'open')   ? ['open']
@@ -2880,9 +2940,13 @@ function updateTimeline() {
         (offMapContracts ? ' / ' + offMapContracts.toLocaleString() + ' contracts' : '') +
         '  \u00b7  ' + pct.toFixed(1) + '% of total';
       offEl.classList.remove('hidden');
-    } else if (dowRestricted && Object.keys(unmappedWeekly).length > 0) {
-      // Signal to Mark that the off-map figure is suppressed while DoW is filtered.
-      offVal.textContent = 'hidden while Day-of-Week filter is active';
+    } else if ((dowRestricted || singleDayIso) && Object.keys(unmappedWeekly).length > 0) {
+      // Signal that the off-map figure is suppressed: either DoW is filtered
+      // OR single-day mode is active (unmapped rows don't carry per-event dates,
+      // so we can't apply either filter without overstating the total).
+      offVal.textContent = singleDayIso
+        ? 'hidden in single-day view'
+        : 'hidden while Day-of-Week filter is active';
       offEl.classList.remove('hidden');
     } else {
       offEl.classList.add('hidden');
@@ -3016,6 +3080,52 @@ function _parseIsoDate(s) {
   const parts = s.split('-');
   if (parts.length !== 3) return null;
   return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+}
+// Returns the active single-day ISO date when both From and To inputs hold the
+// same valid YYYY-MM-DD value, else null. The Today / Tomorrow chips both call
+// setTimelineRange(today, today) / setTimelineRange(tomorrow, tomorrow), so
+// "From === To" is the canonical single-day signal — no extra state needed.
+//
+// Used by:
+//   - updateTimeline()   to force the event-level aggregation path with the
+//                        exact day instead of the week-level fast path
+//   - getContractEvents()/getVenueEvents() to scope drill-down tables to that
+//                        same day (otherwise popups would show all 7 days of
+//                        the week the chosen date falls in)
+//
+// Manually picking the same date in both From and To inputs also triggers
+// single-day mode — this is intentional and gives advanced users a custom-day
+// option without an extra UI control.
+function _currentSingleDayIso() {
+  try {
+    const f = document.getElementById('tl-from-input');
+    const t = document.getElementById('tl-to-input');
+    if (!f || !t) return null;
+    const v = f.value;
+    if (!v || v !== t.value) return null;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+    return v;
+  } catch (e) {
+    return null;
+  }
+}
+// Format a single ISO date as the timeline panel's range-display label.
+// Special-cases Today / Tomorrow / Yesterday so the active chip's intent reads
+// at a glance ("Today · Mon May 4" rather than just "Mon May 4").
+function _singleDayLabel(iso) {
+  const d = _parseIsoDate(iso);
+  if (!d) return iso;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+  const cmp = _dateToIsoDate(d);
+  const prefix = (cmp === _dateToIsoDate(today))     ? 'Today · '
+              : (cmp === _dateToIsoDate(tomorrow))   ? 'Tomorrow · '
+              : (cmp === _dateToIsoDate(yesterday))  ? 'Yesterday · '
+              : '';
+  const days   = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return prefix + days[d.getDay()] + ' ' + months[d.getMonth()] + ' ' + d.getDate();
 }
 // Map an ISO week index (into weekKeys) to the Monday date of that week.
 function _wkIdxToMondayDate(idx) {
@@ -3621,6 +3731,56 @@ function _syncAllChip() {
   _setChipActive('co-all', allOn);
 }
 
+// Re-frame the map on whatever data is currently rendered. Walks every layer
+// group that's actually on the map, harvests every marker / polyline / circle's
+// bounds, and flies the camera to fit them with sane padding/maxZoom.
+//
+// Why this exists: when the user clicks a company chip (e.g. East -> West),
+// updateTimeline() rebuilds the revenue heatmap with the new filter, but the
+// camera doesn't move. So clicking "West" while zoomed on the GTA leaves the
+// user staring at empty space east of Toronto while the West bubbles render
+// off-screen. This helper closes that loop.
+//
+// Layers considered: revLayerGroup (heatmap), dispatchLayerGroup (routes),
+// venuesLayerGroup, caterersLayerGroup, newLayerGroup/oldLayerGroup. Only
+// included if the group is actually on the map (so toggling chips on a
+// pricing-only view doesn't yank the camera).
+//
+// Safe to call even when nothing is visible — bounds.isValid() guards the
+// fitBounds call.
+function fitToVisibleData() {
+  if (typeof map === 'undefined' || !map) return;
+  const bounds = L.latLngBounds([]);
+  const consider = function(group) {
+    if (!group) return;
+    if (typeof map.hasLayer === 'function' && !map.hasLayer(group)) return;
+    if (typeof group.eachLayer !== 'function') return;
+    group.eachLayer(function(layer) {
+      try {
+        if (layer.getLatLng) {
+          bounds.extend(layer.getLatLng());
+        } else if (layer.getBounds) {
+          const b = layer.getBounds();
+          if (b && b.isValid && b.isValid()) bounds.extend(b);
+        }
+      } catch (e) { /* skip layers without geometry */ }
+    });
+  };
+  // Order doesn't matter — all extents merge into the same bounds object.
+  if (typeof revLayerGroup      !== 'undefined') consider(revLayerGroup);
+  if (typeof dispatchLayerGroup !== 'undefined') consider(dispatchLayerGroup);
+  if (typeof venuesLayerGroup   !== 'undefined') consider(venuesLayerGroup);
+  if (typeof caterersLayerGroup !== 'undefined') consider(caterersLayerGroup);
+  if (typeof newLayerGroup      !== 'undefined') consider(newLayerGroup);
+  if (typeof oldLayerGroup      !== 'undefined') consider(oldLayerGroup);
+  if (!bounds.isValid()) return;
+  // maxZoom 11 keeps regional context visible (clicking "West" should show
+  // all of southwestern Ontario, not zoom into one stop). Padding leaves room
+  // for the side panels on desktop.
+  map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 11, duration: 0.6 });
+}
+window.fitToVisibleData = fitToVisibleData;  // expose for console / future hooks
+
 window.toggleCompany = function(co) {
   if (co === '__ALL__') {
     // "All" always turns every bucket on (no longer toggles off — ensures the
@@ -3644,8 +3804,14 @@ window.toggleCompany = function(co) {
   updateTimeline();
   if (dispatchVisible) {
     updateDispatchTruckOptions(false);  // company change -> reset truck selection to new scope
-    buildDispatchLayer(true);
+    // Pass false: fitToVisibleData() below handles the camera so dispatch +
+    // any other visible layer (rev bubbles, venues) all fit together.
+    buildDispatchLayer(false);
   }
+  // Re-frame the map on the new filtered data — this is the whole point of
+  // clicking a company chip. Without this, picking West while zoomed on the
+  // GTA leaves the camera parked over empty space east of Toronto.
+  fitToVisibleData();
 };
 
 function _syncAllDowChip() {

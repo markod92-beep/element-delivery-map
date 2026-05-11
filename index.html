@@ -6,7 +6,18 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Element Delivery Zones — Old vs New Pricing + Contracts</title>
+<title>Element Delivery Map</title>
+
+<!-- ===== PWA / HOME-SCREEN BRANDING ===== -->
+<link rel="icon" type="image/svg+xml" href="/assets/element-logo.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/icon-180.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1C3B42">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Delivery Map">
+<meta name="mobile-web-app-capable" content="yes">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css"/>
@@ -146,6 +157,7 @@ body {
   font-size: 13px; max-width: 320px;
 }
 .info-panel h4 { font-size: 14px; color: var(--element-teal); margin-bottom: 4px; font-weight: 700; letter-spacing: 0.01em; }
+.info-panel .brand-lockup { display: block; width: 180px; height: auto; margin: 0 0 6px 0; }
 .info-panel .subtitle { color: var(--element-muted); font-size: 11px; margin-bottom: 8px; font-weight: 500; }
 .toggle-row { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
 .toggle-btn {
@@ -700,9 +712,9 @@ body.routes-active:not(.rev-on) #tl-daterange .tl-step {
 }
 #loading-overlay.fade-out { opacity: 0; pointer-events: none; }
 .loading-brand {
-  font-size: 20px; font-weight: 700; color: var(--element-teal);
-  letter-spacing: 0.12em; text-transform: uppercase;
+  width: 260px; height: auto;
   margin-bottom: 24px;
+  display: block;
 }
 .loading-spinner {
   width: 44px; height: 44px; border: 3px solid var(--element-mint);
@@ -832,6 +844,7 @@ body.routes-active:not(.rev-on) #tl-daterange .tl-step {
   }
   /* Decorative headings take up space we don't have on mobile; the collapsed toggle button is enough. */
   .info-panel h4 { display: none !important; }
+  .info-panel .brand-lockup { display: none !important; }
   .info-panel .subtitle { display: none !important; }
   /* Company-section label + chip row inside the info-panel are duplicated in #mobile-top-bar;
      hide the panel copy so we don't render them twice. The chips themselves get relocated via JS;
@@ -1290,7 +1303,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- LOADING SPINNER (shown during map initialization) -->
 <div id="loading-overlay" style="display:none;">
-  <div class="loading-brand">element</div>
+  <img class="loading-brand" src="/assets/element-lockup.svg" alt="Element Event Solutions" width="260">
   <div class="loading-spinner"></div>
   <div class="loading-text">Loading delivery data&hellip;</div>
 </div>
@@ -2117,8 +2130,8 @@ function _routeMatchesCompany(route) {
 const infoControl = L.control({position:'topleft'});
 infoControl.onAdd = function() {
   const div = L.DomUtil.create('div','info-panel');
-  div.innerHTML = '<h4>Element Delivery Zones</h4>' +
-    '<div class="subtitle">Old vs New Pricing + Revenue & 2026 Contracts</div>' +
+  div.innerHTML = '<img class="brand-lockup" src="/assets/element-lockup.svg" alt="Element Event Solutions">' +
+    '<div class="subtitle">Delivery Map &middot; Old vs New Pricing + Revenue &amp; 2026 Contracts</div>' +
     '<div class="toggle-row" style="flex-wrap:wrap;">' +
     '<div class="toggle-btn active-new" id="btn-new" onclick="toggleLayer(\'new\')">&#10004; New Pricing (99)</div>' +
     '<div class="toggle-btn" id="btn-old" onclick="toggleLayer(\'old\')">Old Pricing (101)</div>' +

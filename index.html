@@ -505,32 +505,47 @@ body.has-dispatch .key-loc-panel { left: 304px; }
 .slider-row { display: flex; gap: 8px; align-items: center; }
 .slider-row label { font-size: 11px; color: var(--element-muted); white-space: nowrap; min-width: 40px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
 .slider-row input[type=range] { flex: 1; }
-/* ===== KEY FILTER button (inside timeline panel) =====
-   Single trigger between BU chips (which sit above the panel) and the date
-   controls. Replaces the old Key Venues / Key Customers / Key Caterers layer
-   toggles + side panel. Clicking opens the bottom-sheet picker.  */
-.timeline-panel .tl-keyfilter { margin: 6px 0 10px; }
-.timeline-panel .tl-keyfilter-btn {
-  display: flex; align-items: center; gap: 8px;
-  width: 100%;
-  padding: 8px 12px;
-  background: var(--element-offwhite);
-  color: var(--element-teal);
-  border: 1px solid var(--element-offwhite-tint);
-  border-radius: 8px;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  text-align: left;
-  transition: background 0.15s ease, border-color 0.15s ease;
+/* ===== STANDALONE KEY FILTER FAB =====
+   Single floating icon that opens the customer/caterer picker sheet.
+   On mobile: lives inside the existing #mobile-fab-stack (left edge, ~38% from top).
+   On desktop: the FAB stack is normally hidden, but THIS specific FAB is kept
+   visible via the override below, positioned on the map's left edge.  */
+@media screen and (min-width: 769px) {
+  /* Re-enable the FAB stack on desktop ONLY for the keyfilter FAB. The other
+     FABs (layer / BU / TL / truck) are still hidden — they're mobile-sheet
+     triggers that have no purpose on desktop. */
+  #mobile-fab-stack {
+    display: flex !important;
+    position: fixed;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    flex-direction: column;
+    gap: 8px;
+    z-index: 1500;
+    pointer-events: none;   /* let map drag pass through gaps */
+  }
+  #mobile-fab-stack .mfab { pointer-events: auto; }
+  #mobile-fab-stack .mfab:not(.mfab-keyfilter) { display: none !important; }
+  /* Base FAB styling (mirrors the mobile-only definition below). */
+  .mfab-keyfilter {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: var(--element-teal);
+    color: var(--element-white);
+    border: none;
+    box-shadow: 0 2px 10px rgba(28,59,66,0.25);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.15s ease, transform 0.12s ease;
+  }
+  .mfab-keyfilter:hover  { background: var(--element-teal-dark); }
+  .mfab-keyfilter:active { transform: scale(0.93); }
+  .mfab-keyfilter svg    { width: 22px; height: 22px; display: block; }
 }
-.timeline-panel .tl-keyfilter-btn:hover {
-  background: var(--element-white);
-  border-color: var(--element-teal);
-}
-.timeline-panel .tl-keyfilter-btn .tl-kf-label { flex: 1; min-width: 0; }
-.timeline-panel .tl-keyfilter-btn .tl-kf-chev { opacity: 0.65; }
+
+/* Active pill inside timeline panel — shown when a filter is applied. */
 .timeline-panel .tl-keyfilter-pill {
   display: flex; align-items: center; gap: 6px;
   margin-top: 6px;
@@ -654,9 +669,15 @@ body.has-dispatch .key-loc-panel { left: 304px; }
 body.ms-sheet-open #mobile-sheet-backdrop {
   opacity: 1; pointer-events: auto;
 }
-/* On very narrow screens (< 380px), stack the two columns vertically. */
-@media screen and (max-width: 380px) {
-  #mobile-sheet-keyfilter .kf-cols { grid-template-columns: 1fr; }
+/* On mobile, stack the two columns vertically — two columns are too cramped
+   for typical 360–430px phone widths once names like "BAAM PRODUCTIONS INC."
+   try to fit. Desktop keeps side-by-side. */
+@media screen and (max-width: 768px) {
+  #mobile-sheet-keyfilter .kf-cols { grid-template-columns: 1fr; gap: 18px; }
+  /* Give a little more breathing room on mobile rows. */
+  #mobile-sheet-keyfilter .ms-body { padding: 12px 14px 24px; }
+  #mobile-sheet-keyfilter .kf-row  { padding: 10px 12px; font-size: 13px; }
+  #mobile-sheet-keyfilter { max-height: 80vh; }
 }
 
 /* Hide the old key-loc-panel — replaced by the keyfilter sheet. The DOM
@@ -1582,27 +1603,13 @@ document.addEventListener('DOMContentLoaded', function() {
   <input type="range" id="slider-to"   min="0" max="104" value="104" oninput="updateTimeline()" style="display:none;">
 
   <div class="tl-body">
-    <!-- KEY FILTER — single button that opens a slide-up sheet for picking a
-         customer or caterer to solo-filter the revenue heatmap. Sits between
-         the BU chips (which live in info-panel on desktop / mobile-top-bar on
-         mobile, both ABOVE this panel in the visual stack) and the date
-         controls below. Filter pill renders here when a filter is active. -->
-    <div class="tl-keyfilter">
-      <button class="tl-keyfilter-btn" id="tl-keyfilter-btn" type="button" onclick="openKeyFilter()">
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-          <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                d="M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0zM4 21a8 8 0 0 1 16 0"/>
-        </svg>
-        <span class="tl-kf-label">Filter by customer or caterer</span>
-        <svg class="tl-kf-chev" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-          <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/>
-        </svg>
-      </button>
-      <div class="tl-keyfilter-pill" id="tl-keyfilter-pill" style="display:none;" onclick="clearRevenueSoloFilter()" title="Click to clear filter">
-        <span class="tl-kf-pill-label" id="tl-kf-pill-label">Filter</span>
-        <span class="tl-kf-pill-name" id="tl-kf-pill-name"></span>
-        <span class="tl-kf-pill-x" aria-hidden="true">&times;</span>
-      </div>
+    <!-- ACTIVE FILTER PILL — only renders when a customer/caterer solo is
+         applied (the trigger is now a standalone FAB on the left edge of the
+         map, not embedded in this panel). Clicking the pill clears the filter. -->
+    <div class="tl-keyfilter-pill" id="tl-keyfilter-pill" style="display:none;" onclick="clearRevenueSoloFilter()" title="Click to clear filter">
+      <span class="tl-kf-pill-label" id="tl-kf-pill-label">Filter</span>
+      <span class="tl-kf-pill-name" id="tl-kf-pill-name"></span>
+      <span class="tl-kf-pill-x" aria-hidden="true">&times;</span>
     </div>
 
     <h4 id="tl-title">Timeframe</h4>
@@ -1760,6 +1767,12 @@ document.addEventListener('DOMContentLoaded', function() {
   <button class="mfab" data-sheet="truck" aria-label="Truck filter" title="Truck filter">
     <!-- truck icon -->
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5h11v9h1.5l2.5-3H22v6h-1.2a2.8 2.8 0 0 1-5.6 0H9.8a2.8 2.8 0 0 1-5.6 0H3V5zm2 2v7h.34a2.8 2.8 0 0 1 3.32 0H12V7H5zm11 4.5V13h3.1l-.85-1.5H16zM7 15.2a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6zm10 0a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6z"/></svg>
+  </button>
+  <button class="mfab mfab-keyfilter" data-sheet="keyfilter" aria-label="Filter by customer or caterer" title="Filter by customer or caterer" onclick="openKeyFilter()">
+    <!-- person icon (matches the in-panel button that was removed) -->
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0zM4 21a8 8 0 0 1 16 0"/>
+    </svg>
   </button>
 </div>
 
@@ -5479,9 +5492,15 @@ window.openKeyFilter = function() {
   });
 };
 
-// Build the two columns. Top 10 per BU by TTM revenue.
+// Build the two columns. Top 10 per BU by IN-WINDOW revenue.
+// Sort + display use the active timeline window (e.g. "This Week" → ranked
+// by this-week revenue per venue/caterer). Falls back to TTM as tiebreaker
+// and as the "All Weeks" representation. Venues/caterers with zero in-window
+// revenue are filtered out so the list always surfaces ACTIVE performers.
 function buildKeyFilterLists() {
   if (!venuesData) return;
+  const win = _venuesGetWindow();
+  const isFullWindow = !win.from && !win.to;  // "All Weeks" — TTM ≈ window rev
   const hasFilter = (typeof companyFilter !== 'undefined') &&
                     companyFilter.size > 0 &&
                     companyFilter.size < ALL_COMPANIES.length;
@@ -5489,23 +5508,20 @@ function buildKeyFilterLists() {
     if (!hasFilter) return true;
     return companyFilter.has(region || 'Unknown');
   };
-  // Subtitle reflects scope so users know what they're seeing.
+  const windowLabel = _kfWindowLabel(win);
+
+  // Subtitle reflects active window + BU.
   const subEl = document.getElementById('kf-subtitle');
   if (subEl) {
-    if (hasFilter) {
-      const bu = Array.from(companyFilter)[0];
-      subEl.textContent = 'Top 10 in ' + bu + ' by TTM revenue';
-    } else {
-      subEl.textContent = 'Top 10 per business unit by TTM revenue';
-    }
+    const buPart = hasFilter ? ('in ' + Array.from(companyFilter)[0]) : 'per business unit';
+    subEl.textContent = 'Top 10 ' + buPart + ' by revenue · ' + windowLabel;
   }
 
-  // ---- Customers column (sourced from venuesData.venues — display_name is customer name) ----
+  // ---- Customers column ----
   const custList = document.getElementById('kf-customers-list');
   if (custList) {
     let html = '';
     if (!hasFilter) {
-      // When "All" is on, show top 10 from EACH BU stacked, with a small region header.
       const byRegion = {};
       (venuesData.venues || []).forEach(function(v) {
         const r = v.region || 'Unknown';
@@ -5513,23 +5529,34 @@ function buildKeyFilterLists() {
       });
       const order = ['GTA', 'GTA Tents', 'East', 'West'];
       order.forEach(function(region) {
-        const list = (byRegion[region] || []).slice()
-          .sort(function(a, b) { return (b.ttm_revenue || 0) - (a.ttm_revenue || 0); })
+        const enriched = (byRegion[region] || []).map(function(v) {
+          return { v: v, winRev: _venueWindowRev(v, win) };
+        }).filter(function(e) { return e.winRev > 0 || isFullWindow; })
+          .sort(function(a, b) {
+            const dr = (b.winRev || 0) - (a.winRev || 0);
+            if (dr) return dr;
+            return (b.v.ttm_revenue || 0) - (a.v.ttm_revenue || 0);
+          })
           .slice(0, 10);
-        if (!list.length) return;
+        if (!enriched.length) return;
         html += '<div class="kf-col-title" style="margin-top:8px;border-bottom:none;color:var(--element-teal);">' + _esc(region) + '</div>';
-        list.forEach(function(v, i) { html += _kfRowVenue(v, i + 1); });
+        enriched.forEach(function(e, i) { html += _kfRowVenue(e.v, i + 1, e.winRev, isFullWindow); });
       });
     } else {
-      const list = (venuesData.venues || [])
+      const enriched = (venuesData.venues || [])
         .filter(function(v) { return inBU(v.region); })
-        .slice()
-        .sort(function(a, b) { return (b.ttm_revenue || 0) - (a.ttm_revenue || 0); })
+        .map(function(v) { return { v: v, winRev: _venueWindowRev(v, win) }; })
+        .filter(function(e) { return e.winRev > 0 || isFullWindow; })
+        .sort(function(a, b) {
+          const dr = (b.winRev || 0) - (a.winRev || 0);
+          if (dr) return dr;
+          return (b.v.ttm_revenue || 0) - (a.v.ttm_revenue || 0);
+        })
         .slice(0, 10);
-      if (!list.length) {
-        html = '<div class="kf-empty">No customers in this BU.</div>';
+      if (!enriched.length) {
+        html = '<div class="kf-empty">No customer activity in this window.</div>';
       } else {
-        list.forEach(function(v, i) { html += _kfRowVenue(v, i + 1); });
+        enriched.forEach(function(e, i) { html += _kfRowVenue(e.v, i + 1, e.winRev, isFullWindow); });
       }
     }
     custList.innerHTML = html;
@@ -5547,54 +5574,109 @@ function buildKeyFilterLists() {
       });
       const order = ['GTA', 'GTA Tents', 'East', 'West'];
       order.forEach(function(region) {
-        const list = (byRegion[region] || []).slice()
-          .sort(function(a, b) { return (b.ttm_revenue || 0) - (a.ttm_revenue || 0); })
+        const enriched = (byRegion[region] || []).map(function(c) {
+          return { c: c, winRev: _catererWindowRev(c, win) };
+        }).filter(function(e) { return e.winRev > 0 || isFullWindow; })
+          .sort(function(a, b) {
+            const dr = (b.winRev || 0) - (a.winRev || 0);
+            if (dr) return dr;
+            return (b.c.ttm_revenue || 0) - (a.c.ttm_revenue || 0);
+          })
           .slice(0, 10);
-        if (!list.length) return;
+        if (!enriched.length) return;
         html += '<div class="kf-col-title" style="margin-top:8px;border-bottom:none;color:var(--element-teal);">' + _esc(region) + '</div>';
-        list.forEach(function(c, i) { html += _kfRowCaterer(c, i + 1); });
+        enriched.forEach(function(e, i) { html += _kfRowCaterer(e.c, i + 1, e.winRev, isFullWindow); });
       });
     } else {
-      const list = (venuesData.caterers || [])
+      const enriched = (venuesData.caterers || [])
         .filter(function(c) { return inBU(c.region); })
-        .slice()
-        .sort(function(a, b) { return (b.ttm_revenue || 0) - (a.ttm_revenue || 0); })
+        .map(function(c) { return { c: c, winRev: _catererWindowRev(c, win) }; })
+        .filter(function(e) { return e.winRev > 0 || isFullWindow; })
+        .sort(function(a, b) {
+          const dr = (b.winRev || 0) - (a.winRev || 0);
+          if (dr) return dr;
+          return (b.c.ttm_revenue || 0) - (a.c.ttm_revenue || 0);
+        })
         .slice(0, 10);
-      if (!list.length) {
-        html = '<div class="kf-empty">No caterers in this BU.</div>';
+      if (!enriched.length) {
+        html = '<div class="kf-empty">No caterer activity in this window.</div>';
       } else {
-        list.forEach(function(c, i) { html += _kfRowCaterer(c, i + 1); });
+        enriched.forEach(function(e, i) { html += _kfRowCaterer(e.c, i + 1, e.winRev, isFullWindow); });
       }
     }
     catList.innerHTML = html;
   }
 }
 
-function _kfRowVenue(v, rank) {
+// Sum revenue for a single venue's contracts in the active window.
+// Contract shape (from venues_data.json): { con, cust, date, tt, df }. `tt`
+// is the rental total used by process_venues.py to build ttm_revenue, so
+// summing it across in-window contracts gives the window-scoped revenue.
+function _venueWindowRev(v, win) {
+  if (!v || !v.contracts || !v.contracts.length) return 0;
+  let s = 0;
+  for (let i = 0; i < v.contracts.length; i++) {
+    const c = v.contracts[i];
+    if (!_venuesInWindow(c, win)) continue;
+    s += (c.tt || 0);
+  }
+  return s;
+}
+
+// Same but for a caterer — has nested locations[].contracts[].
+function _catererWindowRev(c, win) {
+  if (!c || !c.locations) return 0;
+  let s = 0;
+  for (let i = 0; i < c.locations.length; i++) {
+    const loc = c.locations[i];
+    const arr = (loc && loc.contracts) || [];
+    for (let j = 0; j < arr.length; j++) {
+      const ct = arr[j];
+      if (!_venuesInWindow(ct, win)) continue;
+      s += (ct.tt || 0);
+    }
+  }
+  return s;
+}
+
+// Human label for the active window — used in the sheet subtitle.
+function _kfWindowLabel(win) {
+  if (!win || (!win.from && !win.to)) return 'All weeks';
+  if (win.from === win.to) return win.from;
+  if (win.from && win.to)  return win.from + ' → ' + win.to;
+  if (win.from) return 'from ' + win.from;
+  return 'through ' + win.to;
+}
+
+function _kfRowVenue(v, rank, winRev, isFullWindow) {
   const safeId = _esc(v.id || '');
   const isOn = (revenueSoloFilter && revenueSoloFilter.type === 'customer' &&
                 revenueSoloFilter.label === v.display_name);
   const onCls = isOn ? ' on' : '';
+  // Display: window revenue (or TTM if window is "All Weeks"). Tooltip
+  // always carries TTM as secondary context.
+  const displayRev = isFullWindow ? (v.ttm_revenue || 0) : (winRev || 0);
   return '<div class="kf-row' + onCls + '" onclick="onKfVenueClick(\'' + safeId + '\')" ' +
     'title="' + _esc(v.display_name) + ' — TTM ' + _klFmtMoney(v.ttm_revenue) + '">' +
     '<span class="kf-rank">#' + rank + '</span>' +
     '<span class="kf-name">' + _esc(v.display_name) + '</span>' +
-    '<span class="kf-meta">' + _klFmtMoney(v.ttm_revenue) + '</span>' +
+    '<span class="kf-meta">' + _klFmtMoney(displayRev) + '</span>' +
     '</div>';
 }
 
-function _kfRowCaterer(c, rank) {
+function _kfRowCaterer(c, rank, winRev, isFullWindow) {
   const safeId = _esc(c.id || '');
   const isOn = (revenueSoloFilter && revenueSoloFilter.type === 'caterer' &&
                 revenueSoloFilter.label === c.display_name);
   const onCls = isOn ? ' on' : '';
   const swatch = c.color ? '<span class="kf-swatch" style="background:' + _esc(c.color) + ';"></span>' : '';
+  const displayRev = isFullWindow ? (c.ttm_revenue || 0) : (winRev || 0);
   return '<div class="kf-row' + onCls + '" onclick="onKfCatererClick(\'' + safeId + '\')" ' +
     'title="' + _esc(c.display_name) + ' — TTM ' + _klFmtMoney(c.ttm_revenue) + '">' +
     '<span class="kf-rank">#' + rank + '</span>' +
     swatch +
     '<span class="kf-name">' + _esc(c.display_name) + '</span>' +
-    '<span class="kf-meta">' + _klFmtMoney(c.ttm_revenue) + '</span>' +
+    '<span class="kf-meta">' + _klFmtMoney(displayRev) + '</span>' +
     '</div>';
 }
 
@@ -5664,20 +5746,21 @@ function _afterRevenueFilterChange() {
 }
 
 // Show/hide the filter pill inside the timeline panel based on filter state.
+// Also reflects state on the standalone FAB (.mfab-keyfilter gets .active when
+// a filter is applied so the user can see at a glance that they're filtered).
 function _syncKeyFilterPill() {
-  const pill = document.getElementById('tl-keyfilter-pill');
-  const btn  = document.getElementById('tl-keyfilter-btn');
+  const pill   = document.getElementById('tl-keyfilter-pill');
+  const fab    = document.querySelector('.mfab-keyfilter');
   const lblEl  = document.getElementById('tl-kf-pill-label');
   const nameEl = document.getElementById('tl-kf-pill-name');
-  if (!pill || !btn) return;
   if (revenueSoloFilter) {
-    pill.style.display = 'flex';
-    btn.style.display  = 'none';
+    if (pill) pill.style.display = 'flex';
+    if (fab)  fab.classList.add('active');
     if (lblEl)  lblEl.textContent  = revenueSoloFilter.type === 'caterer' ? 'Caterer:' : 'Customer:';
     if (nameEl) nameEl.textContent = revenueSoloFilter.label;
   } else {
-    pill.style.display = 'none';
-    btn.style.display  = 'flex';
+    if (pill) pill.style.display = 'none';
+    if (fab)  fab.classList.remove('active');
   }
 }
 // Run once on script load in case there's any persisted state (there isn't

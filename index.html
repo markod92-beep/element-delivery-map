@@ -1312,8 +1312,11 @@ body.pwa-mode #pwa-refresh-btn.spinning svg { animation: pwa-refresh-spin 0.7s l
 }
 </style>
 </head>
-<body>
+<body class="rev-on">
 <!-- Access is protected by Cloudflare Access (email OTP) at the edge. -->
+<!-- body.rev-on is set here (not via JS) so the page paints directly into Revenue mode
+     instead of rendering New Pricing first and flipping during _initDefaultView. -->
+
 <script>
 // ===== PWA standalone detection + manual refresh =====
 // When the site is launched from a home-screen icon, iOS Safari hides the
@@ -1378,7 +1381,7 @@ document.addEventListener('DOMContentLoaded', function() {
   </svg>
 </button>
 
-<div class="timeline-panel" id="timeline-panel" style="display:none;">
+<div class="timeline-panel" id="timeline-panel">
   <!-- Hidden sliders — retained so existing updateTimeline() / quickJump() / setContractFilter() logic keeps working without rewrite. -->
   <input type="range" id="slider-from" min="0" max="104" value="0" oninput="updateTimeline()" style="display:none;">
   <input type="range" id="slider-to"   min="0" max="104" value="104" oninput="updateTimeline()" style="display:none;">
@@ -1873,7 +1876,10 @@ newCities.forEach(city => {
     className: tooltipClass
   });
 });
-newLayerGroup.addTo(map);
+// New Pricing layer is built but NOT added to the map on initial paint.
+// Default load state is "Revenue Heatmap on" — see line ~2037 (newVisible=false,
+// revVisible=true) and body.rev-on in the markup. Users can toggle New Pricing
+// on via the info-panel button.
 
 // ===== OLD PRICING LAYER =====
 const oldLayerGroup = L.layerGroup();
@@ -2034,10 +2040,20 @@ const revLayerGroup = revMarkerGroup;
 // will throw a ReferenceError (TDZ — typeof on a `let` before its declaration
 // does NOT return 'undefined', it throws). The actual assignments below still
 // win at normal script execution order; we're just escaping the TDZ.
-let newVisible = true, oldVisible = false, revVisible = false, pickupVisible = false;
+// Initial layer visibility — Revenue Heatmap is the default load view.
+// (Previously: newVisible=true, revVisible=false, then _initDefaultView flipped
+// them after delivery_data.json loaded — that caused a visible "pricing → revenue"
+// jump on every page load. Now defaults match the desired end-state.)
+let newVisible = false, oldVisible = false, revVisible = true, pickupVisible = false;
 let venuesVisible = false;
 let caterersVisible = false;
 const pickupLayerGroup = L.layerGroup();
+
+// Add Revenue Heatmap layer group to the map on init (matches revVisible=true above).
+// revLayerGroup is empty until updateTimeline() populates bubbles based on the
+// active week window — adding an empty layer group is harmless and prevents the
+// need for toggleLayer('rev') to do it later (which would cause a flip-flop).
+revLayerGroup.addTo(map);
 
 // ===== DISPATCH ROUTES STATE =====
 // Populated by dispatch_data.json fetch. Loaded eagerly on page init so the
@@ -2195,11 +2211,12 @@ const infoControl = L.control({position:'topleft'});
 infoControl.onAdd = function() {
   const div = L.DomUtil.create('div','info-panel');
   div.innerHTML = '<img class="brand-lockup" src="/assets/element-lockup.svg" alt="Element Event Solutions">' +
-    '<div class="subtitle">Delivery Map &middot; Old vs New Pricing + Revenue &amp; 2026 Contracts</div>' +
+    '<div class="subtitle">Delivery Map &middot; Revenue &amp; 2026 Contracts</div>' +
     '<div class="toggle-row" style="flex-wrap:wrap;">' +
-    '<div class="toggle-btn active-new" id="btn-new" onclick="toggleLayer(\'new\')">&#10004; New Pricing (99)</div>' +
-    '<div class="toggle-btn" id="btn-old" onclick="toggleLayer(\'old\')">Old Pricing (101)</div>' +
-    '<div class="toggle-btn" id="btn-rev" onclick="toggleLayer(\'rev\')">Revenue Heatmap</div>' +
+    // New Pricing + Old Pricing layer toggles intentionally removed — pricing
+    // overlays retired from the UI. The underlying layer-build code is left in
+    // place (dead) to avoid ripple in legend / mobile-sheet / state-guard logic.
+    '<div class="toggle-btn active-rev" id="btn-rev" onclick="toggleLayer(\'rev\')">&#10004; Revenue Heatmap</div>' +
     '<div class="toggle-btn" id="btn-dispatch" onclick="toggleLayer(\'dispatch\')">Routes</div>' +
     '<div class="toggle-btn" id="btn-venues" onclick="toggleLayer(\'venues\')">Key Venues</div>' +
     '<div class="toggle-btn" id="btn-caterers" onclick="toggleLayer(\'caterers\')">Key Caterers</div>' +
@@ -3150,11 +3167,12 @@ function _initDefaultView() {
     });
   }
 
-  // 3. Turn OFF New Pricing (was default-on) so Revenue Heatmap dominates
+  // 3 & 4. Layer state is now set at init time (newVisible=false, revVisible=true,
+  // body.rev-on set in markup, btn-rev active in info-panel HTML, revLayerGroup
+  // added to map right after state declaration). These two guards are kept as a
+  // safety net — they'll no-op when defaults are correct, but will self-correct
+  // state if anyone changes the initial defaults back without thinking it through.
   if (newVisible) toggleLayer('new');
-
-  // 4. Turn ON Revenue Heatmap — uses toggleLayer so body class, button
-  //    styling, and timeline panel visibility all sync correctly.
   if (!revVisible) toggleLayer('rev');
 
   // 5. Render the revenue bubbles for the current week window

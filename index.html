@@ -6709,7 +6709,12 @@ window.closeMobileSheet = function() {
     }
 
     // --- FAB click wiring ---
+    // Skip the keyfilter FAB — it has its own inline onclick that calls
+    // openKeyFilter() (which loads venuesData + builds the list before
+    // showing the sheet). Without this skip, both handlers fire, and the
+    // second openMobileSheet call toggles the just-opened sheet closed.
     document.querySelectorAll('.mfab').forEach(function(fab) {
+      if (fab.classList.contains('mfab-keyfilter')) return;
       fab.addEventListener('click', function(e) {
         e.stopPropagation();
         var key = fab.getAttribute('data-sheet');

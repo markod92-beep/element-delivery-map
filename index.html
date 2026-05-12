@@ -255,6 +255,30 @@ body.has-dispatch .key-loc-panel { left: 304px; }
   font-size: 11px; color: var(--element-teal); text-decoration: none; font-weight: 600;
 }
 .key-loc-panel .kl-mini-link:hover { text-decoration: underline; }
+/* Solo filter pill — appears at top of venues list when a customer is solo'd. */
+.key-loc-panel .kl-solo-pill {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--element-mint);
+  color: var(--element-teal);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 10px;
+  border: 1px solid var(--element-teal);
+  transition: background 0.15s ease;
+}
+.key-loc-panel .kl-solo-pill:hover { background: var(--element-teal); color: var(--element-white); }
+.key-loc-panel .kl-solo-pill .kl-solo-label {
+  text-transform: uppercase; letter-spacing: 0.06em; font-size: 9px; opacity: 0.75;
+}
+.key-loc-panel .kl-solo-pill .kl-solo-name {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.key-loc-panel .kl-solo-pill .kl-solo-x {
+  font-size: 16px; line-height: 1; font-weight: 400; opacity: 0.75;
+}
 .key-loc-panel .kl-empty {
   padding: 6px; color: var(--element-muted); font-style: italic; font-size: 11px;
 }
@@ -790,6 +814,14 @@ body.pwa-mode #pwa-refresh-btn:active {
 }
 body.pwa-mode #pwa-refresh-btn.spinning svg { animation: pwa-refresh-spin 0.7s linear infinite; }
 @keyframes pwa-refresh-spin { to { transform: rotate(360deg); } }
+
+/* When the refresh button is visible (PWA mode only), push the Leaflet
+   top-right control stack — geocoder search + GPS locate — down so they
+   sit BELOW the refresh button instead of underneath it. 44px button +
+   10px gap below the button = 54px offset. */
+body.pwa-mode .leaflet-top.leaflet-right {
+  margin-top: calc(env(safe-area-inset-top, 0px) + 54px);
+}
 
 /* ===== MOBILE TOP BAR — company chips relocated above the map on mobile ===== */
 #mobile-top-bar { display: none; }  /* hidden on desktop */
@@ -1505,6 +1537,13 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
     <div id="kl-venues-list"></div>
   </div>
+  <div class="kl-section" id="kl-customers-section" style="display:none;">
+    <div class="kl-section-head">
+      <span>Key Customers</span>
+      <span><a href="#" class="kl-mini-link" onclick="clearVenueSolo();return false;">Clear filter</a></span>
+    </div>
+    <div id="kl-customers-list"></div>
+  </div>
   <div class="kl-section" id="kl-caterers-section" style="display:none;">
     <div class="kl-section-head">
       <span>Key Caterers</span>
@@ -2047,6 +2086,11 @@ const revLayerGroup = revMarkerGroup;
 let newVisible = false, oldVisible = false, revVisible = true, pickupVisible = false;
 let venuesVisible = false;
 let caterersVisible = false;
+// Key Customers is a panel-only layer (no on-map markers) — it surfaces the
+// top rental customers ranked by total TTM revenue, with the same click-to-
+// solo behavior as Key Venues. Shares the venueSoloCustomer state so a solo
+// set from either panel highlights the same customer's revenue footprint.
+let customersVisible = false;
 const pickupLayerGroup = L.layerGroup();
 
 // Add Revenue Heatmap layer group to the map on init (matches revVisible=true above).
@@ -2219,6 +2263,7 @@ infoControl.onAdd = function() {
     '<div class="toggle-btn active-rev" id="btn-rev" onclick="toggleLayer(\'rev\')">&#10004; Revenue Heatmap</div>' +
     '<div class="toggle-btn" id="btn-dispatch" onclick="toggleLayer(\'dispatch\')">Routes</div>' +
     '<div class="toggle-btn" id="btn-venues" onclick="toggleLayer(\'venues\')">Key Venues</div>' +
+    '<div class="toggle-btn" id="btn-customers" onclick="toggleLayer(\'customers\')">Key Customers</div>' +
     '<div class="toggle-btn" id="btn-caterers" onclick="toggleLayer(\'caterers\')">Key Caterers</div>' +
     '</div>' +
     '<div class="co-label">Company</div>' +
@@ -2869,17 +2914,39 @@ function updateTimeline() {
           locBag.venues[vn].rev += arr[0]; locBag.venues[vn].fees += arr[1]; locBag.venues[vn].events += arr[2];
         }
       };
-      if (contractFilter === 'all' || contractFilter === 'closed') {
-        const c = cityData.closed;
-        loc.rev += c.r; loc.fees += c.f; loc.del += c.d; loc.pick += c.p; loc.events += c.e;
-        loc.closedR += c.r; loc.closedE += c.e;
-        _mergeVenues(c.v, loc);
-      }
-      if (contractFilter === 'all' || contractFilter === 'open') {
-        const o = cityData.open;
-        loc.rev += o.r; loc.fees += o.f; loc.del += o.d; loc.pick += o.p; loc.events += o.e;
-        loc.openR += o.r; loc.openE += o.e;
-        _mergeVenues(o.v, loc);
+      // === Customer solo filter ===
+      // When a venue is solo'd (user clicked a row in the Key Venues panel),
+      // restrict each location's totals to ONLY that customer's contribution.
+      // Locations where the customer has no contracts will end up with rev=0
+      // and get filtered out at the bubble-render step (loc.rev <= 0 skip).
+      const _soloCust = (typeof venueSoloCustomer !== 'undefined' && venueSoloCustomer) ? venueSoloCustomer : null;
+      const _mergeSolo = function(bucket, locBag, custName, isClosed) {
+        if (!bucket || !bucket.v) return;
+        const arr = bucket.v[custName];
+        if (!Array.isArray(arr)) return;
+        const rev = arr[0] || 0, fees = arr[1] || 0, events = arr[2] || 0;
+        locBag.rev += rev; locBag.fees += fees; locBag.events += events;
+        if (isClosed) { locBag.closedR += rev; locBag.closedE += events; }
+        else          { locBag.openR   += rev; locBag.openE   += events; }
+        if (!locBag.venues[custName]) locBag.venues[custName] = {rev:0, events:0, fees:0};
+        locBag.venues[custName].rev += rev; locBag.venues[custName].fees += fees; locBag.venues[custName].events += events;
+      };
+      if (_soloCust) {
+        if (contractFilter === 'all' || contractFilter === 'closed') _mergeSolo(cityData.closed, loc, _soloCust, true);
+        if (contractFilter === 'all' || contractFilter === 'open')   _mergeSolo(cityData.open,   loc, _soloCust, false);
+      } else {
+        if (contractFilter === 'all' || contractFilter === 'closed') {
+          const c = cityData.closed;
+          loc.rev += c.r; loc.fees += c.f; loc.del += c.d; loc.pick += c.p; loc.events += c.e;
+          loc.closedR += c.r; loc.closedE += c.e;
+          _mergeVenues(c.v, loc);
+        }
+        if (contractFilter === 'all' || contractFilter === 'open') {
+          const o = cityData.open;
+          loc.rev += o.r; loc.fees += o.f; loc.del += o.d; loc.pick += o.p; loc.events += o.e;
+          loc.openR += o.r; loc.openE += o.e;
+          _mergeVenues(o.v, loc);
+        }
       }
     }
   }
@@ -3038,7 +3105,13 @@ function updateTimeline() {
   // single-day mode is active — the mapped total stops being apples-to-apples
   // with a full-week off-map figure.
   let offMapRev = 0, offMapFees = 0, offMapEvents = 0, offMapContracts = 0;
-  const offMapApplicable = !dowRestricted && !singleDayIso && Object.keys(unmappedWeekly).length > 0;
+  // Off-map is aggregated at the BU level (no per-customer breakdown), so when
+  // a customer solo filter is active we suppress off-map entirely — otherwise
+  // the rev-total would mix a customer-filtered on-map number with an
+  // unfiltered off-map number, which misreads.
+  const offMapApplicable = !dowRestricted && !singleDayIso &&
+                           Object.keys(unmappedWeekly).length > 0 &&
+                           !venueSoloCustomer;
   if (offMapApplicable) {
     const statusWanted = (contractFilter === 'closed') ? ['closed']
                        : (contractFilter === 'open')   ? ['open']
@@ -3114,6 +3187,14 @@ function updateTimeline() {
     if (typeof renderVenuesSidebar === 'function') renderVenuesSidebar();
   }
 
+  // Key Customers panel rerender — same trigger conditions as Key Venues, but
+  // no on-map marker layer to rebuild (it's a panel-only feature). Counts in
+  // window scope to the active timeline range + BU filter.
+  if (typeof customersVisible !== 'undefined' && customersVisible &&
+      typeof renderCustomersSidebar === 'function') {
+    renderCustomersSidebar();
+  }
+
   // Same pattern for Key Caterers — top-15 caterers are fixed (pipeline),
   // but bubble sizes + popup contract tables scope to the timeline window.
   if (typeof caterersVisible !== 'undefined' && caterersVisible &&
@@ -3177,6 +3258,12 @@ function _initDefaultView() {
 
   // 5. Render the revenue bubbles for the current week window
   updateTimeline();
+
+  // 6. Auto-fit the camera to the rendered bubbles on first paint. Replaces the
+  //    hardcoded setView([43.85, -79.35], 9) that left users staring at the GTA
+  //    even when the active data window had nothing there (e.g. weeks where
+  //    Tents has installs in Muskoka but nothing in the GTA).
+  fitToVisibleData();
 }
 
 // ===== ORPHAN-FSA → CITY-TAG FALLBACK =====
@@ -4045,38 +4132,60 @@ function _syncAllChip() {
 // fitBounds call.
 function fitToVisibleData() {
   if (typeof map === 'undefined' || !map) return;
-  const bounds = L.latLngBounds([]);
-  const consider = function(group) {
-    if (!group) return;
-    if (typeof map.hasLayer === 'function' && !map.hasLayer(group)) return;
-    if (typeof group.eachLayer !== 'function') return;
-    group.eachLayer(function(layer) {
-      try {
-        if (layer.getLatLng) {
-          bounds.extend(layer.getLatLng());
-        } else if (layer.getBounds) {
-          const b = layer.getBounds();
-          if (b && b.isValid && b.isValid()) bounds.extend(b);
-        }
-      } catch (e) { /* skip layers without geometry */ }
-    });
-  };
-  // Order doesn't matter — all extents merge into the same bounds object.
-  if (typeof revLayerGroup      !== 'undefined') consider(revLayerGroup);
-  if (typeof dispatchLayerGroup !== 'undefined') consider(dispatchLayerGroup);
-  if (typeof venuesLayerGroup   !== 'undefined') consider(venuesLayerGroup);
-  if (typeof caterersLayerGroup !== 'undefined') consider(caterersLayerGroup);
-  if (typeof newLayerGroup      !== 'undefined') consider(newLayerGroup);
-  if (typeof oldLayerGroup      !== 'undefined') consider(oldLayerGroup);
-  if (!bounds.isValid()) return;
-  // maxZoom 11 keeps regional context visible (clicking "West" should show
-  // all of southwestern Ontario, not zoom into one stop). Padding leaves room
-  // for the side panels on desktop.
-  map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 11, duration: 0.6 });
+  // Defer one animation frame so that:
+  //  - markercluster's chunkedLoading has flushed the just-added markers
+  //  - any setTimeout-batched additions from updateTimeline have completed
+  // Without this, eachLayer/getBounds saw a partial set on Tents (which has
+  // fewer but more dispersed bubbles than GTA), and bounds came back tight
+  // around the GTA — leaving Tents bubbles in Muskoka/Niagara off-frame.
+  requestAnimationFrame(function() {
+    const bounds = L.latLngBounds([]);
+    const consider = function(group) {
+      if (!group) return;
+      if (typeof map.hasLayer === 'function' && !map.hasLayer(group)) return;
+      // L.markerClusterGroup ships a getBounds() that covers ALL child markers
+      // (including those currently hidden inside a cluster icon). That's the
+      // authoritative source for a clustered revenue layer — eachLayer can
+      // miss in-flight chunked additions.
+      if (typeof group.getBounds === 'function') {
+        try {
+          const b = group.getBounds();
+          if (b && b.isValid && b.isValid()) { bounds.extend(b); return; }
+        } catch (e) { /* fall through to per-layer iteration */ }
+      }
+      if (typeof group.eachLayer !== 'function') return;
+      group.eachLayer(function(layer) {
+        try {
+          if (layer.getLatLng) {
+            bounds.extend(layer.getLatLng());
+          } else if (layer.getBounds) {
+            const b = layer.getBounds();
+            if (b && b.isValid && b.isValid()) bounds.extend(b);
+          }
+        } catch (e) { /* skip layers without geometry */ }
+      });
+    };
+    // Order doesn't matter — all extents merge into the same bounds object.
+    if (typeof revLayerGroup      !== 'undefined') consider(revLayerGroup);
+    if (typeof dispatchLayerGroup !== 'undefined') consider(dispatchLayerGroup);
+    if (typeof venuesLayerGroup   !== 'undefined') consider(venuesLayerGroup);
+    if (typeof caterersLayerGroup !== 'undefined') consider(caterersLayerGroup);
+    if (typeof newLayerGroup      !== 'undefined') consider(newLayerGroup);
+    if (typeof oldLayerGroup      !== 'undefined') consider(oldLayerGroup);
+    if (!bounds.isValid()) return;
+    // maxZoom 11 keeps regional context visible (clicking "West" should show
+    // all of southwestern Ontario, not zoom into one stop). Padding leaves room
+    // for the side panels on desktop.
+    map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 11, duration: 0.6 });
+  });
 }
 window.fitToVisibleData = fitToVisibleData;  // expose for console / future hooks
 
 window.toggleCompany = function(co) {
+  // Changing the business-unit filter clears any active customer solo —
+  // otherwise the user can end up with a solo'd customer that has no contracts
+  // in the newly-selected BU, producing a blank map with no obvious cause.
+  if (venueSoloCustomer) venueSoloCustomer = null;
   if (co === '__ALL__') {
     // "All" always turns every bucket on (no longer toggles off — ensures the
     // map never ends up with zero filters applied, which would show nothing).
@@ -4233,6 +4342,31 @@ window.toggleLayer = function(which) {
       vbtn.className = 'toggle-btn';
       vbtn.textContent = 'Key Venues';
       _syncTimelinePanelVisibility();
+      _syncSidePanelVisibility && _syncSidePanelVisibility();
+    }
+  } else if (which === 'customers') {
+    // Key Customers is panel-only (no on-map markers). Toggling it just shows
+    // the customers section of the side panel — derived client-side from
+    // venuesData.venues, re-sorted by ttm_revenue globally and filtered by
+    // active business unit. Clicking a row uses the shared venueSoloCustomer
+    // state (same filter as Key Venues solo).
+    customersVisible = !customersVisible;
+    const custbtn = document.getElementById('btn-customers');
+    if (customersVisible) {
+      custbtn.className = 'toggle-btn active-rev';
+      custbtn.innerHTML = '&#10004; Key Customers';
+      ensureVenuesData().then(function() {
+        if (typeof renderCustomersSidebar === 'function') renderCustomersSidebar();
+        _syncSidePanelVisibility && _syncSidePanelVisibility();
+      }).catch(function(err) {
+        console.error('Customers data load failed:', err);
+        customersVisible = false;
+        custbtn.className = 'toggle-btn';
+        custbtn.textContent = 'Key Customers';
+      });
+    } else {
+      custbtn.className = 'toggle-btn';
+      custbtn.textContent = 'Key Customers';
       _syncSidePanelVisibility && _syncSidePanelVisibility();
     }
   } else if (which === 'caterers') {
@@ -5262,6 +5396,12 @@ window._venueOpenRoute = function(isoDate) {
 // layer only renders that caterer's bubbles. null = all caterers visible.
 let catererSoloId = null;
 
+// Venue / customer "solo" state — when set to a display_name (the customer
+// name on a Key Venue), the revenue heatmap re-renders showing ONLY that
+// customer's contribution at each location. Clicking the row toggles solo;
+// clicking the × on the filter pill clears it.
+let venueSoloCustomer = null;
+
 // Region display order in the sidebar — mirrors REGION_ORDER in process_venues.py.
 const KL_REGION_ORDER = ['GTA', 'GTA Tents', 'East', 'West', 'Unknown'];
 
@@ -5271,12 +5411,15 @@ function _syncSidePanelVisibility() {
   const panel = document.getElementById('key-loc-panel');
   const vSec  = document.getElementById('kl-venues-section');
   const cSec  = document.getElementById('kl-caterers-section');
+  const custSec = document.getElementById('kl-customers-section');
   if (!panel) return;
   const vOn = typeof venuesVisible !== 'undefined' && venuesVisible;
   const cOn = typeof caterersVisible !== 'undefined' && caterersVisible;
-  panel.classList.toggle('show', vOn || cOn);
-  if (vSec) vSec.style.display = vOn ? 'block' : 'none';
-  if (cSec) cSec.style.display = cOn ? 'block' : 'none';
+  const custOn = typeof customersVisible !== 'undefined' && customersVisible;
+  panel.classList.toggle('show', vOn || cOn || custOn);
+  if (vSec)    vSec.style.display    = vOn    ? 'block' : 'none';
+  if (custSec) custSec.style.display = custOn ? 'block' : 'none';
+  if (cSec)    cSec.style.display    = cOn    ? 'block' : 'none';
 
   // Body class lets CSS shift the panel right when the dispatch panel
   // (Routes layer) is also visible — prevents stacking.
@@ -5319,9 +5462,17 @@ function renderVenuesSidebar() {
     return;
   }
   const win = _venuesGetWindow();
+  // Filter by active business unit chips. companyFilter is the same Set used
+  // by the revenue layer. ALL_COMPANIES = ['GTA','GTA Tents','East','West'] —
+  // matches venue.region values, so direct membership check works.
+  // When all chips are on (default), this filter is a no-op.
+  const hasFilter = (typeof companyFilter !== 'undefined') &&
+                    companyFilter.size > 0 &&
+                    companyFilter.size < ALL_COMPANIES.length;
   const byRegion = {};
   venuesData.venues.forEach(function(v) {
     const r = v.region || 'Unknown';
+    if (hasFilter && !companyFilter.has(r)) return;
     (byRegion[r] = byRegion[r] || []).push(v);
   });
 
@@ -5329,7 +5480,24 @@ function renderVenuesSidebar() {
   const regions = KL_REGION_ORDER.filter(function(r) { return byRegion[r]; })
     .concat(Object.keys(byRegion).filter(function(r) { return KL_REGION_ORDER.indexOf(r) < 0; }));
 
+  // Solo-filter pill — when a venue is solo'd, show it at top of the list
+  // with a clear-button so users always know they're in a filtered view.
   let html = '';
+  if (typeof venueSoloCustomer !== 'undefined' && venueSoloCustomer) {
+    html += '<div class="kl-solo-pill" onclick="clearVenueSolo()" ' +
+            'title="Click to clear filter">' +
+            '<span class="kl-solo-label">Filter:</span>' +
+            '<span class="kl-solo-name">' + _esc(venueSoloCustomer) + '</span>' +
+            '<span class="kl-solo-x" aria-hidden="true">&times;</span>' +
+            '</div>';
+  }
+
+  if (regions.length === 0) {
+    html += '<div class="kl-empty">No venues in the selected business unit.</div>';
+    container.innerHTML = html;
+    return;
+  }
+
   regions.forEach(function(region) {
     const list = byRegion[region].slice().sort(function(a, b) {
       return (a.region_rank || 0) - (b.region_rank || 0);
@@ -5338,16 +5506,123 @@ function renderVenuesSidebar() {
     list.forEach(function(v) {
       const cnt = _venueCountInWindow(v, win);
       const ghostCls = cnt === 0 ? ' ghosted' : '';
+      const isSolo = (typeof venueSoloCustomer !== 'undefined' &&
+                      venueSoloCustomer === v.display_name);
+      const onCls = isSolo ? ' on' : '';
       const metaTxt = cnt === 0 ? '0 in win' : (cnt + ' in win');
       const safeId = _esc(v.id || '');
-      html += '<div class="kl-row' + ghostCls + '" ' +
-        'onclick="focusVenue(\'' + safeId + '\')" ' +
-        'title="' + _esc(v.display_name) + ' — TTM rental ' + _klFmtMoney(v.ttm_revenue) + '">' +
+      html += '<div class="kl-row' + ghostCls + onCls + '" ' +
+        'onclick="onVenueRowClick(\'' + safeId + '\')" ' +
+        'title="' + _esc(v.display_name) + ' — TTM rental ' + _klFmtMoney(v.ttm_revenue) +
+        ' — Click to filter revenue bubbles to this customer">' +
         '<span class="kl-rank">#' + (v.region_rank || v.rank) + '</span>' +
         '<span class="kl-name">' + _esc(v.display_name) + '</span>' +
         '<span class="kl-meta">' + metaTxt + '</span>' +
         '</div>';
     });
+  });
+  container.innerHTML = html;
+}
+
+// Sidebar row click handler — toggles the venue's customer as the solo filter
+// on the revenue heatmap. First click: solo this customer (revenue bubbles
+// re-render showing only that customer's footprint). Click same row again to
+// clear. Always re-renders + refits the map.
+window.onVenueRowClick = function(venueId) {
+  if (!venuesData || !venuesData.venues) return;
+  const v = venuesData.venues.find(function(x) { return x.id === venueId; });
+  if (!v) return;
+  const cust = v.display_name;
+  if (venueSoloCustomer === cust) {
+    // Clicked the row that's already solo'd → clear filter (also zooms to
+    // venue location for context, same as old focusVenue behavior).
+    venueSoloCustomer = null;
+  } else {
+    venueSoloCustomer = cust;
+  }
+  updateTimeline();
+  if (typeof renderVenuesSidebar    === 'function') renderVenuesSidebar();
+  if (typeof renderCustomersSidebar === 'function') renderCustomersSidebar();
+  // After re-render, re-fit the map to whatever bubbles remain visible. When
+  // solo'd, this frames the customer's full footprint. When cleared, frames
+  // all revenue in the active window.
+  fitToVisibleData();
+};
+
+// Clear the customer solo filter — hooked to the × on the filter pill in
+// either Key Venues or Key Customers panel, and to the "Clear filter" link
+// in the Key Customers section header.
+window.clearVenueSolo = function() {
+  if (!venueSoloCustomer) return;
+  venueSoloCustomer = null;
+  updateTimeline();
+  if (typeof renderVenuesSidebar    === 'function') renderVenuesSidebar();
+  if (typeof renderCustomersSidebar === 'function') renderCustomersSidebar();
+  fitToVisibleData();
+};
+
+// ===== KEY CUSTOMERS SIDEBAR =====
+// Flat top-customers ranking derived from venuesData.venues. Each "venue" entry
+// in the source data is keyed by display_name (customer name), so re-sorting
+// the same list by ttm_revenue gives us a global customer leaderboard rather
+// than the region-rank Key Venues view. Business-unit chips filter this list
+// just like the venues panel. Click row uses the shared venueSoloCustomer state.
+function renderCustomersSidebar() {
+  const container = document.getElementById('kl-customers-list');
+  if (!container) return;
+  if (!venuesData || !venuesData.venues || !venuesData.venues.length) {
+    container.innerHTML = '<div class="kl-empty">No customers available.</div>';
+    return;
+  }
+  const win = _venuesGetWindow();
+  const hasFilter = (typeof companyFilter !== 'undefined') &&
+                    companyFilter.size > 0 &&
+                    companyFilter.size < ALL_COMPANIES.length;
+  // Filter venues by active BU, sort by ttm_revenue descending, take top 30.
+  // (Same row cap as Key Venues so the panel doesn't grow unbounded.)
+  const customers = venuesData.venues
+    .filter(function(v) {
+      const r = v.region || 'Unknown';
+      return !hasFilter || companyFilter.has(r);
+    })
+    .slice()
+    .sort(function(a, b) { return (b.ttm_revenue || 0) - (a.ttm_revenue || 0); })
+    .slice(0, 30);
+
+  // Solo pill (reuses the same state as Key Venues — solo'ing from either
+  // panel filters the revenue bubbles identically).
+  let html = '';
+  if (typeof venueSoloCustomer !== 'undefined' && venueSoloCustomer) {
+    html += '<div class="kl-solo-pill" onclick="clearVenueSolo()" ' +
+            'title="Click to clear filter">' +
+            '<span class="kl-solo-label">Filter:</span>' +
+            '<span class="kl-solo-name">' + _esc(venueSoloCustomer) + '</span>' +
+            '<span class="kl-solo-x" aria-hidden="true">&times;</span>' +
+            '</div>';
+  }
+
+  if (customers.length === 0) {
+    html += '<div class="kl-empty">No customers in the selected business unit.</div>';
+    container.innerHTML = html;
+    return;
+  }
+
+  customers.forEach(function(v, idx) {
+    const cnt = _venueCountInWindow(v, win);
+    const ghostCls = cnt === 0 ? ' ghosted' : '';
+    const isSolo = (typeof venueSoloCustomer !== 'undefined' &&
+                    venueSoloCustomer === v.display_name);
+    const onCls = isSolo ? ' on' : '';
+    const safeId = _esc(v.id || '');
+    const metaTxt = _klFmtMoney(v.ttm_revenue || 0) + ' TTM';
+    html += '<div class="kl-row' + ghostCls + onCls + '" ' +
+      'onclick="onVenueRowClick(\'' + safeId + '\')" ' +
+      'title="' + _esc(v.display_name) + ' — TTM rental ' + _klFmtMoney(v.ttm_revenue) +
+      ' — ' + cnt + ' in window. Click to filter revenue bubbles to this customer.">' +
+      '<span class="kl-rank">#' + (idx + 1) + '</span>' +
+      '<span class="kl-name">' + _esc(v.display_name) + '</span>' +
+      '<span class="kl-meta">' + metaTxt + '</span>' +
+      '</div>';
   });
   container.innerHTML = html;
 }

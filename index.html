@@ -505,6 +505,165 @@ body.has-dispatch .key-loc-panel { left: 304px; }
 .slider-row { display: flex; gap: 8px; align-items: center; }
 .slider-row label { font-size: 11px; color: var(--element-muted); white-space: nowrap; min-width: 40px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
 .slider-row input[type=range] { flex: 1; }
+/* ===== KEY FILTER button (inside timeline panel) =====
+   Single trigger between BU chips (which sit above the panel) and the date
+   controls. Replaces the old Key Venues / Key Customers / Key Caterers layer
+   toggles + side panel. Clicking opens the bottom-sheet picker.  */
+.timeline-panel .tl-keyfilter { margin: 6px 0 10px; }
+.timeline-panel .tl-keyfilter-btn {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--element-offwhite);
+  color: var(--element-teal);
+  border: 1px solid var(--element-offwhite-tint);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.timeline-panel .tl-keyfilter-btn:hover {
+  background: var(--element-white);
+  border-color: var(--element-teal);
+}
+.timeline-panel .tl-keyfilter-btn .tl-kf-label { flex: 1; min-width: 0; }
+.timeline-panel .tl-keyfilter-btn .tl-kf-chev { opacity: 0.65; }
+.timeline-panel .tl-keyfilter-pill {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: var(--element-teal);
+  color: var(--element-white);
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.timeline-panel .tl-keyfilter-pill .tl-kf-pill-label {
+  text-transform: uppercase; letter-spacing: 0.06em; font-size: 9px; opacity: 0.75;
+}
+.timeline-panel .tl-keyfilter-pill .tl-kf-pill-name {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.timeline-panel .tl-keyfilter-pill .tl-kf-pill-x { font-size: 14px; line-height: 1; opacity: 0.8; }
+
+/* ===== KEY FILTER bottom sheet (cross-screen — NOT inside the mobile media query
+   like the other .mobile-sheet elements, so it works on both desktop and mobile).
+   Slides up from the bottom regardless of viewport size. Two-column body. ===== */
+#mobile-sheet-keyfilter {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  background: var(--element-white);
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  box-shadow: 0 -4px 24px rgba(28,59,66,0.18);
+  max-height: 72vh;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  transition: transform 0.28s cubic-bezier(.2,.8,.2,1);
+  z-index: 1450;
+}
+#mobile-sheet-keyfilter.ms-open { transform: translateY(0); }
+#mobile-sheet-keyfilter .ms-handle {
+  width: 36px; height: 4px; border-radius: 2px;
+  background: var(--element-offwhite-tint);
+  margin: 8px auto 0;
+  flex-shrink: 0;
+}
+#mobile-sheet-keyfilter .ms-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--element-border);
+  flex-shrink: 0;
+}
+#mobile-sheet-keyfilter .ms-title {
+  font-size: 14px; font-weight: 700; color: var(--element-teal); letter-spacing: 0.01em;
+}
+#mobile-sheet-keyfilter .ms-close {
+  background: transparent; border: none; cursor: pointer;
+  font-size: 24px; line-height: 1; color: var(--element-muted);
+  padding: 4px 8px;
+}
+#mobile-sheet-keyfilter .ms-body {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: 12px 16px 20px;
+  -webkit-overflow-scrolling: touch;
+}
+#mobile-sheet-keyfilter .kf-subtitle {
+  font-size: 11px; color: var(--element-muted); margin-bottom: 10px; font-weight: 500;
+}
+#mobile-sheet-keyfilter .kf-cols {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+}
+#mobile-sheet-keyfilter .kf-col-title {
+  font-size: 10px; font-weight: 700; color: var(--element-muted);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  margin-bottom: 6px; padding-bottom: 4px;
+  border-bottom: 1px solid var(--element-border);
+}
+#mobile-sheet-keyfilter .kf-list { display: flex; flex-direction: column; gap: 4px; }
+#mobile-sheet-keyfilter .kf-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 10px;
+  background: var(--element-offwhite);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+  min-height: 44px;
+}
+#mobile-sheet-keyfilter .kf-row:hover {
+  background: var(--element-white); border-color: var(--element-offwhite-tint);
+}
+#mobile-sheet-keyfilter .kf-row.on {
+  background: var(--element-teal); color: var(--element-white); border-color: var(--element-teal);
+}
+#mobile-sheet-keyfilter .kf-rank {
+  font-size: 10px; font-weight: 700; color: var(--element-muted); min-width: 22px;
+}
+#mobile-sheet-keyfilter .kf-row.on .kf-rank { color: rgba(255,255,255,0.85); }
+#mobile-sheet-keyfilter .kf-name {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: 600;
+}
+#mobile-sheet-keyfilter .kf-meta { font-size: 10px; color: var(--element-muted); flex-shrink: 0; }
+#mobile-sheet-keyfilter .kf-row.on .kf-meta { color: rgba(255,255,255,0.85); }
+#mobile-sheet-keyfilter .kf-swatch {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+#mobile-sheet-keyfilter .kf-empty {
+  font-size: 11px; color: var(--element-muted); padding: 12px 8px; text-align: center;
+}
+/* Backdrop — applies on both desktop and mobile. Hidden by default; visible
+   only when body has .ms-sheet-open (i.e., the key-filter sheet is up).
+   On mobile this rule is duplicated inside the mobile media query for the
+   regular bottom sheets — they share the same backdrop element. */
+#mobile-sheet-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(28,59,66,0.4);
+  z-index: 1440;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.22s ease;
+}
+body.ms-sheet-open #mobile-sheet-backdrop {
+  opacity: 1; pointer-events: auto;
+}
+/* On very narrow screens (< 380px), stack the two columns vertically. */
+@media screen and (max-width: 380px) {
+  #mobile-sheet-keyfilter .kf-cols { grid-template-columns: 1fr; }
+}
+
+/* Hide the old key-loc-panel — replaced by the keyfilter sheet. The DOM
+   element + its renderers are left in place to avoid ripple in legacy code
+   paths, but display:none keeps it off-screen. */
+.key-loc-panel { display: none !important; }
+
 .timeline-panel .rev-total { font-size: 11px; color: var(--element-muted); margin-top: 4px; text-align: center; font-weight: 500; }
 .timeline-panel .off-map-stat {
   font-size: 10px;
@@ -1097,8 +1256,12 @@ body.pwa-mode .leaflet-top.leaflet-right {
   .timeline-collapse-handle { display: none; }
   .legend .legend-toggle { display: none; }
   .info-panel .info-toggle { display: none; }
-  /* Bottom-sheet system is mobile-only. */
-  #mobile-fab-stack, .mobile-sheet, #mobile-sheet-backdrop { display: none !important; }
+  /* Mobile FAB + most sheets are mobile-only. The key-filter sheet
+     (.kf-sheet) is intentionally cross-screen — it slides up on both mobile
+     AND desktop — so it's excluded here. The backdrop is also kept available
+     so the key-filter sheet can dim the map on desktop. */
+  #mobile-fab-stack { display: none !important; }
+  .mobile-sheet:not(.kf-sheet) { display: none !important; }
 }
 
 /* =====================================================================
@@ -1419,6 +1582,29 @@ document.addEventListener('DOMContentLoaded', function() {
   <input type="range" id="slider-to"   min="0" max="104" value="104" oninput="updateTimeline()" style="display:none;">
 
   <div class="tl-body">
+    <!-- KEY FILTER — single button that opens a slide-up sheet for picking a
+         customer or caterer to solo-filter the revenue heatmap. Sits between
+         the BU chips (which live in info-panel on desktop / mobile-top-bar on
+         mobile, both ABOVE this panel in the visual stack) and the date
+         controls below. Filter pill renders here when a filter is active. -->
+    <div class="tl-keyfilter">
+      <button class="tl-keyfilter-btn" id="tl-keyfilter-btn" type="button" onclick="openKeyFilter()">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                d="M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0zM4 21a8 8 0 0 1 16 0"/>
+        </svg>
+        <span class="tl-kf-label">Filter by customer or caterer</span>
+        <svg class="tl-kf-chev" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+          <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/>
+        </svg>
+      </button>
+      <div class="tl-keyfilter-pill" id="tl-keyfilter-pill" style="display:none;" onclick="clearRevenueSoloFilter()" title="Click to clear filter">
+        <span class="tl-kf-pill-label" id="tl-kf-pill-label">Filter</span>
+        <span class="tl-kf-pill-name" id="tl-kf-pill-name"></span>
+        <span class="tl-kf-pill-x" aria-hidden="true">&times;</span>
+      </div>
+    </div>
+
     <h4 id="tl-title">Timeframe</h4>
     <div class="range-display" id="range-display">All Weeks</div>
 
@@ -1611,6 +1797,33 @@ document.addEventListener('DOMContentLoaded', function() {
     <button class="ms-close" onclick="closeMobileSheet()" aria-label="Close">&times;</button>
   </div>
   <div class="ms-body" id="ms-body-truck"></div>
+</div>
+
+<!-- KEY FILTER SHEET — slides up from the bottom on both mobile AND desktop.
+     Two side-by-side columns: top 10 customers (left) and top 10 caterers
+     (right), each filtered by the active BU chip. Clicking a row sets the
+     revenueSoloFilter and closes the sheet. CSS for this sheet's visibility
+     lives OUTSIDE the mobile-only media query so it works everywhere — that's
+     why it has a dedicated kf-sheet class for styling. -->
+<div class="mobile-sheet kf-sheet" id="mobile-sheet-keyfilter" role="dialog" aria-modal="true" aria-labelledby="ms-title-keyfilter" aria-hidden="true">
+  <div class="ms-handle"></div>
+  <div class="ms-header">
+    <div class="ms-title" id="ms-title-keyfilter">Filter by Customer or Caterer</div>
+    <button class="ms-close" onclick="closeMobileSheet()" aria-label="Close">&times;</button>
+  </div>
+  <div class="ms-body" id="ms-body-keyfilter">
+    <div class="kf-subtitle" id="kf-subtitle">Top 10 per business unit, ranked by TTM revenue</div>
+    <div class="kf-cols">
+      <div class="kf-col">
+        <div class="kf-col-title">Top Customers</div>
+        <div id="kf-customers-list" class="kf-list"></div>
+      </div>
+      <div class="kf-col">
+        <div class="kf-col-title">Top Caterers</div>
+        <div id="kf-caterers-list" class="kf-list"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 
@@ -2260,11 +2473,13 @@ infoControl.onAdd = function() {
     // New Pricing + Old Pricing layer toggles intentionally removed — pricing
     // overlays retired from the UI. The underlying layer-build code is left in
     // place (dead) to avoid ripple in legend / mobile-sheet / state-guard logic.
+    // ---- Layer row: Revenue Heatmap and Routes only. ----
+    // Key Venues / Key Customers / Key Caterers were removed as layer toggles —
+    // they're now accessed via the Key Filter button inside the timeline panel
+    // (between BU and Date sections), which opens a slide-up sheet for picking
+    // a customer or caterer to solo-filter the revenue heatmap.
     '<div class="toggle-btn active-rev" id="btn-rev" onclick="toggleLayer(\'rev\')">&#10004; Revenue Heatmap</div>' +
     '<div class="toggle-btn" id="btn-dispatch" onclick="toggleLayer(\'dispatch\')">Routes</div>' +
-    '<div class="toggle-btn" id="btn-venues" onclick="toggleLayer(\'venues\')">Key Venues</div>' +
-    '<div class="toggle-btn" id="btn-customers" onclick="toggleLayer(\'customers\')">Key Customers</div>' +
-    '<div class="toggle-btn" id="btn-caterers" onclick="toggleLayer(\'caterers\')">Key Caterers</div>' +
     '</div>' +
     '<div class="co-label">Company</div>' +
     '<div class="toggle-row" style="flex-wrap:wrap;gap:6px;">' +
@@ -2914,26 +3129,33 @@ function updateTimeline() {
           locBag.venues[vn].rev += arr[0]; locBag.venues[vn].fees += arr[1]; locBag.venues[vn].events += arr[2];
         }
       };
-      // === Customer solo filter ===
-      // When a venue is solo'd (user clicked a row in the Key Venues panel),
-      // restrict each location's totals to ONLY that customer's contribution.
-      // Locations where the customer has no contracts will end up with rev=0
-      // and get filtered out at the bubble-render step (loc.rev <= 0 skip).
-      const _soloCust = (typeof venueSoloCustomer !== 'undefined' && venueSoloCustomer) ? venueSoloCustomer : null;
-      const _mergeSolo = function(bucket, locBag, custName, isClosed) {
+      // === Revenue solo filter ===
+      // When a customer or caterer is solo'd via the Key Filter sheet,
+      // restrict each location's totals to ONLY revenue from customer names
+      // in the filter Set. For a customer filter the Set has one name; for a
+      // caterer filter it has every cust name from the caterer's contracts.
+      // Locations where no soloed customer has revenue end up at rev=0 and
+      // are skipped at the bubble-render step (loc.rev <= 0).
+      const _soloSet = (typeof revenueSoloFilter !== 'undefined' && revenueSoloFilter && revenueSoloFilter.customers)
+                       ? revenueSoloFilter.customers
+                       : null;
+      const _mergeSolo = function(bucket, locBag, custSet, isClosed) {
         if (!bucket || !bucket.v) return;
-        const arr = bucket.v[custName];
-        if (!Array.isArray(arr)) return;
-        const rev = arr[0] || 0, fees = arr[1] || 0, events = arr[2] || 0;
-        locBag.rev += rev; locBag.fees += fees; locBag.events += events;
-        if (isClosed) { locBag.closedR += rev; locBag.closedE += events; }
-        else          { locBag.openR   += rev; locBag.openE   += events; }
-        if (!locBag.venues[custName]) locBag.venues[custName] = {rev:0, events:0, fees:0};
-        locBag.venues[custName].rev += rev; locBag.venues[custName].fees += fees; locBag.venues[custName].events += events;
+        for (const custName in bucket.v) {
+          if (!custSet.has(custName)) continue;
+          const arr = bucket.v[custName];
+          if (!Array.isArray(arr)) continue;
+          const rev = arr[0] || 0, fees = arr[1] || 0, events = arr[2] || 0;
+          locBag.rev += rev; locBag.fees += fees; locBag.events += events;
+          if (isClosed) { locBag.closedR += rev; locBag.closedE += events; }
+          else          { locBag.openR   += rev; locBag.openE   += events; }
+          if (!locBag.venues[custName]) locBag.venues[custName] = {rev:0, events:0, fees:0};
+          locBag.venues[custName].rev += rev; locBag.venues[custName].fees += fees; locBag.venues[custName].events += events;
+        }
       };
-      if (_soloCust) {
-        if (contractFilter === 'all' || contractFilter === 'closed') _mergeSolo(cityData.closed, loc, _soloCust, true);
-        if (contractFilter === 'all' || contractFilter === 'open')   _mergeSolo(cityData.open,   loc, _soloCust, false);
+      if (_soloSet) {
+        if (contractFilter === 'all' || contractFilter === 'closed') _mergeSolo(cityData.closed, loc, _soloSet, true);
+        if (contractFilter === 'all' || contractFilter === 'open')   _mergeSolo(cityData.open,   loc, _soloSet, false);
       } else {
         if (contractFilter === 'all' || contractFilter === 'closed') {
           const c = cityData.closed;
@@ -3106,12 +3328,12 @@ function updateTimeline() {
   // with a full-week off-map figure.
   let offMapRev = 0, offMapFees = 0, offMapEvents = 0, offMapContracts = 0;
   // Off-map is aggregated at the BU level (no per-customer breakdown), so when
-  // a customer solo filter is active we suppress off-map entirely — otherwise
-  // the rev-total would mix a customer-filtered on-map number with an
-  // unfiltered off-map number, which misreads.
+  // a solo filter is active we suppress off-map entirely — otherwise the
+  // rev-total would mix a filtered on-map number with an unfiltered off-map
+  // number, which misreads.
   const offMapApplicable = !dowRestricted && !singleDayIso &&
                            Object.keys(unmappedWeekly).length > 0 &&
-                           !venueSoloCustomer;
+                           !revenueSoloFilter;
   if (offMapApplicable) {
     const statusWanted = (contractFilter === 'closed') ? ['closed']
                        : (contractFilter === 'open')   ? ['open']
@@ -3264,6 +3486,13 @@ function _initDefaultView() {
   //    even when the active data window had nothing there (e.g. weeks where
   //    Tents has installs in Muskoka but nothing in the GTA).
   fitToVisibleData();
+
+  // 7. Eagerly load venues_data.json so the Key Filter sheet has data ready
+  //    by the time the user taps the filter button (previously this loaded
+  //    lazily on layer-toggle click; layers are gone now).
+  if (typeof ensureVenuesData === 'function') {
+    ensureVenuesData().catch(function() { /* sheet itself surfaces errors on open */ });
+  }
 }
 
 // ===== ORPHAN-FSA → CITY-TAG FALLBACK =====
@@ -4182,10 +4411,13 @@ function fitToVisibleData() {
 window.fitToVisibleData = fitToVisibleData;  // expose for console / future hooks
 
 window.toggleCompany = function(co) {
-  // Changing the business-unit filter clears any active customer solo —
-  // otherwise the user can end up with a solo'd customer that has no contracts
+  // Changing the business-unit filter clears any active customer/caterer solo —
+  // otherwise the user can end up with a solo'd target that has no contracts
   // in the newly-selected BU, producing a blank map with no obvious cause.
-  if (venueSoloCustomer) venueSoloCustomer = null;
+  if (revenueSoloFilter) {
+    revenueSoloFilter = null;
+    if (typeof _syncKeyFilterPill === 'function') _syncKeyFilterPill();
+  }
   if (co === '__ALL__') {
     // "All" always turns every bucket on (no longer toggles off — ensures the
     // map never ends up with zero filters applied, which would show nothing).
@@ -5234,6 +5466,224 @@ let venuesData = null;
 let venuesLoading = null;
 const venuesLayerGroup = L.layerGroup();
 
+// ===== KEY FILTER SHEET — customer + caterer picker =====
+// Opens the slide-up sheet, lazy-loads venues_data.json if needed, then
+// renders top-10-by-TTM-revenue lists for the active BU.
+window.openKeyFilter = function() {
+  ensureVenuesData().then(function() {
+    buildKeyFilterLists();
+    window.openMobileSheet('keyfilter');
+  }).catch(function(err) {
+    console.error('Could not open Key Filter sheet:', err);
+    alert('Customer / caterer data is not available right now. Try refreshing the page.');
+  });
+};
+
+// Build the two columns. Top 10 per BU by TTM revenue.
+function buildKeyFilterLists() {
+  if (!venuesData) return;
+  const hasFilter = (typeof companyFilter !== 'undefined') &&
+                    companyFilter.size > 0 &&
+                    companyFilter.size < ALL_COMPANIES.length;
+  const inBU = function(region) {
+    if (!hasFilter) return true;
+    return companyFilter.has(region || 'Unknown');
+  };
+  // Subtitle reflects scope so users know what they're seeing.
+  const subEl = document.getElementById('kf-subtitle');
+  if (subEl) {
+    if (hasFilter) {
+      const bu = Array.from(companyFilter)[0];
+      subEl.textContent = 'Top 10 in ' + bu + ' by TTM revenue';
+    } else {
+      subEl.textContent = 'Top 10 per business unit by TTM revenue';
+    }
+  }
+
+  // ---- Customers column (sourced from venuesData.venues — display_name is customer name) ----
+  const custList = document.getElementById('kf-customers-list');
+  if (custList) {
+    let html = '';
+    if (!hasFilter) {
+      // When "All" is on, show top 10 from EACH BU stacked, with a small region header.
+      const byRegion = {};
+      (venuesData.venues || []).forEach(function(v) {
+        const r = v.region || 'Unknown';
+        (byRegion[r] = byRegion[r] || []).push(v);
+      });
+      const order = ['GTA', 'GTA Tents', 'East', 'West'];
+      order.forEach(function(region) {
+        const list = (byRegion[region] || []).slice()
+          .sort(function(a, b) { return (b.ttm_revenue || 0) - (a.ttm_revenue || 0); })
+          .slice(0, 10);
+        if (!list.length) return;
+        html += '<div class="kf-col-title" style="margin-top:8px;border-bottom:none;color:var(--element-teal);">' + _esc(region) + '</div>';
+        list.forEach(function(v, i) { html += _kfRowVenue(v, i + 1); });
+      });
+    } else {
+      const list = (venuesData.venues || [])
+        .filter(function(v) { return inBU(v.region); })
+        .slice()
+        .sort(function(a, b) { return (b.ttm_revenue || 0) - (a.ttm_revenue || 0); })
+        .slice(0, 10);
+      if (!list.length) {
+        html = '<div class="kf-empty">No customers in this BU.</div>';
+      } else {
+        list.forEach(function(v, i) { html += _kfRowVenue(v, i + 1); });
+      }
+    }
+    custList.innerHTML = html;
+  }
+
+  // ---- Caterers column ----
+  const catList = document.getElementById('kf-caterers-list');
+  if (catList) {
+    let html = '';
+    if (!hasFilter) {
+      const byRegion = {};
+      (venuesData.caterers || []).forEach(function(c) {
+        const r = c.region || 'Unknown';
+        (byRegion[r] = byRegion[r] || []).push(c);
+      });
+      const order = ['GTA', 'GTA Tents', 'East', 'West'];
+      order.forEach(function(region) {
+        const list = (byRegion[region] || []).slice()
+          .sort(function(a, b) { return (b.ttm_revenue || 0) - (a.ttm_revenue || 0); })
+          .slice(0, 10);
+        if (!list.length) return;
+        html += '<div class="kf-col-title" style="margin-top:8px;border-bottom:none;color:var(--element-teal);">' + _esc(region) + '</div>';
+        list.forEach(function(c, i) { html += _kfRowCaterer(c, i + 1); });
+      });
+    } else {
+      const list = (venuesData.caterers || [])
+        .filter(function(c) { return inBU(c.region); })
+        .slice()
+        .sort(function(a, b) { return (b.ttm_revenue || 0) - (a.ttm_revenue || 0); })
+        .slice(0, 10);
+      if (!list.length) {
+        html = '<div class="kf-empty">No caterers in this BU.</div>';
+      } else {
+        list.forEach(function(c, i) { html += _kfRowCaterer(c, i + 1); });
+      }
+    }
+    catList.innerHTML = html;
+  }
+}
+
+function _kfRowVenue(v, rank) {
+  const safeId = _esc(v.id || '');
+  const isOn = (revenueSoloFilter && revenueSoloFilter.type === 'customer' &&
+                revenueSoloFilter.label === v.display_name);
+  const onCls = isOn ? ' on' : '';
+  return '<div class="kf-row' + onCls + '" onclick="onKfVenueClick(\'' + safeId + '\')" ' +
+    'title="' + _esc(v.display_name) + ' — TTM ' + _klFmtMoney(v.ttm_revenue) + '">' +
+    '<span class="kf-rank">#' + rank + '</span>' +
+    '<span class="kf-name">' + _esc(v.display_name) + '</span>' +
+    '<span class="kf-meta">' + _klFmtMoney(v.ttm_revenue) + '</span>' +
+    '</div>';
+}
+
+function _kfRowCaterer(c, rank) {
+  const safeId = _esc(c.id || '');
+  const isOn = (revenueSoloFilter && revenueSoloFilter.type === 'caterer' &&
+                revenueSoloFilter.label === c.display_name);
+  const onCls = isOn ? ' on' : '';
+  const swatch = c.color ? '<span class="kf-swatch" style="background:' + _esc(c.color) + ';"></span>' : '';
+  return '<div class="kf-row' + onCls + '" onclick="onKfCatererClick(\'' + safeId + '\')" ' +
+    'title="' + _esc(c.display_name) + ' — TTM ' + _klFmtMoney(c.ttm_revenue) + '">' +
+    '<span class="kf-rank">#' + rank + '</span>' +
+    swatch +
+    '<span class="kf-name">' + _esc(c.display_name) + '</span>' +
+    '<span class="kf-meta">' + _klFmtMoney(c.ttm_revenue) + '</span>' +
+    '</div>';
+}
+
+// Click a customer row — set solo filter to that one customer.
+window.onKfVenueClick = function(venueId) {
+  if (!venuesData || !venuesData.venues) return;
+  const v = venuesData.venues.find(function(x) { return x.id === venueId; });
+  if (!v) return;
+  const same = (revenueSoloFilter && revenueSoloFilter.type === 'customer' &&
+                revenueSoloFilter.label === v.display_name);
+  if (same) {
+    revenueSoloFilter = null;
+  } else {
+    revenueSoloFilter = {
+      label: v.display_name,
+      type: 'customer',
+      customers: new Set([v.display_name])
+    };
+  }
+  _afterRevenueFilterChange();
+};
+
+// Click a caterer row — build a Set of every cust name across that caterer's
+// contracts. Filtering the heatmap by that Set surfaces every location the
+// caterer has worked (regardless of which rental client they catered for there).
+window.onKfCatererClick = function(catererId) {
+  if (!venuesData || !venuesData.caterers) return;
+  const c = venuesData.caterers.find(function(x) { return x.id === catererId; });
+  if (!c) return;
+  const same = (revenueSoloFilter && revenueSoloFilter.type === 'caterer' &&
+                revenueSoloFilter.label === c.display_name);
+  if (same) {
+    revenueSoloFilter = null;
+  } else {
+    const custSet = new Set();
+    (c.locations || []).forEach(function(loc) {
+      (loc.contracts || []).forEach(function(ct) {
+        if (ct && ct.cust) custSet.add(ct.cust);
+      });
+    });
+    revenueSoloFilter = {
+      label: c.display_name,
+      type: 'caterer',
+      customers: custSet
+    };
+  }
+  _afterRevenueFilterChange();
+};
+
+// Clear the active solo filter — hooked to the timeline-panel pill click and
+// to the × inside the pill.
+window.clearRevenueSoloFilter = function() {
+  if (!revenueSoloFilter) return;
+  revenueSoloFilter = null;
+  _afterRevenueFilterChange();
+};
+// Backward-compat alias for any older onclicks lingering in the DOM.
+window.clearVenueSolo = window.clearRevenueSoloFilter;
+
+// Common post-change side-effects: close the sheet, rebuild the heatmap, sync
+// the filter pill in the timeline panel, refit the camera to whatever's left.
+function _afterRevenueFilterChange() {
+  if (typeof window.closeMobileSheet === 'function') window.closeMobileSheet();
+  _syncKeyFilterPill();
+  if (typeof updateTimeline === 'function') updateTimeline();
+  if (typeof fitToVisibleData === 'function') fitToVisibleData();
+}
+
+// Show/hide the filter pill inside the timeline panel based on filter state.
+function _syncKeyFilterPill() {
+  const pill = document.getElementById('tl-keyfilter-pill');
+  const btn  = document.getElementById('tl-keyfilter-btn');
+  const lblEl  = document.getElementById('tl-kf-pill-label');
+  const nameEl = document.getElementById('tl-kf-pill-name');
+  if (!pill || !btn) return;
+  if (revenueSoloFilter) {
+    pill.style.display = 'flex';
+    btn.style.display  = 'none';
+    if (lblEl)  lblEl.textContent  = revenueSoloFilter.type === 'caterer' ? 'Caterer:' : 'Customer:';
+    if (nameEl) nameEl.textContent = revenueSoloFilter.label;
+  } else {
+    pill.style.display = 'none';
+    btn.style.display  = 'flex';
+  }
+}
+// Run once on script load in case there's any persisted state (there isn't
+// currently, but this keeps the pill DOM consistent on first paint).
+document.addEventListener('DOMContentLoaded', _syncKeyFilterPill);
+
 function ensureVenuesData() {
   if (venuesData) return Promise.resolve(venuesData);
   if (venuesLoading) return venuesLoading;
@@ -5396,11 +5846,18 @@ window._venueOpenRoute = function(isoDate) {
 // layer only renders that caterer's bubbles. null = all caterers visible.
 let catererSoloId = null;
 
-// Venue / customer "solo" state — when set to a display_name (the customer
-// name on a Key Venue), the revenue heatmap re-renders showing ONLY that
-// customer's contribution at each location. Clicking the row toggles solo;
-// clicking the × on the filter pill clears it.
-let venueSoloCustomer = null;
+// Revenue solo filter — when set, the revenue heatmap re-renders showing ONLY
+// contributions from a defined set of customer names. Shape:
+//   null               (no filter)
+// | { label: string,     // e.g. 'BAAM PRODUCTIONS' or 'THE FOOD DUDES (Caterer)'
+//     type:  'customer' | 'caterer',
+//     customers: Set<string> }  // names that match keys in contractCityData.v
+// A "customer" filter has exactly one name in the Set; a "caterer" filter
+// pulls every cust name from the caterer's contracts so the heatmap shows
+// every location that caterer has worked at (regardless of which client they
+// catered for there). The accumulation loop in updateTimeline checks each
+// location's per-customer revenue dict against this Set.
+let revenueSoloFilter = null;
 
 // Region display order in the sidebar — mirrors REGION_ORDER in process_venues.py.
 const KL_REGION_ORDER = ['GTA', 'GTA Tents', 'East', 'West', 'Unknown'];
@@ -5549,17 +6006,15 @@ window.onVenueRowClick = function(venueId) {
   fitToVisibleData();
 };
 
-// Clear the customer solo filter — hooked to the × on the filter pill in
-// either Key Venues or Key Customers panel, and to the "Clear filter" link
-// in the Key Customers section header.
-window.clearVenueSolo = function() {
-  if (!venueSoloCustomer) return;
-  venueSoloCustomer = null;
-  updateTimeline();
-  if (typeof renderVenuesSidebar    === 'function') renderVenuesSidebar();
-  if (typeof renderCustomersSidebar === 'function') renderCustomersSidebar();
-  fitToVisibleData();
-};
+// Legacy clear handler — kept as an alias to clearRevenueSoloFilter so any
+// inline onclicks lingering in the (now hidden) key-loc-panel HTML still work.
+// The old implementation referenced a removed state variable and would have
+// thrown ReferenceError if any path resurrected it. Re-aliasing here AFTER
+// clearRevenueSoloFilter is defined ensures both names point at the same
+// safe implementation.
+if (typeof window.clearRevenueSoloFilter === 'function') {
+  window.clearVenueSolo = window.clearRevenueSoloFilter;
+}
 
 // ===== KEY CUSTOMERS SIDEBAR =====
 // Flat top-customers ranking derived from venuesData.venues. Each "venue" entry

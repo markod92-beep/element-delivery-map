@@ -3302,6 +3302,50 @@ function updateTimeline() {
     }
   })();
 
+  // --- Second pass: nudge non-V: bubbles off V:* venue overrides ---
+  // The first pass deliberately excludes V:* keys (they're curated precise
+  // venue coords that should never move). But that means a non-V: bubble
+  // sitting at the same coords as a V: bubble was left alone — and a V:
+  // bubble in a single-item cluster wasn't spread either. Concrete case:
+  // CITY:HALIFAX fallback coord (44.6488, -63.5752) is identical to
+  // V:halifax-cc (Halifax Convention Centre), so the two bubbles rendered
+  // exactly on top of each other and no zoom level could separate them.
+  //
+  // This pass keeps V:* fixed (still the anchor) and nudges any non-V: bubble
+  // within THRESH outward to SPREAD distance, so every bubble has a clickable
+  // center at sufficient zoom.
+  (function nudgeNonVOffVAnchors() {
+    const THRESH = 0.003;
+    const SPREAD = 0.006;
+    const vEntries = Object.entries(allLocations).filter(function(e) {
+      return e[0].startsWith('V:') && e[1].rev > 0;
+    });
+    if (!vEntries.length) return;
+    Object.entries(allLocations).forEach(function(pair) {
+      const k = pair[0], l = pair[1];
+      if (k.startsWith('V:') || l.rev <= 0) return;
+      for (let i = 0; i < vEntries.length; i++) {
+        const vl = vEntries[i][1];
+        if (Math.abs(l.lat - vl.lat) < THRESH && Math.abs(l.lng - vl.lng) < THRESH) {
+          // Direction = vector from V: anchor to current bubble. If exact
+          // overlap (mag == 0), pick a default southeast offset so we still
+          // separate.
+          const dLat = l.lat - vl.lat;
+          const dLng = l.lng - vl.lng;
+          const mag = Math.sqrt(dLat * dLat + dLng * dLng);
+          if (mag > 1e-9) {
+            l.lat = vl.lat + (dLat / mag) * SPREAD;
+            l.lng = vl.lng + (dLng / mag) * SPREAD;
+          } else {
+            l.lat = vl.lat - SPREAD * 0.707;  // southeast: -lat, +lng
+            l.lng = vl.lng + SPREAD * 0.707;
+          }
+          break;  // one nudge per non-V: bubble is enough
+        }
+      }
+    });
+  })();
+
   // --- Render all locations as ONE bubble each ---
   for (const [locKey, loc] of Object.entries(allLocations)) {
     if (loc.rev <= 0) continue;

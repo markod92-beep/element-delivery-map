@@ -3555,6 +3555,15 @@ function updateTimeline() {
     buildCaterersLayer();
     if (typeof renderCaterersSidebar === 'function') renderCaterersSidebar();
   }
+
+  // Key Filter sheet — if it's currently open, refresh the in-window revenue
+  // pills (row order stays static — only the right-side $ values update).
+  // The sheet is independent of any layer toggle; check by class instead.
+  var _kfSheet = document.getElementById('mobile-sheet-keyfilter');
+  if (_kfSheet && _kfSheet.classList.contains('ms-open') &&
+      typeof buildKeyFilterLists === 'function') {
+    buildKeyFilterLists();
+  }
 }
 
 
@@ -5634,17 +5643,23 @@ function buildKeyFilterLists() {
     if (!hasFilter) return true;
     return companyFilter.has(region || 'Unknown');
   };
+  // Active timeline window — the displayed pill revenue scopes to this. The
+  // ranking does NOT change with the window; only the right-side $ value does.
+  const win = _venuesGetWindow();
+  const winLabel = _kfWindowLabel(win);
 
-  // Static subtitle — does not reflect the timeline window because the ranking
-  // is independent of it. The label "Top 10" applies per BU.
+  // Subtitle: stable ranking metric + dynamic window label so the user knows
+  // (a) why this order doesn't change, and (b) what window the $ reflects.
   const subEl = document.getElementById('kf-subtitle');
   if (subEl) {
-    subEl.textContent = hasFilter
-      ? ('Top 10 in ' + Array.from(companyFilter)[0] + ' · Venues by 2025 revenue · Caterers by TTM')
-      : 'Top 10 per BU · Venues by 2025 revenue · Caterers by TTM';
+    const buPart = hasFilter
+      ? ('Top 10 in ' + Array.from(companyFilter)[0])
+      : 'Top 10 per BU';
+    subEl.textContent = buPart + ' · ranked by 2025 (venues) / TTM (caterers) · $ shown for ' + winLabel;
   }
 
-  // ---- Customers column (static — sorted by 2025 calendar revenue) ----
+  // ---- Customers column (order static — ranked by 2025 calendar revenue) ----
+  // Display: per-row revenue is computed against the current timeline window.
   const custList = document.getElementById('kf-customers-list');
   if (custList) {
     let html = '';
@@ -5665,7 +5680,7 @@ function buildKeyFilterLists() {
         }).slice(0, 10);
         if (!ranked.length) return;
         html += '<div class="kf-col-title" style="margin-top:8px;border-bottom:none;color:var(--element-teal);">' + _esc(region) + '</div>';
-        ranked.forEach(function(e, i) { html += _kfRowVenue(e.v, i + 1, e.rev2025); });
+        ranked.forEach(function(e, i) { html += _kfRowVenue(e.v, i + 1, _venueWindowRev(e.v, win), e.rev2025); });
       });
     } else {
       const ranked = (venuesData.venues || [])
@@ -5679,13 +5694,18 @@ function buildKeyFilterLists() {
       if (!ranked.length) {
         html = '<div class="kf-empty">No customers in this BU.</div>';
       } else {
-        ranked.forEach(function(e, i) { html += _kfRowVenue(e.v, i + 1, e.rev2025); });
+        ranked.forEach(function(e, i) { html += _kfRowVenue(e.v, i + 1, _venueWindowRev(e.v, win), e.rev2025); });
       }
     }
     custList.innerHTML = html;
   }
 
-  // ---- Caterers column (static — sorted by TTM revenue) ----
+  // ---- Caterers column (order static — ranked by TTM revenue) ----
+  // Display: per-row revenue is computed against the current timeline window.
+  // The caterer.locations[].contracts[] list only contains geocoded contracts
+  // (~13% of total caterer activity), so the window-scoped number here is
+  // proportionally consistent across caterers but absolute values understate
+  // true caterer revenue. Adequate for relative comparison within a window.
   const catList = document.getElementById('kf-caterers-list');
   if (catList) {
     let html = '';
@@ -5702,7 +5722,7 @@ function buildKeyFilterLists() {
           .slice(0, 10);
         if (!ranked.length) return;
         html += '<div class="kf-col-title" style="margin-top:8px;border-bottom:none;color:var(--element-teal);">' + _esc(region) + '</div>';
-        ranked.forEach(function(c, i) { html += _kfRowCaterer(c, i + 1, c.ttm_revenue || 0); });
+        ranked.forEach(function(c, i) { html += _kfRowCaterer(c, i + 1, _catererWindowRev(c, win), c.ttm_revenue || 0); });
       });
     } else {
       const ranked = (venuesData.caterers || [])
@@ -5713,7 +5733,7 @@ function buildKeyFilterLists() {
       if (!ranked.length) {
         html = '<div class="kf-empty">No caterers in this BU.</div>';
       } else {
-        ranked.forEach(function(c, i) { html += _kfRowCaterer(c, i + 1, c.ttm_revenue || 0); });
+        ranked.forEach(function(c, i) { html += _kfRowCaterer(c, i + 1, _catererWindowRev(c, win), c.ttm_revenue || 0); });
       }
     }
     catList.innerHTML = html;
@@ -5772,36 +5792,37 @@ function _kfWindowLabel(win) {
   return 'through ' + win.to;
 }
 
-function _kfRowVenue(v, rank, rev2025) {
+function _kfRowVenue(v, rank, winRev, rev2025) {
   const safeId = _esc(v.id || '');
   const isOn = (revenueSoloFilter && revenueSoloFilter.type === 'customer' &&
                 revenueSoloFilter.label === v.display_name);
   const onCls = isOn ? ' on' : '';
-  // Display = 2025 calendar revenue (the same value used for ranking, so the
-  // ordering matches the meta column). Tooltip carries TTM as context.
+  // Pill (right column) = revenue in the selected timeline window.
+  // Ranking metric (2025 calendar rev) + TTM stay in the tooltip as context.
   return '<div class="kf-row' + onCls + '" onclick="onKfVenueClick(\'' + safeId + '\')" ' +
-    'title="' + _esc(v.display_name) + ' — 2025 ' + _klFmtMoney(rev2025) +
-    ' · TTM ' + _klFmtMoney(v.ttm_revenue) + '">' +
+    'title="' + _esc(v.display_name) + ' — In-window ' + _klFmtMoney(winRev) +
+    ' · 2025 ' + _klFmtMoney(rev2025) + ' · TTM ' + _klFmtMoney(v.ttm_revenue) + '">' +
     '<span class="kf-rank">#' + rank + '</span>' +
     '<span class="kf-name">' + _esc(v.display_name) + '</span>' +
-    '<span class="kf-meta">' + _klFmtMoney(rev2025) + '</span>' +
+    '<span class="kf-meta">' + _klFmtMoney(winRev) + '</span>' +
     '</div>';
 }
 
-function _kfRowCaterer(c, rank, ttmRev) {
+function _kfRowCaterer(c, rank, winRev, ttmRev) {
   const safeId = _esc(c.id || '');
   const isOn = (revenueSoloFilter && revenueSoloFilter.type === 'caterer' &&
                 revenueSoloFilter.label === c.display_name);
   const onCls = isOn ? ' on' : '';
   const swatch = c.color ? '<span class="kf-swatch" style="background:' + _esc(c.color) + ';"></span>' : '';
-  // Display = TTM revenue (caterer 2025-only isn't computable from the
-  // truncated/geocoded-only contracts list in venues_data.json).
+  // Pill = window revenue (from geocoded subset of caterer contracts — see
+  // note in buildKeyFilterLists). Tooltip carries TTM as full-coverage context.
   return '<div class="kf-row' + onCls + '" onclick="onKfCatererClick(\'' + safeId + '\')" ' +
-    'title="' + _esc(c.display_name) + ' — TTM ' + _klFmtMoney(ttmRev) + '">' +
+    'title="' + _esc(c.display_name) + ' — In-window ' + _klFmtMoney(winRev) +
+    ' · TTM ' + _klFmtMoney(ttmRev) + '">' +
     '<span class="kf-rank">#' + rank + '</span>' +
     swatch +
     '<span class="kf-name">' + _esc(c.display_name) + '</span>' +
-    '<span class="kf-meta">' + _klFmtMoney(ttmRev) + '</span>' +
+    '<span class="kf-meta">' + _klFmtMoney(winRev) + '</span>' +
     '</div>';
 }
 

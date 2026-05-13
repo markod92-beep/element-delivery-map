@@ -3154,8 +3154,13 @@ function updateTimeline() {
                        : null;
       const _mergeSolo = function(bucket, locBag, custSet, isClosed) {
         if (!bucket || !bucket.v) return;
+        // The Set is uppercase-normalized (see _buildVenueCustomerSet /
+        // _buildCatererCustomerSet). Uppercase each .v key for the lookup so
+        // brand-override labels like "Royal Ontario Museum" still match raw
+        // POR venue strings like "ROYAL ONTARIO MUSEUM".
         for (const custName in bucket.v) {
-          if (!custSet.has(custName)) continue;
+          const norm = (custName || '').toString().trim().toUpperCase();
+          if (!custSet.has(norm)) continue;
           const arr = bucket.v[custName];
           if (!Array.isArray(arr)) continue;
           const rev = arr[0] || 0, fees = arr[1] || 0, events = arr[2] || 0;
@@ -5680,7 +5685,34 @@ function _kfRowCaterer(c, rank, winRev, isFullWindow) {
     '</div>';
 }
 
-// Click a customer row — set solo filter to that one customer.
+// Build the Set of names to match against contractCityData.v keys. Both sides
+// are uppercased + trimmed so we match across the title-case display labels
+// (e.g. brand-override "Royal Ontario Museum") and the uppercase POR strings
+// (e.g. "ROYAL ONTARIO MUSEUM"). For venues we also include every unique
+// contract.cust as a fallback for rows where POR's key_venue field was blank
+// and process_cmmc.py fell back to customer_name as the venue key.
+function _kfNorm(s) { return (s || '').toString().trim().toUpperCase(); }
+
+function _buildVenueCustomerSet(v) {
+  const s = new Set();
+  if (v.display_name) s.add(_kfNorm(v.display_name));
+  (v.contracts || []).forEach(function(c) {
+    if (c && c.cust) s.add(_kfNorm(c.cust));
+  });
+  return s;
+}
+
+function _buildCatererCustomerSet(c) {
+  const s = new Set();
+  (c.locations || []).forEach(function(loc) {
+    (loc.contracts || []).forEach(function(ct) {
+      if (ct && ct.cust) s.add(_kfNorm(ct.cust));
+    });
+  });
+  return s;
+}
+
+// Click a customer row — set solo filter to that venue's identifiers.
 window.onKfVenueClick = function(venueId) {
   if (!venuesData || !venuesData.venues) return;
   const v = venuesData.venues.find(function(x) { return x.id === venueId; });
@@ -5693,7 +5725,7 @@ window.onKfVenueClick = function(venueId) {
     revenueSoloFilter = {
       label: v.display_name,
       type: 'customer',
-      customers: new Set([v.display_name])
+      customers: _buildVenueCustomerSet(v)
     };
   }
   _afterRevenueFilterChange();
@@ -5711,16 +5743,10 @@ window.onKfCatererClick = function(catererId) {
   if (same) {
     revenueSoloFilter = null;
   } else {
-    const custSet = new Set();
-    (c.locations || []).forEach(function(loc) {
-      (loc.contracts || []).forEach(function(ct) {
-        if (ct && ct.cust) custSet.add(ct.cust);
-      });
-    });
     revenueSoloFilter = {
       label: c.display_name,
       type: 'caterer',
-      customers: custSet
+      customers: _buildCatererCustomerSet(c)
     };
   }
   _afterRevenueFilterChange();

@@ -2220,6 +2220,33 @@ let contractFilter = 'all'; // 'all', 'closed', 'open'
 let revView = 'address';
 const TORONTO_CENTROID = { lat: 43.6532, lng: -79.3832 };
 
+// ===== CITY:* fallback coordinates =====
+// process_cmmc.py emits locKey 'CITY:<NAME>' when an address resolves to a
+// city tag but no FSA. The JS render path resolves these via cityKeyToZone →
+// zoneCoords. Some city tags don't have a zone mapping (or map to themselves
+// like 'CITY:OTTAWA' → 'CITY:OTTAWA'), and contractCityRef doesn't carry them
+// either — so revenue at those locKeys gets silently dropped, with
+// 'CITY:TORONTO' alone accounting for >$1M of Tents revenue that never
+// reached the map. This table is the safety net of last resort: if both
+// cityKeyToZone and contractCityRef fail for a CITY:* key, place the bubble
+// at the centroid recorded here. Keys must match the locKey suffix exactly
+// (uppercase, as emitted by process_cmmc.py).
+const CITY_FALLBACK_COORDS = {
+  'TORONTO':              { lat: 43.6532, lng: -79.3832, label: 'Toronto' },
+  'OTTAWA':               { lat: 45.4215, lng: -75.6972, label: 'Ottawa' },
+  'MCMASTER UNIVERSITY':  { lat: 43.2609, lng: -79.9192, label: 'Hamilton (McMaster)' },
+  'HAMILTON':             { lat: 43.2557, lng: -79.8711, label: 'Hamilton' },
+  'MONTREAL':             { lat: 45.5019, lng: -73.5674, label: 'Montreal' },
+  'KINGSTON':             { lat: 44.2312, lng: -76.4860, label: 'Kingston' },
+  'LONDON':               { lat: 42.9849, lng: -81.2453, label: 'London' },
+  'WINDSOR':              { lat: 42.3149, lng: -83.0364, label: 'Windsor' },
+  'BARRIE':               { lat: 44.3894, lng: -79.6903, label: 'Barrie' },
+  'GUELPH':               { lat: 43.5448, lng: -80.2482, label: 'Guelph' },
+  'KITCHENER':            { lat: 43.4516, lng: -80.4925, label: 'Kitchener' },
+  'WATERLOO':             { lat: 43.4643, lng: -80.5204, label: 'Waterloo' },
+  'CENTERVILLE CREEK':    { lat: 43.6532, lng: -79.3832, label: 'Centerville Creek' }
+};
+
 // Company bucket filter — matches buckets defined in process_cmmc.py.
 // All on by default. Unclassified rows ("Other") are always included as a
 // safety net for new store codes before Mark classifies them.
@@ -3082,7 +3109,19 @@ function updateTimeline() {
           displayKey = locKey;
           displayName = ref.name;
           displayLat = ref.lat; displayLng = ref.lng;
-        } else continue;
+        } else {
+          // Fallback: hardcoded centroid for common city tags that have
+          // neither a zone mapping nor a ref. Without this, revenue at
+          // CITY:TORONTO, CITY:OTTAWA, CITY:MCMASTER UNIVERSITY etc. was
+          // silently dropped — accounted for ~$1.5M of missing 2026 Tents
+          // revenue on the site vs. the source data.
+          const cityName = locKey.slice(5);  // strip 'CITY:' prefix
+          const fb = CITY_FALLBACK_COORDS[cityName];
+          if (!fb) continue;
+          displayKey = locKey;
+          displayName = fb.label || cityName;
+          displayLat = fb.lat; displayLng = fb.lng;
+        }
       } else if (locKey.split(',')[0].startsWith('M')) {
         // Toronto FSA — in Address mode, one bubble per FSA. In City mode,
         // collapse all Toronto FSAs into a single downtown-Toronto bubble so

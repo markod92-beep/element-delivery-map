@@ -2232,19 +2232,49 @@ const TORONTO_CENTROID = { lat: 43.6532, lng: -79.3832 };
 // at the centroid recorded here. Keys must match the locKey suffix exactly
 // (uppercase, as emitted by process_cmmc.py).
 const CITY_FALLBACK_COORDS = {
-  'TORONTO':              { lat: 43.6532, lng: -79.3832, label: 'Toronto' },
-  'OTTAWA':               { lat: 45.4215, lng: -75.6972, label: 'Ottawa' },
-  'MCMASTER UNIVERSITY':  { lat: 43.2609, lng: -79.9192, label: 'Hamilton (McMaster)' },
-  'HAMILTON':             { lat: 43.2557, lng: -79.8711, label: 'Hamilton' },
-  'MONTREAL':             { lat: 45.5019, lng: -73.5674, label: 'Montreal' },
-  'KINGSTON':             { lat: 44.2312, lng: -76.4860, label: 'Kingston' },
-  'LONDON':               { lat: 42.9849, lng: -81.2453, label: 'London' },
-  'WINDSOR':              { lat: 42.3149, lng: -83.0364, label: 'Windsor' },
-  'BARRIE':               { lat: 44.3894, lng: -79.6903, label: 'Barrie' },
-  'GUELPH':               { lat: 43.5448, lng: -80.2482, label: 'Guelph' },
-  'KITCHENER':            { lat: 43.4516, lng: -80.4925, label: 'Kitchener' },
-  'WATERLOO':             { lat: 43.4643, lng: -80.5204, label: 'Waterloo' },
-  'CENTERVILLE CREEK':    { lat: 43.6532, lng: -79.3832, label: 'Centerville Creek' }
+  // --- Ontario ---
+  'TORONTO':                          { lat: 43.6532, lng: -79.3832, label: 'Toronto' },
+  'OTTAWA':                           { lat: 45.4215, lng: -75.6972, label: 'Ottawa' },
+  'MCMASTER UNIVERSITY':              { lat: 43.2609, lng: -79.9192, label: 'Hamilton (McMaster)' },
+  'HAMILTON':                         { lat: 43.2557, lng: -79.8711, label: 'Hamilton' },
+  'KINGSTON':                         { lat: 44.2312, lng: -76.4860, label: 'Kingston' },
+  'LONDON':                           { lat: 42.9849, lng: -81.2453, label: 'London' },
+  'WINDSOR':                          { lat: 42.3149, lng: -83.0364, label: 'Windsor' },
+  'BARRIE':                           { lat: 44.3894, lng: -79.6903, label: 'Barrie' },
+  'GUELPH':                           { lat: 43.5448, lng: -80.2482, label: 'Guelph' },
+  'KITCHENER':                        { lat: 43.4516, lng: -80.4925, label: 'Kitchener' },
+  'WATERLOO':                         { lat: 43.4643, lng: -80.5204, label: 'Waterloo' },
+  'BLUE MOUNTAINS':                   { lat: 44.5004, lng: -80.3920, label: 'Blue Mountains' },
+  'MUSKOKA':                          { lat: 44.9437, lng: -79.3081, label: 'Muskoka' },
+  // GTA sports/community venues seen in 2026 data — coords near each named venue
+  'SRC JCC':                          { lat: 43.7787, lng: -79.4385, label: 'Schwartz/Reisman Centre (JCC)' },
+  'SRC JCC ARENA':                    { lat: 43.7787, lng: -79.4385, label: 'Schwartz/Reisman Arena' },
+  'VAUGHAN GROVE SPORTS PARK':        { lat: 43.7790, lng: -79.5430, label: 'Vaughan Grove Sports Park' },
+  'RICHMOND GREEN SPORTS CENTRE':     { lat: 43.9036, lng: -79.4297, label: 'Richmond Green Sports Centre' },
+  'LEBOVIC GOLF COURSE':              { lat: 43.9580, lng: -79.4400, label: 'Lebovic Golf Course' },
+  'CITY PLAYHOUSE + WESTMOUNT C.':    { lat: 43.8000, lng: -79.5500, label: 'City Playhouse / Westmount C.' },
+  'THE SPORTS VILLAGE':               { lat: 43.7100, lng: -79.6300, label: 'The Sports Village' },
+  'VAUGHAN SPORTSPLEX':               { lat: 43.7800, lng: -79.5800, label: 'Vaughan Sportsplex' },
+  'HOOPDOME':                         { lat: 43.7170, lng: -79.4400, label: 'Hoopdome' },
+  'TORONTO CITY HALL GROUNDS':        { lat: 43.6534, lng: -79.3839, label: 'Toronto City Hall Grounds' },
+  'BRONTE HERITAGE PARK':             { lat: 43.3950, lng: -79.7100, label: 'Bronte Heritage Park' },
+  'BRONTE HERITAGE WATERFRONT PAR':   { lat: 43.3950, lng: -79.7100, label: 'Bronte Heritage Waterfront' },
+  'WATERFRONT PARK BRONTE':           { lat: 43.3950, lng: -79.7100, label: 'Bronte Waterfront Park' },
+  'CLARKSON / TRUSCOTT':              { lat: 43.5100, lng: -79.6300, label: 'Clarkson / Truscott' },
+  'CENTERVILLE CREEK':                { lat: 43.6532, lng: -79.3832, label: 'Centerville Creek' },
+  // --- East (MFL — Halifax/Dartmouth, NS) ---
+  'HALIFAX':                          { lat: 44.6488, lng: -63.5752, label: 'Halifax' },
+  'EAST POINT':                       { lat: 46.4500, lng: -61.9000, label: 'East Point' },
+  // --- West (A&B / LW — Vancouver area, BC) ---
+  'VANCOUVER':                        { lat: 49.2827, lng: -123.1207, label: 'Vancouver' },
+  'SQUAMISH VALLEY':                  { lat: 49.7016, lng: -123.1558, label: 'Squamish Valley' },
+  'MORRIS VALLEY':                    { lat: 49.2700, lng: -121.9000, label: 'Morris Valley' },
+  'MONTREAL':                         { lat: 45.5019, lng: -73.5674, label: 'Montreal' }
+  // Note: "TBD", "ADDRESS TBD", "VARIOUS DROPS SEE LIST", "UNIT #2901", "YONGE"
+  // are intentionally NOT in this table — they're data-entry placeholders that
+  // shouldn't render at any particular lat/lng. ~$25K of misc revenue stays
+  // dropped from these; surface them as a data-quality issue to fix in POR
+  // rather than fake a coordinate.
 };
 
 // Company bucket filter — matches buckets defined in process_cmmc.py.

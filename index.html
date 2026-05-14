@@ -2076,12 +2076,11 @@ function getBandFromRate(rate) {
   return "100km+";
 }
 
-// ===== WAREHOUSE MARKER =====
+// ===== WAREHOUSE MARKER (DISABLED) =====
 // 601 Milner Ave, Scarborough ON M1B 3A7 — Element's main GTA warehouse.
-// Coords verified against Google Maps street address (not FSA centroid).
-// Marker = small teal anchor dot AT the exact point + legible label tag
-// beside it. iconAnchor positions the dot (11px circle centered on lat/lng);
-// the label floats to the right with its own box so the point is unambiguous.
+// Marker definition kept in place for future re-enablement; the .addTo(map)
+// call is commented out so it no longer renders on the map. To restore, just
+// uncomment the .addTo(map) line below.
 const warehouse = L.marker([43.77913, -79.22245], {
   icon: L.divIcon({
     className: 'warehouse-icon',
@@ -2096,7 +2095,7 @@ const warehouse = L.marker([43.77913, -79.22245], {
     iconSize:   [0, 0],
     iconAnchor: [7, 7]   // center of the 14px anchor dot
   })
-}).addTo(map);
+}); // .addTo(map);  ← re-enable to restore the warehouse pin on the map
 
 // ===== NEW PRICING LAYER (Voronoi Polygons) =====
 const newLayerGroup = L.layerGroup();

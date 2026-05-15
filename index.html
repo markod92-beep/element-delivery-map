@@ -3075,13 +3075,17 @@ function updateTimeline() {
           const co = (info && info.co) ? info.co : 'Other';
           if (co !== 'Other' && !companyFilter.has(co)) continue;
           hasData = true;
-          if (!contractCityData[locKey]) contractCityData[locKey] = {closed:{r:0,f:0,d:0,p:0,e:0,v:{}}, open:{r:0,f:0,d:0,p:0,e:0,v:{}}};
+          if (!contractCityData[locKey]) contractCityData[locKey] = {closed:{r:0,f:0,d:0,p:0,e:0,tentE:0,v:{}}, open:{r:0,f:0,d:0,p:0,e:0,tentE:0,v:{}}};
           const statusKey = statusCode === 'C' ? 'closed' : 'open';
           const cd = contractCityData[locKey][statusKey];
           cd.r += rent;
           cd.f += fee;
           cd.e += 1;
           if (cls === 'D') cd.d += 1; else cd.p += 1;
+          // Tent event tally — only when this row's company bucket is GTA Tents.
+          // Lets the heatmap surface $0 tent installs (warranty/comp/exchange)
+          // alongside revenue-bearing bubbles. See _shouldRenderLoc.
+          if (co === 'GTA Tents') cd.tentE = (cd.tentE || 0) + 1;
           if (!cd.v[venue]) cd.v[venue] = [0, 0, 0];
           cd.v[venue][0] += rent;
           cd.v[venue][1] += fee;
@@ -3114,10 +3118,22 @@ function updateTimeline() {
     if (!allLocations[key]) allLocations[key] = {
       rev:0, events:0, del:0, pick:0, fees:0, venues:{},
       lat:lat, lng:lng, name:name,
-      closedR:0, openR:0, closedE:0, openE:0
+      closedR:0, openR:0, closedE:0, openE:0,
+      // Tent event count (co=='GTA Tents'). Used to keep $0 tent installs
+      // (warranty/comp/exchange contracts that still ship product on a date)
+      // visible on the heatmap. See _shouldRenderLoc below.
+      tentEvents:0
     };
     return allLocations[key];
   }
+
+  // Bubble visibility rule: render if the location has any revenue OR has
+  // any tent events. Zero-rev tent installs ship product on a real date and
+  // need to be on the map even though they contribute nothing to revenue.
+  // All other zero-rev locations remain hidden (unchanged behavior).
+  const _shouldRenderLoc = function(l) {
+    return (l.rev > 0) || ((l.tentEvents || 0) > 0);
+  };
 
   // Build allLocations from contractCityData (skip in pickup mode — handled separately)
   if (contractFilter !== 'pickup') {
@@ -3247,12 +3263,14 @@ function updateTimeline() {
           const c = cityData.closed;
           loc.rev += c.r; loc.fees += c.f; loc.del += c.d; loc.pick += c.p; loc.events += c.e;
           loc.closedR += c.r; loc.closedE += c.e;
+          loc.tentEvents += (c.tentE || 0);
           _mergeVenues(c.v, loc);
         }
         if (contractFilter === 'all' || contractFilter === 'open') {
           const o = cityData.open;
           loc.rev += o.r; loc.fees += o.f; loc.del += o.d; loc.pick += o.p; loc.events += o.e;
           loc.openR += o.r; loc.openE += o.e;
+          loc.tentEvents += (o.tentE || 0);
           _mergeVenues(o.v, loc);
         }
       }
@@ -3274,7 +3292,7 @@ function updateTimeline() {
     const THRESH = 0.003;   // cluster if lat & lng both within ~300m (Toronto lat)
     const SPREAD = 0.006;   // ring radius from cluster center (~650m)
     const entries = Object.entries(allLocations).filter(function(e){
-      return e[1].rev > 0 && !e[0].startsWith('V:');
+      return _shouldRenderLoc(e[1]) && !e[0].startsWith('V:');
     });
     const seen = new Set();
     for (let i = 0; i < entries.length; i++) {
@@ -3317,12 +3335,12 @@ function updateTimeline() {
     const THRESH = 0.003;
     const SPREAD = 0.006;
     const vEntries = Object.entries(allLocations).filter(function(e) {
-      return e[0].startsWith('V:') && e[1].rev > 0;
+      return e[0].startsWith('V:') && _shouldRenderLoc(e[1]);
     });
     if (!vEntries.length) return;
     Object.entries(allLocations).forEach(function(pair) {
       const k = pair[0], l = pair[1];
-      if (k.startsWith('V:') || l.rev <= 0) return;
+      if (k.startsWith('V:') || !_shouldRenderLoc(l)) return;
       for (let i = 0; i < vEntries.length; i++) {
         const vl = vEntries[i][1];
         if (Math.abs(l.lat - vl.lat) < THRESH && Math.abs(l.lng - vl.lng) < THRESH) {
@@ -3347,7 +3365,7 @@ function updateTimeline() {
 
   // --- Render all locations as ONE bubble each ---
   for (const [locKey, loc] of Object.entries(allLocations)) {
-    if (loc.rev <= 0) continue;
+    if (!_shouldRenderLoc(loc)) continue;
 
     const rev = loc.rev;
     const maxRev = 200000;

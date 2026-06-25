@@ -209,13 +209,13 @@ function render(){
   }
   document.getElementById('footNote').style.display='';
 
-  let totRev=0, totProjHrs=0, totActualHrs=0, totStops=0, nActive=trucks.length;
+  let totRev=0, totProjHrs=0, totActualHrs=0, totStops=0, nActive=trucks.length, revWithActual=0, revWithProj=0;
   let cGreen=0,cYellow=0,cRed=0,cNotEntered=0;
   const rowsHtml = trucks.map((row,i)=>{
     const c = computeRow(row, manual, target);
     totRev += row.rev; totStops += row.stops;
-    if(c.proj>0) totProjHrs += c.proj;
-    if(c.actual>0) totActualHrs += c.actual;
+    if(c.proj>0){ totProjHrs += c.proj; revWithProj += row.rev; }
+    if(c.actual>0){ totActualHrs += c.actual; revWithActual += row.rev; }
     if(c.actual>0 || c.proj>0){
       if(c.rag==='g')cGreen++; else if(c.rag==='y')cYellow++; else if(c.rag==='r')cRed++;
     } else cNotEntered++;
@@ -241,7 +241,7 @@ function render(){
       '</tr>';
   }).join('');
 
-  const fleetRevHr = (totActualHrs>0)? totRev/totActualHrs : (totProjHrs>0? totRev/totProjHrs : null);
+  const fleetRevHr = (totActualHrs>0)? revWithActual/totActualHrs : (totProjHrs>0? revWithProj/totProjHrs : null);
   const avgStops = nActive? totStops/nActive : 0;
   const pctOnTarget = (cGreen+cYellow+cRed)>0 ? Math.round(100*cGreen/(cGreen+cYellow+cRed)) : 0;
 
@@ -329,21 +329,21 @@ function flashSaved(){
 function recompute(){
   const target = getTarget(curDate);
   const manual = loadManual(curDate);
-  let totRev=0,totProjHrs=0,totActualHrs=0,totStops=0;
+  let totRev=0,totProjHrs=0,totActualHrs=0,totStops=0,revWithActual=0,revWithProj=0;
   let cGreen=0,cYellow=0,cRed=0,cNotEntered=0;
   trucks.forEach(row=>{
     const tr = document.querySelector('tbody tr[data-truck="'+CSS.escape(row.truck)+'"]');
     if(!tr) return;
     const c = computeRow(row, manual, target);
     totRev+=row.rev; totStops+=row.stops;
-    if(c.proj>0)totProjHrs+=c.proj; if(c.actual>0)totActualHrs+=c.actual;
+    if(c.proj>0){totProjHrs+=c.proj;revWithProj+=row.rev;} if(c.actual>0){totActualHrs+=c.actual;revWithActual+=row.rev;}
     if(c.actual>0||c.proj>0){ if(c.rag==='g')cGreen++;else if(c.rag==='y')cYellow++;else cRed++; } else cNotEntered++;
     tr.querySelector('.ragdot').className='ragdot dot-'+c.rag;
     tr.querySelector('[data-c="revActual"]').textContent = c.revActual!=null?fmtMoney(c.revActual):'';
     const vsCell = tr.querySelector('[data-c="vsTarget"]');
     vsCell.innerHTML = (c.vsTarget==null)?'':'<span class="'+(c.vsTarget>=0?'vt-pos':'vt-neg')+'">'+(c.vsTarget>=0?'+':'')+Math.round(c.vsTarget*100)+'%</span>';
   });
-  const fleetRevHr=(totActualHrs>0)?totRev/totActualHrs:(totProjHrs>0?totRev/totProjHrs:null);
+  const fleetRevHr=(totActualHrs>0)?revWithActual/totActualHrs:(totProjHrs>0?revWithProj/totProjHrs:null);
   const pills=document.querySelectorAll('.rag .pill .n');
   if(pills.length===4){pills[0].textContent=cGreen;pills[1].textContent=cYellow;pills[2].textContent=cRed;pills[3].textContent=cNotEntered;}
   const cards=document.querySelectorAll('.dash .card .v');
@@ -384,10 +384,10 @@ function exportXlsx(){
   const manual = loadManual(curDate);
   const head = ['#','Truck #','Driver','Revenue ($)','Stops','Items','Proj Lab Hrs','Actual Lab Hrs','Volume (lbs)','Rev / Proj Hr','Rev / Actual Hr','Vol / Actual Hr','vs Target','Hrs Source','Notes'];
   const rows = [head];
-  let totRev=0,totProj=0,totActual=0,totStops=0;
+  let totRev=0,totProj=0,totActual=0,totStops=0,revWithActual=0;
   trucks.forEach((row,i)=>{
     const c=computeRow(row,manual,target);
-    totRev+=row.rev;totStops+=row.stops;if(c.proj>0)totProj+=c.proj;if(c.actual>0)totActual+=c.actual;
+    totRev+=row.rev;totStops+=row.stops;if(c.proj>0)totProj+=c.proj;if(c.actual>0){totActual+=c.actual;revWithActual+=row.rev;}
     rows.push([i+1,row.truck,row.driver||'',Math.round(row.rev*100)/100,row.stops,row.items||'',
       isNaN(c.proj)?'':c.proj, isNaN(c.actual)?'':c.actual, isNaN(c.vol)?'':c.vol,
       c.revProj!=null?Math.round(c.revProj*100)/100:'', c.revActual!=null?Math.round(c.revActual*100)/100:'',
@@ -395,7 +395,7 @@ function exportXlsx(){
       c.actualFromPW?'Payworks':(c.actual>0?'Manual':''),
       (manual[row.truck]&&manual[row.truck].notes)||'']);
   });
-  const fleetRevHr=(totActual>0)?totRev/totActual:(totProj>0?totRev/totProj:'');
+  const fleetRevHr=(totActual>0)?revWithActual/totActual:(totProj>0?totRev/totProj:'');
   rows.push([]);
   rows.push(['','FLEET TOTAL','',Math.round(totRev*100)/100,totStops,'',totProj||'',totActual||'','',
     '', fleetRevHr!==''?Math.round(fleetRevHr*100)/100:'', '','','','']);

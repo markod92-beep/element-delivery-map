@@ -36,6 +36,13 @@
   .card .k{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--element-muted);}
   .card .v{font-size:24px;font-weight:700;color:var(--element-teal);margin-top:3px;line-height:1.1;}
   .card .v.small{font-size:18px;}
+  .card .csub{font-size:10.5px;color:var(--element-muted);margin-top:3px;font-weight:500;line-height:1.25;}
+  .bu-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:14px;}
+  .bu-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--element-muted);margin-right:2px;}
+  .bu-chip{padding:5px 12px;border-radius:999px;border:1.5px solid var(--element-border);background:var(--element-white);font-size:12.5px;font-weight:600;color:var(--element-ink);cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .12s ease;}
+  .bu-chip:hover{border-color:var(--element-teal-mid);}
+  .bu-chip.active{background:var(--element-teal);color:#fff;border-color:var(--element-teal);}
+  .bu-chip .bu-n{font-weight:700;opacity:.75;}
   .rag{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 16px;}
   .pill{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;padding:6px 12px;border-radius:999px;}
   .pill .n{font-weight:700;}
@@ -107,7 +114,9 @@ const fmt1 = n => (n==null||isNaN(n))?'':(Math.round(n*10)/10).toLocaleString('e
 
 let DATA = null;
 let curDate = null;
-let trucks = [];
+let trucks = [];      // currently-shown (BU-filtered) trucks
+let allTrucks = [];   // all trucks for the date, before BU filter
+let curBU = 'All';    // active business-unit filter
 
 // ---- manual-entry persistence (per date, this browser) ----
 function storeKey(d){ return 'truck-tracker:'+d; }
@@ -155,6 +164,13 @@ function pwHoursFor(driver, isoDate){
   return (typeof h === 'number') ? h : null;
 }
 
+// ---- Business-unit classification (mirrors the map's DISPATCH_HS_TO_CO:
+//      a truck's BU comes from its home-store code `hs`, tying the filter to
+//      the physical truck dispatch rather than the contract's booking branch). ----
+const HS_TO_CO = {'001':'GTA','002':'GTA','003':'East','004':'GTA Tents','005':'West','006':'GTA','007':'West','008':'GTA','009':'GTA'};
+function buOf(hs){ return HS_TO_CO[hs] || 'Other'; }
+const BU_CHIPS = [['All','All'],['GTA','GTA'],['GTA Tents','Tents'],['East','East'],['West','West']];
+
 // ---- aggregate routes -> per-truck rows ----
 function aggregate(d){
   const rts = (DATA.routes && DATA.routes[d]) ? DATA.routes[d] : [];
@@ -162,13 +178,14 @@ function aggregate(d){
   for(const r of rts){
     const t = (r.tnum || r.truck || '').toString().replace(/^#/,'').trim();
     if(!t) continue;
-    if(!byTruck[t]) byTruck[t] = {truck:t, driver:'', rev:0, stops:0, items:0, routes:0};
+    if(!byTruck[t]) byTruck[t] = {truck:t, driver:'', rev:0, stops:0, items:0, routes:0, hs:'', bu:'Other'};
     const o = byTruck[t];
     o.routes++;
     o.stops += (r.stps||0);
     o.items += (r.load>0 ? r.load : 0);
     o.rev   += (r.stops||[]).reduce((s,x)=>s+(x.rev||0),0);
     if(!o.driver && r.drv) o.driver = r.drv;
+    if((!o.hs || o.bu==='Other') && r.hs!=null && String(r.hs).trim()){ o.hs=String(r.hs).trim(); o.bu=buOf(o.hs); }
   }
   const arr = Object.values(byTruck);
   arr.sort((a,b)=> b.rev - a.rev || (a.truck.localeCompare(b.truck, undefined, {numeric:true})));
@@ -203,11 +220,14 @@ function computeRow(row, manual, target){
 function render(){
   const target = getTarget(curDate);
   const manual = loadManual(curDate);
-  trucks = aggregate(curDate);
-  trucks.forEach(t=>{ t.pwActual = pwHoursFor(t.driver, curDate); });
+  allTrucks = aggregate(curDate);
+  allTrucks.forEach(t=>{ t.pwActual = pwHoursFor(t.driver, curDate); });
+  // apply the business-unit filter (reset to All if the chosen BU has no trucks today)
+  if(curBU!=='All' && !allTrucks.some(t=>t.bu===curBU)) curBU='All';
+  trucks = (curBU==='All') ? allTrucks : allTrucks.filter(t=>t.bu===curBU);
   const content = document.getElementById('content');
 
-  if(!trucks.length){
+  if(!allTrucks.length){
     content.innerHTML = '<div class="empty">No routes found for '+curDate+'.<br>Pick another date above.</div>';
     document.getElementById('footNote').style.display='none';
     return;
@@ -249,15 +269,20 @@ function render(){
   const fleetRevHr = (totActualHrs>0)? revWithActual/totActualHrs : (totProjHrs>0? revWithProj/totProjHrs : null);
   const avgStops = nActive? totStops/nActive : 0;
   const pctOnTarget = (cGreen+cYellow+cRed)>0 ? Math.round(100*cGreen/(cGreen+cYellow+cRed)) : 0;
+  const nEntered = cGreen+cYellow+cRed; // trucks with any hours
+  // Rev/Lab Hr pairs revenue & hours for the SAME (entered) trucks — the caption
+  // shows that math explicitly so it reconciles with the headline cards.
+  const revHrSub = (totActualHrs>0) ? (fmtMoney(revWithActual)+' ÷ '+fmt1(totActualHrs)+'h') : 'enter hours';
 
   content.innerHTML = ''+
+    buChipsHtml()+
     '<div class="dash">'+
-      card('Trucks Active', nActive)+
-      card('Total Revenue', fmtMoney(totRev), true)+
-      card('Total Lab Hours', (totActualHrs||totProjHrs)? fmt1(totActualHrs||totProjHrs):'—', true)+
-      card('Fleet Rev / Lab Hr', fleetRevHr!=null? fmtMoney(fleetRevHr):'—', true)+
-      card('Avg Stops', fmt1(avgStops), true)+
-      card('% Fleet On Target', pctOnTarget+'%', true)+
+      card('Trucks Active', nActive, false, nEntered+' with hours')+
+      card('Total Revenue', fmtMoney(totRev), true, (curBU==='All'?'all active trucks':curBU))+
+      card('Lab Hours', (totActualHrs||totProjHrs)? fmt1(totActualHrs||totProjHrs):'—', true, nEntered+' of '+nActive+' trucks')+
+      card('Rev / Lab Hr', fleetRevHr!=null? fmtMoney(fleetRevHr):'—', true, revHrSub)+
+      card('Avg Stops', fmt1(avgStops), true, 'per truck')+
+      card('% On Target', pctOnTarget+'%', true, 'of '+nEntered+' w/ hours')+
     '</div>'+
     '<div class="rag">'+
       '<span class="pill g">&#9679; On Target (&ge;'+fmtMoney(target)+'/hr) <span class="n">'+cGreen+'</span></span>'+
@@ -290,7 +315,22 @@ function render(){
   wireInputs();
 }
 
-function card(k,v,small){ return '<div class="card"><div class="k">'+k+'</div><div class="v'+(small?' small':'')+'">'+v+'</div></div>'; }
+function card(k,v,small,sub){ return '<div class="card"><div class="k">'+k+'</div><div class="v'+(small?' small':'')+'">'+v+'</div>'+(sub?'<div class="csub">'+sub+'</div>':'')+'</div>'; }
+
+// Business-unit filter chips (counts from the full day's trucks).
+function buChipsHtml(){
+  const counts={}; allTrucks.forEach(t=>{ counts[t.bu]=(counts[t.bu]||0)+1; });
+  let chips = BU_CHIPS.map(function(p){
+    const val=p[0], lbl=p[1];
+    const n = (val==='All') ? allTrucks.length : (counts[val]||0);
+    if(val!=='All' && n===0) return '';
+    return '<div class="bu-chip'+(curBU===val?' active':'')+'" onclick="setBU(\''+val+'\')">'+lbl+' <span class="bu-n">'+n+'</span></div>';
+  }).join('');
+  if((counts['Other']||0)>0)
+    chips += '<div class="bu-chip'+(curBU==='Other'?' active':'')+'" onclick="setBU(\'Other\')">Other <span class="bu-n">'+counts['Other']+'</span></div>';
+  return '<div class="bu-row"><span class="bu-label">Business Unit</span>'+chips+'</div>';
+}
+function setBU(b){ curBU=b; render(); }
 
 function wireInputs(){
   const manualSave = ()=>{

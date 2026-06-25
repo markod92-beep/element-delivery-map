@@ -7110,12 +7110,22 @@ window.closeMobileSheet = function() {
     // 1) ensure Routes is on; if it flips back to Revenue, re-assert and re-apply the date
     if(!routesOn()){ try{ window.toggleLayer('dispatch'); }catch(e){} dateApplied = false; return setTimeout(tick, 500); }
     try{
-      // 2) set the date once (reflect it in the picker, which setDispatchDate alone doesn't touch)
-      if(date && !dateApplied){ var di = document.getElementById('dp-date-input'); if(di) di.value = date; window.setDispatchDate(date); dateApplied = true; }
+      // 2) set the date once — setDispatchDate drives the data; setTimelineRange
+      //    syncs the visible date label. Both reset the truck selection, so they
+      //    must run BEFORE the solo below.
+      if(date && !dateApplied){
+        var di = document.getElementById('dp-date-input'); if(di) di.value = date;
+        window.setDispatchDate(date);
+        if(typeof setTimelineRange==='function'){ try{ setTimelineRange(date, date); }catch(e){} }
+        dateApplied = true;
+      }
       // 3) solo the truck once its row exists (i.e. the date's dispatch data has loaded)
       var key = (window.CSS && CSS.escape) ? CSS.escape(truck) : truck;
       var row = document.querySelector('.dp-truck-row[data-truck="'+key+'"]');
-      if(row){ window.soloDispatchTruck(truck); if(row.classList.contains('on') && routesOn()) return; } // success
+      if(row) window.soloDispatchTruck(truck);
+      // success only when EXACTLY this truck is soloed (guards against a late rebuild reset)
+      var onRows = document.querySelectorAll('.dp-truck-row.on');
+      if(onRows.length===1 && onRows[0].getAttribute('data-truck')===truck && routesOn()) return;
     }catch(e){}
     setTimeout(tick, 500);
   }

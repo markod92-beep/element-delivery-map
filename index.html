@@ -7101,13 +7101,17 @@ window.closeMobileSheet = function() {
   var truck = p.get('routes_truck'), date = p.get('routes_date');
   if(!truck) return;
   var tries = 0;
+  // Routes layer is active when the dispatch panel carries the 'show' class
+  // (toggleLayer adds it on, removes it off). This avoids flip-flopping the
+  // mutually-exclusive Revenue/Routes toggle.
+  function routesOn(){ var pn = document.getElementById('dispatch-panel'); return !!(pn && pn.classList.contains('show')); }
   var iv = setInterval(function(){
     if(++tries > 50){ clearInterval(iv); return; }   // ~20s ceiling
     if(typeof window.toggleLayer!=='function' || typeof window.setDispatchDate!=='function' || typeof window.soloDispatchTruck!=='function') return;
     try{
-      // 1) ensure the Routes layer is active (guard so we never toggle it back off)
-      if(!document.body.classList.contains('routes-active')) window.toggleLayer('dispatch');
-      // 2) set the date (and reflect it in the picker, which setDispatchDate alone doesn't touch)
+      // 1) turn Routes on if it isn't already, then let it settle one cycle
+      if(!routesOn()){ window.toggleLayer('dispatch'); return; }
+      // 2) set the date (reflect it in the picker too, which setDispatchDate alone doesn't touch)
       var di = document.getElementById('dp-date-input');
       if(di && date && di.value!==date) di.value = date;
       if(date) window.setDispatchDate(date);
@@ -7115,8 +7119,7 @@ window.closeMobileSheet = function() {
       var key = (window.CSS && CSS.escape) ? CSS.escape(truck) : truck;
       var row = document.querySelector('.dp-truck-row[data-truck="'+key+'"]');
       if(row) window.soloDispatchTruck(truck);
-      // done once the layer is active and exactly this truck is soloed
-      if(row && row.classList.contains('on') && document.body.classList.contains('routes-active')) clearInterval(iv);
+      if(row && row.classList.contains('on')) clearInterval(iv);   // done
     }catch(e){}
   }, 400);
 })();

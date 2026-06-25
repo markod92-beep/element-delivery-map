@@ -341,12 +341,19 @@ function recompute(){
   }
 }
 
+// ---- local (not UTC) YYYY-MM-DD so the tracker opens on the correct
+//      operational day even late in the evening Eastern time. ----
+function localToday(){
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
 // ---- date picker population ----
 function setupDates(){
   const dates = Object.keys(DATA.routes||{}).sort();
   const dp = document.getElementById('datePick');
   if(dates.length){ dp.min=dates[0]; dp.max=dates[dates.length-1]; }
-  const today = new Date().toISOString().slice(0,10);
+  const today = localToday();
   curDate = (DATA.routes && DATA.routes[today]) ? today : (dates.length?dates[dates.length-1]:today);
   dp.value = curDate;
   dp.addEventListener('change', ()=>{ curDate = dp.value; render(); });

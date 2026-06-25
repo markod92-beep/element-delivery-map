@@ -146,6 +146,47 @@ function loadManual(d){ try{ return JSON.parse(localStorage.getItem(storeKey(d))
 function saveManual(d, obj){ try{ localStorage.setItem(storeKey(d), JSON.stringify(obj)); }catch(e){} }
 function getTarget(d){ const m=loadManual(d); return (m.__target && m.__target>0)?m.__target:TARGET_DEFAULT; }
 
+// ---- Server store (Cloudflare D1 via /api/projhours) ----
+// Shared across the team + persists for months. localStorage is kept as an
+// offline cache/fallback so the tracker still works if the API is unreachable.
+const API = '/api/projhours';
+let SERVER_OK = true;
+async function pullServer(date){
+  try{
+    const r = await fetch(API+'?date='+encodeURIComponent(date), {cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j = await r.json();
+    const m = loadManual(date);
+    (j.rows||[]).forEach(row=>{
+      const t = String(row.truck); const rec = m[t] || {};
+      if(row.proj_hrs!=null) rec.proj = row.proj_hrs;
+      if(row.notes!=null && row.notes!=='') rec.notes = row.notes;
+      if(Object.keys(rec).length) m[t]=rec;
+    });
+    saveManual(date, m);
+    SERVER_OK = true;
+  }catch(e){ SERVER_OK = false; console.warn('proj-hours API unavailable — using local cache:', e.message); }
+}
+const _saveTimers = {};
+function pushServer(date, truck){
+  const rec = (loadManual(date)[truck]) || {};
+  const t = allTrucks.find(x=>x.truck===truck) || {};
+  const payload = {
+    date: date, truck: truck,
+    proj_hrs: (rec.proj!=null ? rec.proj : null),
+    notes: (rec.notes!=null ? rec.notes : null),
+    driver: t.driver||null, bu: t.bu||null,
+    revenue: (t.rev!=null ? Math.round(t.rev) : null), stops: (t.stops!=null ? t.stops : null),
+    actual_hrs: (t.pwActual!=null ? t.pwActual : (rec.actual!=null ? rec.actual : null))
+  };
+  clearTimeout(_saveTimers[date+'|'+truck]);
+  _saveTimers[date+'|'+truck] = setTimeout(function(){
+    fetch(API, {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(payload)})
+      .then(r=>{ if(r.ok){ const s=document.getElementById('saveStatus'); if(s){ s.textContent='Saved to server ✓'; clearTimeout(savedTimer); savedTimer=setTimeout(()=>{s.textContent='';},1400);} } })
+      .catch(()=>{});
+  }, 600);
+}
+
 // ---- Payworks driver-hours lookup (per driver, per date) ----
 let PW = null, PW_FULL = null, PW_INIT = null;
 // Confirmed manual aliases: dispatch driver name (normalized) -> Payworks "FIRST LAST".
@@ -426,6 +467,8 @@ function wireInputs(){
     inp.addEventListener('input', ()=>{
       if(inp.classList.contains('pw')) inp.classList.remove('pw'); // became a manual override
       manualSave(); recompute();
+      const tr = inp.closest('tr'); const tk = tr ? tr.getAttribute('data-truck') : null;
+      if(tk) pushServer(curDate, tk);   // persist this truck's entry to the shared store
     });
   });
   const ti = document.getElementById('targetInput');
@@ -493,7 +536,7 @@ function setupDates(){
   const today = localToday();
   curDate = (DATA.routes && DATA.routes[today]) ? today : (dates.length?dates[dates.length-1]:today);
   dp.value = curDate;
-  dp.addEventListener('change', ()=>{ curDate = dp.value; render(); });
+  dp.addEventListener('change', async ()=>{ curDate = dp.value; await pullServer(curDate); render(); });
 }
 
 // ---- Excel export ----
@@ -559,6 +602,7 @@ function exportXlsx(){
   }catch(e){ console.warn('driver_hours.json unavailable:', e.message); }
   setupDates();
   document.getElementById('dlBtn').addEventListener('click', exportXlsx);
+  await pullServer(curDate);   // load shared entries for the opening date
   render();
 })();
 </script>

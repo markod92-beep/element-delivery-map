@@ -8,7 +8,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-<!-- SheetJS for client-side .xlsx export -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
@@ -20,9 +19,7 @@
   *{box-sizing:border-box;}
   body{margin:0;font-family:'Inter',system-ui,sans-serif;color:var(--element-ink);background:var(--element-offwhite);}
   a{color:var(--element-teal-mid);}
-  .wrap{max-width:1280px;margin:0 auto;padding:18px 20px 60px;}
-
-  /* Header */
+  .wrap{max-width:1320px;margin:0 auto;padding:18px 20px 60px;}
   header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;border-bottom:2px solid var(--element-border);padding-bottom:14px;margin-bottom:18px;}
   header img{height:34px;width:auto;}
   header .title{font-size:20px;font-weight:700;color:var(--element-teal);letter-spacing:.01em;}
@@ -34,8 +31,6 @@
   .btn:hover{background:var(--element-teal-dark);}
   .btn.ghost{background:var(--element-white);color:var(--element-teal);}
   .btn.ghost:hover{background:var(--element-mint);}
-
-  /* Dashboard cards */
   .dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:8px;}
   .card{background:var(--element-white);border:1px solid var(--element-border);border-radius:12px;padding:13px 15px;}
   .card .k{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--element-muted);}
@@ -50,10 +45,8 @@
   .pill.n{background:#ECEAE2;color:var(--element-muted);}
   .target-row{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--element-muted);margin-bottom:14px;}
   .target-row input{width:78px;font-family:inherit;font-size:14px;padding:6px 8px;border:1px solid var(--element-border);border-radius:7px;text-align:right;}
-
-  /* Table */
   .tbl-scroll{overflow-x:auto;border:1px solid var(--element-border);border-radius:12px;background:var(--element-white);}
-  table{border-collapse:collapse;width:100%;min-width:920px;font-size:13px;}
+  table{border-collapse:collapse;width:100%;min-width:940px;font-size:13px;}
   thead th{position:sticky;top:0;background:var(--element-teal);color:#fff;font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;padding:10px 10px;text-align:left;white-space:nowrap;}
   thead th.num{text-align:right;}
   tbody td{padding:7px 10px;border-top:1px solid var(--element-border);white-space:nowrap;}
@@ -61,6 +54,7 @@
   tbody tr:nth-child(even){background:#FBFAF6;}
   tbody td input{font-family:inherit;font-size:13px;width:74px;padding:5px 7px;border:1px solid var(--element-border);border-radius:6px;text-align:right;background:#fff;}
   tbody td input.notes{width:160px;text-align:left;}
+  tbody td input.pw{background:#E9F3EC;border-color:#BFD9C6;color:var(--element-teal);font-weight:600;}
   .truck-cell{font-weight:700;color:var(--element-teal);}
   .drv-cell{color:var(--element-muted);}
   .ragdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle;}
@@ -69,21 +63,16 @@
   .vt-pos{color:var(--green);font-weight:600;} .vt-neg{color:var(--red);font-weight:600;}
   tfoot td{padding:10px;font-weight:700;border-top:2px solid var(--element-teal);background:#F4F1E9;white-space:nowrap;}
   tfoot td.num{text-align:right;}
-
   .note{font-size:12px;color:var(--element-muted);margin:14px 2px;line-height:1.5;}
   .status{font-size:12px;color:var(--element-muted);margin-left:4px;}
   .empty{padding:40px;text-align:center;color:var(--element-muted);}
-  @media(max-width:640px){
-    header .title{font-size:17px;}
-    .wrap{padding:14px 12px 50px;}
-  }
+  @media(max-width:640px){ header .title{font-size:17px;} .wrap{padding:14px 12px 50px;} }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <img src="/assets/element-lockup.svg" alt="Element Event Solutions"
-         onerror="this.style.display='none'">
+    <img src="/assets/element-lockup.svg" alt="Element Event Solutions" onerror="this.style.display='none'">
     <div class="title">Daily Truck Tracker</div>
     <div class="spacer"></div>
     <div class="ctrl">
@@ -100,8 +89,10 @@
 
   <p class="note" id="footNote" style="display:none;">
     Revenue, stops, truck&nbsp;# and driver are auto-pulled from the same dispatch data as the live map
-    (sum of stop revenue per truck for the selected day). <strong>Proj/Actual labour hours and notes are entered manually</strong>
-    and saved in this browser per day. Productivity colour: <span style="color:var(--green);font-weight:600;">green &ge; $200/hr</span>,
+    (sum of stop revenue per truck for the selected day). <strong>Actual Hrs auto-fill from the Payworks timesheet</strong>
+    for each matched driver on that date (shown shaded green — type to override); Proj Hrs and notes are entered manually
+    and saved in this browser per day. Payworks posts a day or two behind, so the most recent dates may be blank until entered.
+    Productivity colour: <span style="color:var(--green);font-weight:600;">green &ge; $200/hr</span>,
     <span style="color:var(--yellow);font-weight:600;">yellow $175&ndash;$199</span>,
     <span style="color:var(--red);font-weight:600;">red &lt; $175</span>. Target rate is adjustable above.
   </p>
@@ -114,21 +105,49 @@ const fmt0 = n => (n==null||isNaN(n))?'':Math.round(n).toLocaleString('en-CA');
 const fmtMoney = n => (n==null||isNaN(n))?'':'$'+Math.round(n).toLocaleString('en-CA');
 const fmt1 = n => (n==null||isNaN(n))?'':(Math.round(n*10)/10).toLocaleString('en-CA',{minimumFractionDigits:1,maximumFractionDigits:1});
 
-let DATA = null;        // full dispatch_data.json
-let curDate = null;     // 'YYYY-MM-DD'
-let trucks = [];        // aggregated rows for curDate
+let DATA = null;
+let curDate = null;
+let trucks = [];
 
 // ---- manual-entry persistence (per date, this browser) ----
 function storeKey(d){ return 'truck-tracker:'+d; }
-function loadManual(d){
-  try{ return JSON.parse(localStorage.getItem(storeKey(d))||'{}'); }catch(e){ return {}; }
+function loadManual(d){ try{ return JSON.parse(localStorage.getItem(storeKey(d))||'{}'); }catch(e){ return {}; } }
+function saveManual(d, obj){ try{ localStorage.setItem(storeKey(d), JSON.stringify(obj)); }catch(e){} }
+function getTarget(d){ const m=loadManual(d); return (m.__target && m.__target>0)?m.__target:TARGET_DEFAULT; }
+
+// ---- Payworks driver-hours lookup (per driver, per date) ----
+let PW = null, PW_FULL = null, PW_INIT = null;
+function normToks(s){
+  return String(s||'').replace(/\([^)]*\)/g,'').toUpperCase()
+    .replace(/[^A-Z ]/g,' ').split(/\s+/).filter(Boolean);
 }
-function saveManual(d, obj){
-  try{ localStorage.setItem(storeKey(d), JSON.stringify(obj)); }catch(e){}
+function buildPwIndex(){
+  PW_FULL = new Map(); PW_INIT = new Map();
+  if(!PW || !PW.drivers) return;
+  for(const rec of PW.drivers){
+    const fn = normToks(rec.f).join(' ');
+    const ln = normToks(rec.l).join(' ');
+    if(!fn) continue;
+    const full = (fn+' '+ln).trim();
+    if(!PW_FULL.has(full)) PW_FULL.set(full, rec);
+    if(ln && !PW_INIT.has(fn+'|'+ln[0])) PW_INIT.set(fn+'|'+ln[0], rec);
+  }
 }
-function getTarget(d){
-  const m = loadManual(d);
-  return (m.__target && m.__target>0) ? m.__target : TARGET_DEFAULT;
+function pwMatch(driver){
+  if(!PW_FULL) return null;
+  const t = normToks(driver);
+  if(!t.length) return null;
+  const fn = t[0], ln = t.slice(1).join(' ');
+  let r = PW_FULL.get((fn+' '+ln).trim()); if(r) return r;
+  if(t.length>=2){ r = PW_FULL.get(fn+' '+t[t.length-1]); if(r) return r; }
+  if(t.length>=2){ r = PW_INIT.get(fn+'|'+t[1][0]); if(r) return r; }
+  return null;
+}
+function pwHoursFor(driver, isoDate){
+  const r = pwMatch(driver);
+  if(!r || !r.d) return null;
+  const h = r.d[isoDate];
+  return (typeof h === 'number') ? h : null;
 }
 
 // ---- aggregate routes -> per-truck rows ----
@@ -151,26 +170,28 @@ function aggregate(d){
   return arr;
 }
 
-// ---- RAG class from rev/hr ----
 function ragOf(revPerHr, target){
   if(revPerHr==null || isNaN(revPerHr)) return 'n';
   if(revPerHr >= target) return 'g';
-  if(revPerHr >= target*0.875) return 'y'; // 175 when target 200
+  if(revPerHr >= target*0.875) return 'y';
   return 'r';
 }
 
-// ---- compute a single row's derived metrics ----
 function computeRow(row, manual, target){
   const m = manual[row.truck] || {};
   const proj = parseFloat(m.proj);
-  const actual = parseFloat(m.actual);
+  // Actual hours: a manually-typed value always wins; otherwise auto-fill
+  // from the Payworks timesheet for this driver + selected date.
+  let actual = parseFloat(m.actual);
+  let actualFromPW = false;
+  if(isNaN(actual) && row.pwActual!=null){ actual = row.pwActual; actualFromPW = true; }
   const vol = parseFloat(m.vol);
   const revProj   = (proj>0)   ? row.rev/proj   : null;
   const revActual = (actual>0) ? row.rev/actual : null;
   const volActual = (actual>0 && vol>0) ? vol/actual : null;
   const ragRef = (revActual!=null)?revActual:revProj;
   const vsTarget = (ragRef!=null)? (ragRef - target)/target : null;
-  return {proj,actual,vol,revProj,revActual,volActual,vsTarget,rag:ragOf(ragRef,target)};
+  return {proj,actual,actualFromPW,vol,revProj,revActual,volActual,vsTarget,rag:ragOf(ragRef,target)};
 }
 
 // ---- render everything for curDate ----
@@ -178,6 +199,7 @@ function render(){
   const target = getTarget(curDate);
   const manual = loadManual(curDate);
   trucks = aggregate(curDate);
+  trucks.forEach(t=>{ t.pwActual = pwHoursFor(t.driver, curDate); });
   const content = document.getElementById('content');
 
   if(!trucks.length){
@@ -187,7 +209,6 @@ function render(){
   }
   document.getElementById('footNote').style.display='';
 
-  // Build rows + running fleet totals
   let totRev=0, totProjHrs=0, totActualHrs=0, totStops=0, nActive=trucks.length;
   let cGreen=0,cYellow=0,cRed=0,cNotEntered=0;
   const rowsHtml = trucks.map((row,i)=>{
@@ -200,6 +221,9 @@ function render(){
     } else cNotEntered++;
     const vsTxt = (c.vsTarget==null)?'' :
       '<span class="'+(c.vsTarget>=0?'vt-pos':'vt-neg')+'">'+(c.vsTarget>=0?'+':'')+Math.round(c.vsTarget*100)+'%</span>';
+    const mActual = (manual[row.truck]&&manual[row.truck].actual!=null)?manual[row.truck].actual:null;
+    const actVal = (mActual!=null)?mActual:(row.pwActual!=null?row.pwActual:'');
+    const actPW = (mActual==null && row.pwActual!=null);
     return ''+
       '<tr data-truck="'+row.truck+'">'+
         '<td class="num">'+(i+1)+'</td>'+
@@ -209,7 +233,7 @@ function render(){
         '<td class="num">'+row.stops+'</td>'+
         '<td class="num">'+(row.items||'')+'</td>'+
         '<td class="num"><input type="number" step="0.5" min="0" data-f="proj" value="'+(manual[row.truck]&&manual[row.truck].proj!=null?manual[row.truck].proj:'')+'" placeholder="—"></td>'+
-        '<td class="num"><input type="number" step="0.5" min="0" data-f="actual" value="'+(manual[row.truck]&&manual[row.truck].actual!=null?manual[row.truck].actual:'')+'" placeholder="—"></td>'+
+        '<td class="num"><input type="number" step="0.5" min="0" data-f="actual" class="'+(actPW?'pw':'')+'" title="'+(actPW?'Auto-filled from Payworks timesheet — type to override':'')+'" value="'+actVal+'" placeholder="—"></td>'+
         '<td class="num"><input type="number" step="1" min="0" data-f="vol" value="'+(manual[row.truck]&&manual[row.truck].vol!=null?manual[row.truck].vol:'')+'" placeholder="—"></td>'+
         '<td class="num" data-c="revActual">'+(c.revActual!=null?fmtMoney(c.revActual):'')+'</td>'+
         '<td class="num" data-c="vsTarget">'+vsTxt+'</td>'+
@@ -261,11 +285,8 @@ function render(){
   wireInputs();
 }
 
-function card(k,v,small){
-  return '<div class="card"><div class="k">'+k+'</div><div class="v'+(small?' small':'')+'">'+v+'</div></div>';
-}
+function card(k,v,small){ return '<div class="card"><div class="k">'+k+'</div><div class="v'+(small?' small':'')+'">'+v+'</div></div>'; }
 
-// ---- input wiring: persist + live recompute ----
 function wireInputs(){
   const manualSave = ()=>{
     const m = loadManual(curDate);
@@ -282,9 +303,11 @@ function wireInputs(){
     saveManual(curDate, m);
     flashSaved();
   };
-
   document.querySelectorAll('tbody input').forEach(inp=>{
-    inp.addEventListener('input', ()=>{ manualSave(); recompute(); });
+    inp.addEventListener('input', ()=>{
+      if(inp.classList.contains('pw')) inp.classList.remove('pw'); // became a manual override
+      manualSave(); recompute();
+    });
   });
   const ti = document.getElementById('targetInput');
   if(ti) ti.addEventListener('input', ()=>{
@@ -292,7 +315,7 @@ function wireInputs(){
     const v = parseFloat(ti.value);
     m.__target = (v>0)? v : TARGET_DEFAULT;
     saveManual(curDate, m);
-    render(); // target affects RAG everywhere
+    render();
   });
 }
 
@@ -303,7 +326,6 @@ function flashSaved(){
   clearTimeout(savedTimer); savedTimer=setTimeout(()=>{s.textContent='';},1200);
 }
 
-// ---- recompute derived cells live without full re-render ----
 function recompute(){
   const target = getTarget(curDate);
   const manual = loadManual(curDate);
@@ -321,7 +343,6 @@ function recompute(){
     const vsCell = tr.querySelector('[data-c="vsTarget"]');
     vsCell.innerHTML = (c.vsTarget==null)?'':'<span class="'+(c.vsTarget>=0?'vt-pos':'vt-neg')+'">'+(c.vsTarget>=0?'+':'')+Math.round(c.vsTarget*100)+'%</span>';
   });
-  // update dashboard pills + cards
   const fleetRevHr=(totActualHrs>0)?totRev/totActualHrs:(totProjHrs>0?totRev/totProjHrs:null);
   const pills=document.querySelectorAll('.rag .pill .n');
   if(pills.length===4){pills[0].textContent=cGreen;pills[1].textContent=cYellow;pills[2].textContent=cRed;pills[3].textContent=cNotEntered;}
@@ -332,7 +353,6 @@ function recompute(){
     const pct=(cGreen+cYellow+cRed)>0?Math.round(100*cGreen/(cGreen+cYellow+cRed)):0;
     cards[5].textContent=pct+'%';
   }
-  // footer
   const ft=document.querySelectorAll('tfoot td');
   if(ft.length){
     ft[6].textContent=totProjHrs?fmt1(totProjHrs):'';
@@ -341,14 +361,12 @@ function recompute(){
   }
 }
 
-// ---- local (not UTC) YYYY-MM-DD so the tracker opens on the correct
-//      operational day even late in the evening Eastern time. ----
+// ---- local (not UTC) date so the tracker opens on the correct operational day ----
 function localToday(){
   const d = new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
 
-// ---- date picker population ----
 function setupDates(){
   const dates = Object.keys(DATA.routes||{}).sort();
   const dp = document.getElementById('datePick');
@@ -364,9 +382,7 @@ function exportXlsx(){
   if(!trucks.length) return;
   const target = getTarget(curDate);
   const manual = loadManual(curDate);
-
-  // Tracker sheet
-  const head = ['#','Truck #','Driver','Revenue ($)','Stops','Items','Proj Lab Hrs','Actual Lab Hrs','Volume (lbs)','Rev / Proj Hr','Rev / Actual Hr','Vol / Actual Hr','vs Target','Notes'];
+  const head = ['#','Truck #','Driver','Revenue ($)','Stops','Items','Proj Lab Hrs','Actual Lab Hrs','Volume (lbs)','Rev / Proj Hr','Rev / Actual Hr','Vol / Actual Hr','vs Target','Hrs Source','Notes'];
   const rows = [head];
   let totRev=0,totProj=0,totActual=0,totStops=0;
   trucks.forEach((row,i)=>{
@@ -376,41 +392,31 @@ function exportXlsx(){
       isNaN(c.proj)?'':c.proj, isNaN(c.actual)?'':c.actual, isNaN(c.vol)?'':c.vol,
       c.revProj!=null?Math.round(c.revProj*100)/100:'', c.revActual!=null?Math.round(c.revActual*100)/100:'',
       c.volActual!=null?Math.round(c.volActual*100)/100:'', c.vsTarget!=null?Math.round(c.vsTarget*1000)/1000:'',
+      c.actualFromPW?'Payworks':(c.actual>0?'Manual':''),
       (manual[row.truck]&&manual[row.truck].notes)||'']);
   });
   const fleetRevHr=(totActual>0)?totRev/totActual:(totProj>0?totRev/totProj:'');
   rows.push([]);
   rows.push(['','FLEET TOTAL','',Math.round(totRev*100)/100,totStops,'',totProj||'',totActual||'','',
-    '', fleetRevHr!==''?Math.round(fleetRevHr*100)/100:'', '','','']);
+    '', fleetRevHr!==''?Math.round(fleetRevHr*100)/100:'', '','','','']);
 
-  // Dashboard sheet
   let cG=0,cY=0,cR=0,cN=0;
   trucks.forEach(row=>{const c=computeRow(row,manual,target);
     if(c.proj>0||c.actual>0){if(c.rag==='g')cG++;else if(c.rag==='y')cY++;else cR++;}else cN++;});
   const dash = [
-    ['DAILY TRUCK TRACKER'],
-    ['Date', curDate],
-    ['Target Rev / Lab Hr', target],
-    [],
-    ['FLEET SUMMARY'],
-    ['Trucks Active Today', trucks.length],
-    ['Total Revenue', Math.round(totRev*100)/100],
-    ['Total Lab Hours', totActual||totProj||0],
-    ['Fleet Rev / Lab Hr', fleetRevHr!==''?Math.round(fleetRevHr*100)/100:0],
-    ['Avg Stops', trucks.length?Math.round(totStops/trucks.length*10)/10:0],
-    [],
-    ['STATUS OVERVIEW'],
-    ['On Target (>= '+target+'/hr)', cG],
-    ['Watch ('+Math.round(target*0.875)+'-'+(target-1)+')', cY],
-    ['Under (< '+Math.round(target*0.875)+')', cR],
+    ['DAILY TRUCK TRACKER'],['Date', curDate],['Target Rev / Lab Hr', target],[],
+    ['FLEET SUMMARY'],['Trucks Active Today', trucks.length],['Total Revenue', Math.round(totRev*100)/100],
+    ['Total Lab Hours', totActual||totProj||0],['Fleet Rev / Lab Hr', fleetRevHr!==''?Math.round(fleetRevHr*100)/100:0],
+    ['Avg Stops', trucks.length?Math.round(totStops/trucks.length*10)/10:0],[],
+    ['STATUS OVERVIEW'],['On Target (>= '+target+'/hr)', cG],
+    ['Watch ('+Math.round(target*0.875)+'-'+(target-1)+')', cY],['Under (< '+Math.round(target*0.875)+')', cR],
     ['Not Entered', cN],
   ];
 
   const wb = XLSX.utils.book_new();
-  const wsD = XLSX.utils.aoa_to_sheet(dash);
-  wsD['!cols']=[{wch:26},{wch:16}];
+  const wsD = XLSX.utils.aoa_to_sheet(dash); wsD['!cols']=[{wch:26},{wch:16}];
   const wsT = XLSX.utils.aoa_to_sheet(rows);
-  wsT['!cols']=[{wch:4},{wch:9},{wch:22},{wch:12},{wch:7},{wch:7},{wch:12},{wch:13},{wch:12},{wch:12},{wch:13},{wch:13},{wch:9},{wch:24}];
+  wsT['!cols']=[{wch:4},{wch:9},{wch:22},{wch:12},{wch:7},{wch:7},{wch:11},{wch:12},{wch:11},{wch:11},{wch:12},{wch:12},{wch:8},{wch:10},{wch:22}];
   XLSX.utils.book_append_sheet(wb, wsD, 'Dashboard');
   XLSX.utils.book_append_sheet(wb, wsT, 'Tracker');
   XLSX.writeFile(wb, 'Daily_Truck_Tracker_'+curDate+'.xlsx');
@@ -428,6 +434,10 @@ function exportXlsx(){
       'If you are signed out, <a href="/">reload the map</a> and sign in, then return here.</div>';
     return;
   }
+  try{
+    const pwRes = await fetch('driver_hours.json?v='+Date.now(), {cache:'no-store'});
+    if(pwRes.ok){ PW = await pwRes.json(); buildPwIndex(); }
+  }catch(e){ console.warn('driver_hours.json unavailable:', e.message); }
   setupDates();
   document.getElementById('dlBtn').addEventListener('click', exportXlsx);
   render();

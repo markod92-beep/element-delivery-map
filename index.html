@@ -159,6 +159,15 @@ body {
 .info-panel h4 { font-size: 14px; color: var(--element-teal); margin-bottom: 4px; font-weight: 700; letter-spacing: 0.01em; }
 .info-panel .brand-lockup { display: block; width: 180px; height: auto; margin: 0 0 6px 0; }
 .info-panel .subtitle { color: var(--element-muted); font-size: 11px; margin-bottom: 8px; font-weight: 500; }
+/* Daily Truck Tracker CTA — full-width button under the company chips. */
+.tracker-cta {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  margin-top: 10px; padding: 8px 12px; border-radius: 9px;
+  background: var(--element-teal); color: var(--element-white);
+  font-size: 12.5px; font-weight: 600; text-decoration: none; letter-spacing: 0.01em;
+  transition: background 0.15s ease;
+}
+.tracker-cta:hover { background: var(--element-teal-dark); }
 .toggle-row { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
 .toggle-btn {
   padding: 6px 14px; border-radius: 999px;
@@ -2558,6 +2567,13 @@ infoControl.onAdd = function() {
     '<div class="toggle-btn co-chip active" id="co-east" onclick="toggleCompany(\'East\')">East</div>' +
     '<div class="toggle-btn co-chip active" id="co-west" onclick="toggleCompany(\'West\')">West</div>' +
     '</div>' +
+    // ---- Daily Truck Tracker CTA — opens tracker.html, a per-truck productivity
+    //      tracker auto-populated from the same dispatch_data.json this map uses. ----
+    '<a class="tracker-cta" href="/tracker.html" title="Open the Daily Truck Tracker — per-truck revenue, stops & rev/hr">' +
+      '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" style="flex:none;">' +
+      '<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
+      'd="M9 5h6M9 5a2 2 0 0 0-2 2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M7 7H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-1M8 12h8M8 16h5"/></svg>' +
+      '<span>Daily Truck Tracker</span></a>' +
     '';
     // Day-of-week filter lives in the timeline panel now (see #contract-filter),
     // next to the other time-window filters, so it's grouped with the controls

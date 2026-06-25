@@ -7091,5 +7091,32 @@ window.closeMobileSheet = function() {
 
 } // end initMap
 </script>
+<script>
+/* ---- Deep-link handler (Daily Truck Tracker -> map) ----
+   /?routes_truck=<truck>&routes_date=<YYYY-MM-DD> switches to the Routes layer,
+   sets the date, and solos that truck's route. Fully defensive: if anything is
+   unavailable it simply gives up after ~18s and the map behaves normally. */
+(function(){
+  var p = new URLSearchParams(location.search);
+  var truck = p.get('routes_truck'), date = p.get('routes_date');
+  if(!truck) return;
+  var phase = 0, tries = 0;
+  var iv = setInterval(function(){
+    if(++tries > 60){ clearInterval(iv); return; }   // ~18s ceiling
+    var ready = typeof window.toggleLayer==='function'
+             && typeof window.setDispatchDate==='function'
+             && typeof window.soloDispatchTruck==='function';
+    if(!ready) return;
+    if(phase === 0){
+      try{ window.toggleLayer('dispatch'); if(date) window.setDispatchDate(date); }catch(e){}
+      phase = 1; return;
+    }
+    var key = (window.CSS && CSS.escape) ? CSS.escape(truck) : truck;
+    var row = document.querySelector('.dp-truck-row[data-truck="'+key+'"]');
+    if(row){ try{ window.soloDispatchTruck(truck); }catch(e){} clearInterval(iv); return; }
+    if(tries % 6 === 0){ try{ if(date) window.setDispatchDate(date); }catch(e){} } // re-apply if data loaded late
+  }, 300);
+})();
+</script>
 </body>
 </html>

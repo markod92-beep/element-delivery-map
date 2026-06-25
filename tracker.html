@@ -63,7 +63,21 @@
   tbody td input.notes{width:160px;text-align:left;}
   tbody td input.pw{background:#E9F3EC;border-color:#BFD9C6;color:var(--element-teal);font-weight:600;}
   .truck-cell{font-weight:700;color:var(--element-teal);}
+  .truck-link{color:var(--element-teal);font-weight:700;text-decoration:none;border-bottom:1px dashed var(--element-teal-mid);}
+  .truck-link:hover{color:var(--element-teal-mid);}
   .drv-cell{color:var(--element-muted);}
+  .quotes-cell{white-space:normal;max-width:230px;line-height:1.6;}
+  .qchip{display:inline-block;margin:1px 4px 1px 0;padding:2px 7px;border-radius:6px;background:var(--element-mint);color:var(--element-teal);font-size:11.5px;font-weight:600;cursor:pointer;font-variant-numeric:tabular-nums;}
+  .qchip:hover{background:var(--element-teal);color:#fff;}
+  .qmodal{position:fixed;inset:0;background:rgba(15,36,40,.45);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;}
+  .qmodal-card{background:#fff;border-radius:14px;max-width:430px;width:100%;box-shadow:0 14px 44px rgba(15,36,40,.34);overflow:hidden;}
+  .qm-head{display:flex;align-items:center;justify-content:space-between;background:var(--element-teal);color:#fff;padding:12px 16px;}
+  .qm-title{font-weight:700;font-size:15px;}
+  .qm-x{background:none;border:none;color:#fff;font-size:24px;line-height:1;cursor:pointer;padding:0 2px;}
+  .qm-row{display:flex;gap:12px;padding:9px 16px;border-bottom:1px solid var(--element-border);font-size:13px;}
+  .qm-body .qm-row:last-child{border-bottom:none;}
+  .qm-k{flex:0 0 118px;color:var(--element-muted);font-weight:600;}
+  .qm-v{flex:1;color:var(--element-ink);word-break:break-word;}
   .ragdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle;}
   .dot-g{background:var(--green);} .dot-y{background:var(--yellow);} .dot-r{background:var(--red);} .dot-n{background:#C9C5BA;}
   td.rev{font-weight:600;}
@@ -105,6 +119,10 @@
   </p>
 </div>
 
+<div id="quote-modal" class="qmodal" style="display:none;" onclick="if(event.target===this)closeQuote()">
+  <div class="qmodal-card" id="quote-modal-card"></div>
+</div>
+
 <script>
 "use strict";
 const TARGET_DEFAULT = 200;
@@ -117,6 +135,8 @@ let curDate = null;
 let trucks = [];      // currently-shown (BU-filtered) trucks
 let allTrucks = [];   // all trucks for the date, before BU filter
 let curBU = 'All';    // active business-unit filter
+let QIDX = {};        // quote/contract number -> details, for the popup
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 // ---- manual-entry persistence (per date, this browser) ----
 function storeKey(d){ return 'truck-tracker:'+d; }
@@ -186,6 +206,25 @@ function aggregate(d){
     o.rev   += (r.stops||[]).reduce((s,x)=>s+(x.rev||0),0);
     if(!o.driver && r.drv) o.driver = r.drv;
     if((!o.hs || o.bu==='Other') && r.hs!=null && String(r.hs).trim()){ o.hs=String(r.hs).trim(); o.bu=buOf(o.hs); }
+    // collect the quote/contract numbers on this truck (one entry per `con`)
+    for(const s of (r.stops||[])){
+      const con = (s.con==null?'':String(s.con)).trim();
+      if(!con) continue;
+      if(!o._q) o._q = {};
+      let q = o._q[con];
+      if(!q){ q = o._q[con] = {con:con, cust:s.cust||'', store:s.store||'', rev:0, types:new Set(), addr:s.addr||'', parr:s.parr||''}; }
+      q.rev += (s.rev||0);
+      if(s.tt) q.types.add(s.tt);
+      if(!q.cust && s.cust) q.cust = s.cust;
+      if(!q.addr && s.addr) q.addr = s.addr;
+      if(!q.parr && s.parr) q.parr = s.parr;
+    }
+  }
+  // finalise each truck's quote list (sorted by revenue)
+  for(const o of Object.values(byTruck)){
+    o.quotes = Object.values(o._q || {}).map(q=>({con:q.con, cust:q.cust, store:q.store, rev:Math.round(q.rev), types:[...q.types], addr:q.addr, parr:q.parr}));
+    o.quotes.sort((a,b)=> b.rev - a.rev);
+    delete o._q;
   }
   const arr = Object.values(byTruck);
   arr.sort((a,b)=> b.rev - a.rev || (a.truck.localeCompare(b.truck, undefined, {numeric:true})));
@@ -222,6 +261,14 @@ function render(){
   const manual = loadManual(curDate);
   allTrucks = aggregate(curDate);
   allTrucks.forEach(t=>{ t.pwActual = pwHoursFor(t.driver, curDate); });
+  // build the quote index (merged across trucks) used by the click-to-view popup
+  QIDX = {};
+  allTrucks.forEach(t=> (t.quotes||[]).forEach(q=>{
+    let e = QIDX[q.con];
+    if(!e){ e = QIDX[q.con] = {con:q.con, cust:q.cust, store:q.store, rev:0, types:new Set(), addr:q.addr, parr:q.parr, trucks:new Set()}; }
+    e.rev += q.rev; (q.types||[]).forEach(x=>e.types.add(x)); e.trucks.add(t.truck);
+    if(!e.cust && q.cust) e.cust=q.cust; if(!e.addr && q.addr) e.addr=q.addr; if(!e.parr && q.parr) e.parr=q.parr;
+  }));
   // apply the business-unit filter (reset to All if the chosen BU has no trucks today)
   if(curBU!=='All' && !allTrucks.some(t=>t.bu===curBU)) curBU='All';
   trucks = (curBU==='All') ? allTrucks : allTrucks.filter(t=>t.bu===curBU);
@@ -252,11 +299,11 @@ function render(){
     return ''+
       '<tr data-truck="'+row.truck+'">'+
         '<td class="num">'+(i+1)+'</td>'+
-        '<td class="truck-cell"><span class="ragdot dot-'+c.rag+'"></span>'+row.truck+'</td>'+
+        '<td class="truck-cell"><span class="ragdot dot-'+c.rag+'"></span><a class="truck-link" href="/?routes_truck='+encodeURIComponent(row.truck)+'&routes_date='+curDate+'" title="Show this truck&#39;s route on the map">'+row.truck+'</a></td>'+
         '<td class="drv-cell">'+(row.driver||'')+'</td>'+
         '<td class="num rev">'+fmtMoney(row.rev)+'</td>'+
         '<td class="num">'+row.stops+'</td>'+
-        '<td class="num">'+(row.items||'')+'</td>'+
+        '<td class="quotes-cell">'+(row.quotes||[]).map(q=>'<span class="qchip" onclick="showQuote(\''+q.con+'\')" title="'+esc(q.cust)+'">'+q.con+'</span>').join('')+'</td>'+
         '<td class="num"><input type="number" step="0.5" min="0" data-f="proj" value="'+(manual[row.truck]&&manual[row.truck].proj!=null?manual[row.truck].proj:'')+'" placeholder="—"></td>'+
         '<td class="num"><input type="number" step="0.5" min="0" data-f="actual" class="'+(actPW?'pw':'')+'" title="'+(actPW?'Auto-filled from Payworks timesheet — type to override':'')+'" value="'+actVal+'" placeholder="—"></td>'+
         '<td class="num"><input type="number" step="1" min="0" data-f="vol" value="'+(manual[row.truck]&&manual[row.truck].vol!=null?manual[row.truck].vol:'')+'" placeholder="—"></td>'+
@@ -295,7 +342,7 @@ function render(){
     '<div class="tbl-scroll"><table>'+
       '<thead><tr>'+
         '<th class="num">#</th><th>Truck</th><th>Driver</th>'+
-        '<th class="num">Revenue</th><th class="num">Stops</th><th class="num">Items</th>'+
+        '<th class="num">Revenue</th><th class="num">Stops</th><th>Quotes</th>'+
         '<th class="num">Proj Hrs</th><th class="num">Actual Hrs</th><th class="num">Volume (lbs)</th>'+
         '<th class="num">Rev / Actual Hr</th><th class="num">vs Target</th><th>Notes</th>'+
       '</tr></thead>'+
@@ -331,6 +378,31 @@ function buChipsHtml(){
   return '<div class="bu-row"><span class="bu-label">Business Unit</span>'+chips+'</div>';
 }
 function setBU(b){ curBU=b; render(); }
+
+// ---- Quote popup ----
+function showQuote(con){
+  const q = QIDX[con];
+  const card = document.getElementById('quote-modal-card');
+  if(!q || !card) return;
+  const r = (k,v)=>'<div class="qm-row"><span class="qm-k">'+k+'</span><span class="qm-v">'+v+'</span></div>';
+  const types = [...q.types].join(' / ') || '—';
+  const bu = buOf((allTrucks.find(t=>t.quotes&&t.quotes.some(x=>x.con===con))||{}).hs);
+  card.innerHTML =
+    '<div class="qm-head"><span class="qm-title">Quote '+esc(q.con)+'</span>'+
+      '<button class="qm-x" onclick="closeQuote()" aria-label="Close">&times;</button></div>'+
+    '<div class="qm-body">'+
+      r('Customer', esc(q.cust)||'—')+
+      r('Store', (q.store||'—')+(bu&&bu!=='Other'?' · '+bu:''))+
+      r('Type', types)+
+      r('Revenue', fmtMoney(q.rev))+
+      r('Address', esc(q.addr)||'—')+
+      r('Planned arrival', esc(q.parr)||'—')+
+      r('Truck(s)', [...q.trucks].join(', '))+
+    '</div>';
+  document.getElementById('quote-modal').style.display='flex';
+}
+function closeQuote(){ const m=document.getElementById('quote-modal'); if(m) m.style.display='none'; }
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeQuote(); });
 
 function wireInputs(){
   const manualSave = ()=>{
@@ -427,13 +499,13 @@ function exportXlsx(){
   if(!trucks.length) return;
   const target = getTarget(curDate);
   const manual = loadManual(curDate);
-  const head = ['#','Truck #','Driver','Revenue ($)','Stops','Items','Proj Lab Hrs','Actual Lab Hrs','Volume (lbs)','Rev / Proj Hr','Rev / Actual Hr','Vol / Actual Hr','vs Target','Hrs Source','Notes'];
+  const head = ['#','Truck #','Driver','Revenue ($)','Stops','Quotes','Proj Lab Hrs','Actual Lab Hrs','Volume (lbs)','Rev / Proj Hr','Rev / Actual Hr','Vol / Actual Hr','vs Target','Hrs Source','Notes'];
   const rows = [head];
   let totRev=0,totProj=0,totActual=0,totStops=0,revWithActual=0;
   trucks.forEach((row,i)=>{
     const c=computeRow(row,manual,target);
     totRev+=row.rev;totStops+=row.stops;if(c.proj>0)totProj+=c.proj;if(c.actual>0){totActual+=c.actual;revWithActual+=row.rev;}
-    rows.push([i+1,row.truck,row.driver||'',Math.round(row.rev*100)/100,row.stops,row.items||'',
+    rows.push([i+1,row.truck,row.driver||'',Math.round(row.rev*100)/100,row.stops,(row.quotes||[]).map(q=>q.con).join(', '),
       isNaN(c.proj)?'':c.proj, isNaN(c.actual)?'':c.actual, isNaN(c.vol)?'':c.vol,
       c.revProj!=null?Math.round(c.revProj*100)/100:'', c.revActual!=null?Math.round(c.revActual*100)/100:'',
       c.volActual!=null?Math.round(c.volActual*100)/100:'', c.vsTarget!=null?Math.round(c.vsTarget*1000)/1000:'',

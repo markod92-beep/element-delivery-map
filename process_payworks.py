@@ -17,11 +17,21 @@ Only employees who hold a Driver / Driver Helper occupation are included.
 """
 import openpyxl, json, datetime, sys, glob, os, re
 
-SRC = os.environ.get("PAYWORKS_XLSX") or (
-    glob.glob("/sessions/great-eager-goodall/mnt/Payworks/*Timesheet*.xlsx") or
-    glob.glob(r"C:\Users\MarkO'Donoghue\OneDrive - Element Events\Data Platform File Storage - Daily Data Extracts\Payworks\*Timesheet*.xlsx")
-)[0]
-OUT = os.environ.get("DRIVER_HOURS_OUT", os.path.join(os.path.dirname(os.path.abspath(__file__)), "driver_hours.json"))
+# Usage:  python process_payworks.py [timesheet.xlsx] [driver_hours.json]
+# Resolution order for each: CLI arg -> env var -> sensible default/glob.
+def _arg(i):
+    return sys.argv[i] if len(sys.argv) > i else None
+
+SRC = _arg(1) or os.environ.get("PAYWORKS_XLSX") or next(iter(
+    glob.glob(os.path.join(os.environ.get("USERPROFILE", ""),
+              "OneDrive - Element Events", "Data Platform File Storage - Daily Data Extracts",
+              "Payworks", "*Timesheet*.xlsx")) or
+    glob.glob("/sessions/*/mnt/Payworks/*Timesheet*.xlsx")), None)
+if not SRC or not os.path.exists(SRC):
+    raise SystemExit(f"ERROR: Payworks timesheet not found (got: {SRC!r}). "
+                     "Pass it as the first argument or set PAYWORKS_XLSX.")
+OUT = _arg(2) or os.environ.get("DRIVER_HOURS_OUT") or \
+      os.path.join(os.path.dirname(os.path.abspath(__file__)), "driver_hours.json")
 
 wb = openpyxl.load_workbook(SRC, read_only=True, data_only=True)
 # pick the most recent YTD sheet (e.g. "2026 YTD (Jun 23)")

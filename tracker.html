@@ -117,6 +117,9 @@ function getTarget(d){ const m=loadManual(d); return (m.__target && m.__target>0
 
 // ---- Payworks driver-hours lookup (per driver, per date) ----
 let PW = null, PW_FULL = null, PW_INIT = null;
+// Confirmed manual aliases: dispatch driver name (normalized) -> Payworks "FIRST LAST".
+// Only HIGH-confidence matches go here. "Joey" is the nickname for "Husep" (Joseph).
+const PW_ALIASES = { 'JOEY SARMIENTO': 'HUSEP SARMIENTO' };
 function normToks(s){
   return String(s||'').replace(/\([^)]*\)/g,'').toUpperCase()
     .replace(/[^A-Z ]/g,' ').split(/\s+/).filter(Boolean);
@@ -137,6 +140,8 @@ function pwMatch(driver){
   if(!PW_FULL) return null;
   const t = normToks(driver);
   if(!t.length) return null;
+  const alias = PW_ALIASES[t.join(' ')];
+  if(alias){ const ar = PW_FULL.get(alias); if(ar) return ar; }
   const fn = t[0], ln = t.slice(1).join(' ');
   let r = PW_FULL.get((fn+' '+ln).trim()); if(r) return r;
   if(t.length>=2){ r = PW_FULL.get(fn+' '+t[t.length-1]); if(r) return r; }

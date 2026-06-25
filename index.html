@@ -7100,28 +7100,27 @@ window.closeMobileSheet = function() {
   var p = new URLSearchParams(location.search);
   var truck = p.get('routes_truck'), date = p.get('routes_date');
   if(!truck) return;
-  var tries = 0;
-  // Routes layer is active when the dispatch panel carries the 'show' class
-  // (toggleLayer adds it on, removes it off). This avoids flip-flopping the
-  // mutually-exclusive Revenue/Routes toggle.
+  // Routes layer is active when the dispatch panel carries the 'show' class.
   function routesOn(){ var pn = document.getElementById('dispatch-panel'); return !!(pn && pn.classList.contains('show')); }
-  var iv = setInterval(function(){
-    if(++tries > 50){ clearInterval(iv); return; }   // ~20s ceiling
-    if(typeof window.toggleLayer!=='function' || typeof window.setDispatchDate!=='function' || typeof window.soloDispatchTruck!=='function') return;
+  function fnsReady(){ return typeof window.toggleLayer==='function' && typeof window.setDispatchDate==='function' && typeof window.soloDispatchTruck==='function' && document.getElementById('dispatch-panel'); }
+  var n = 0, dateApplied = false;
+  function tick(){
+    if(++n > 45){ return; }   // give up after ~22s past the initial delay
+    if(!fnsReady()){ return setTimeout(tick, 450); }
+    // 1) ensure Routes is on; if it flips back to Revenue, re-assert and re-apply the date
+    if(!routesOn()){ try{ window.toggleLayer('dispatch'); }catch(e){} dateApplied = false; return setTimeout(tick, 500); }
     try{
-      // 1) turn Routes on if it isn't already, then let it settle one cycle
-      if(!routesOn()){ window.toggleLayer('dispatch'); return; }
-      // 2) set the date (reflect it in the picker too, which setDispatchDate alone doesn't touch)
-      var di = document.getElementById('dp-date-input');
-      if(di && date && di.value!==date) di.value = date;
-      if(date) window.setDispatchDate(date);
-      // 3) solo the truck once its row exists (i.e. dispatch data for the date has loaded)
+      // 2) set the date once (reflect it in the picker, which setDispatchDate alone doesn't touch)
+      if(date && !dateApplied){ var di = document.getElementById('dp-date-input'); if(di) di.value = date; window.setDispatchDate(date); dateApplied = true; }
+      // 3) solo the truck once its row exists (i.e. the date's dispatch data has loaded)
       var key = (window.CSS && CSS.escape) ? CSS.escape(truck) : truck;
       var row = document.querySelector('.dp-truck-row[data-truck="'+key+'"]');
-      if(row) window.soloDispatchTruck(truck);
-      if(row && row.classList.contains('on')) clearInterval(iv);   // done
+      if(row){ window.soloDispatchTruck(truck); if(row.classList.contains('on') && routesOn()) return; } // success
     }catch(e){}
-  }, 400);
+    setTimeout(tick, 500);
+  }
+  // Start AFTER the map's default layer + timeline have settled, so the toggle sticks.
+  setTimeout(tick, 1500);
 })();
 </script>
 </body>

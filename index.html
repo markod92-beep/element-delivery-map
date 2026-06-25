@@ -170,6 +170,8 @@ body {
   transition: background 0.15s ease;
 }
 .info-panel .tracker-cta:hover { background: var(--element-teal-dark); color: var(--element-white); }
+/* Mobile-only tracker pill (lives in the layer toggle-row); hidden on desktop. */
+.tracker-pill-mobile { display: none; }
 .toggle-row { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
 .toggle-btn {
   padding: 6px 14px; border-radius: 999px;
@@ -1102,6 +1104,14 @@ body.pwa-mode .leaflet-top.leaflet-right {
      the row is left empty in-panel — hide empty rows so we don't render a 6px gap. */
   .info-panel .co-label { display: none !important; }
   .info-panel .toggle-row:empty { display: none !important; }
+  /* Mobile-only Daily Truck Tracker pill — shown beside Routes inside the Layers
+     sheet. The compound selector beats Leaflet's default .leaflet-container a colour. */
+  .toggle-btn.tracker-pill-mobile {
+    display: inline-flex; align-items: center;
+    background: var(--element-teal); color: var(--element-white);
+    border-color: var(--element-teal); text-decoration: none; font-weight: 600;
+  }
+  .toggle-btn.tracker-pill-mobile:active { transform: scale(0.96); }
   .toggle-row { gap: 6px !important; }
   .toggle-btn {
     padding: 8px 10px !important;
@@ -2560,6 +2570,14 @@ infoControl.onAdd = function() {
     // a customer or caterer to solo-filter the revenue heatmap.
     '<div class="toggle-btn active-rev" id="btn-rev" onclick="toggleLayer(\'rev\')">&#10004; Revenue Heatmap</div>' +
     '<div class="toggle-btn" id="btn-dispatch" onclick="toggleLayer(\'dispatch\')">Routes</div>' +
+    // Mobile-only Daily Truck Tracker pill — sits beside Routes inside this layer
+    // toggle-row, which JS relocates into the mobile "Layers & Legend" sheet.
+    // Hidden on desktop (desktop uses the full-width .tracker-cta below).
+    '<a class="toggle-btn tracker-pill-mobile" id="btn-tracker-mobile" href="/tracker.html" title="Open the Daily Truck Tracker">' +
+      '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;flex:none;">' +
+      '<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
+      'd="M9 5h6M9 5a2 2 0 0 0-2 2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M7 7H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-1M8 12h8M8 16h5"/></svg>' +
+      'Daily Truck Tracker</a>' +
     '</div>' +
     '<div class="co-label">Company</div>' +
     '<div class="toggle-row" style="flex-wrap:wrap;gap:6px;">' +

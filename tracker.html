@@ -354,10 +354,10 @@ function recompute(){
     cards[5].textContent=pct+'%';
   }
   const ft=document.querySelectorAll('tfoot td');
-  if(ft.length){
-    ft[6].textContent=totProjHrs?fmt1(totProjHrs):'';
-    ft[7].textContent=totActualHrs?fmt1(totActualHrs):'';
-    ft[9].textContent=fleetRevHr!=null?fmtMoney(fleetRevHr):'';
+  if(ft.length>=9){
+    ft[5].textContent=totProjHrs?fmt1(totProjHrs):'';     // Proj Hrs total
+    ft[6].textContent=totActualHrs?fmt1(totActualHrs):''; // Actual Hrs total
+    ft[8].textContent=fleetRevHr!=null?fmtMoney(fleetRevHr):''; // Rev/Actual Hr
   }
 }
 

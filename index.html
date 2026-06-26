@@ -159,6 +159,19 @@ body {
 .info-panel h4 { font-size: 14px; color: var(--element-teal); margin-bottom: 4px; font-weight: 700; letter-spacing: 0.01em; }
 .info-panel .brand-lockup { display: block; width: 180px; height: auto; margin: 0 0 6px 0; }
 .info-panel .subtitle { color: var(--element-muted); font-size: 11px; margin-bottom: 8px; font-weight: 500; }
+/* Daily Truck Tracker CTA — full-width button under the company chips. */
+/* Selector scoped under .info-panel so it beats Leaflet's default
+   .leaflet-container a link colour (which otherwise tints the text blue). */
+.info-panel .tracker-cta {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  margin-top: 10px; padding: 8px 12px; border-radius: 9px;
+  background: var(--element-teal); color: var(--element-white);
+  font-size: 12.5px; font-weight: 600; text-decoration: none; letter-spacing: 0.01em;
+  transition: background 0.15s ease;
+}
+.info-panel .tracker-cta:hover { background: var(--element-teal-dark); color: var(--element-white); }
+/* Mobile-only tracker pill (lives in the layer toggle-row); hidden on desktop. */
+.tracker-pill-mobile { display: none; }
 .toggle-row { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
 .toggle-btn {
   padding: 6px 14px; border-radius: 999px;
@@ -1091,6 +1104,14 @@ body.pwa-mode .leaflet-top.leaflet-right {
      the row is left empty in-panel — hide empty rows so we don't render a 6px gap. */
   .info-panel .co-label { display: none !important; }
   .info-panel .toggle-row:empty { display: none !important; }
+  /* Mobile-only Daily Truck Tracker pill — shown beside Routes inside the Layers
+     sheet. The compound selector beats Leaflet's default .leaflet-container a colour. */
+  .toggle-btn.tracker-pill-mobile {
+    display: inline-flex; align-items: center;
+    background: var(--element-teal); color: var(--element-white);
+    border-color: var(--element-teal); text-decoration: none; font-weight: 600;
+  }
+  .toggle-btn.tracker-pill-mobile:active { transform: scale(0.96); }
   .toggle-row { gap: 6px !important; }
   .toggle-btn {
     padding: 8px 10px !important;
@@ -2549,6 +2570,14 @@ infoControl.onAdd = function() {
     // a customer or caterer to solo-filter the revenue heatmap.
     '<div class="toggle-btn active-rev" id="btn-rev" onclick="toggleLayer(\'rev\')">&#10004; Revenue Heatmap</div>' +
     '<div class="toggle-btn" id="btn-dispatch" onclick="toggleLayer(\'dispatch\')">Routes</div>' +
+    // Mobile-only Daily Truck Tracker pill — sits beside Routes inside this layer
+    // toggle-row, which JS relocates into the mobile "Layers & Legend" sheet.
+    // Hidden on desktop (desktop uses the full-width .tracker-cta below).
+    '<a class="toggle-btn tracker-pill-mobile" id="btn-tracker-mobile" href="/tracker.html" title="Open the Daily Truck Tracker">' +
+      '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;flex:none;">' +
+      '<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
+      'd="M9 5h6M9 5a2 2 0 0 0-2 2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M7 7H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-1M8 12h8M8 16h5"/></svg>' +
+      'Daily Truck Tracker</a>' +
     '</div>' +
     '<div class="co-label">Company</div>' +
     '<div class="toggle-row" style="flex-wrap:wrap;gap:6px;">' +
@@ -2558,6 +2587,13 @@ infoControl.onAdd = function() {
     '<div class="toggle-btn co-chip active" id="co-east" onclick="toggleCompany(\'East\')">East</div>' +
     '<div class="toggle-btn co-chip active" id="co-west" onclick="toggleCompany(\'West\')">West</div>' +
     '</div>' +
+    // ---- Daily Truck Tracker CTA — opens tracker.html, a per-truck productivity
+    //      tracker auto-populated from the same dispatch_data.json this map uses. ----
+    '<a class="tracker-cta" href="/tracker.html" title="Open the Daily Truck Tracker — per-truck revenue, stops & rev/hr">' +
+      '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" style="flex:none;">' +
+      '<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
+      'd="M9 5h6M9 5a2 2 0 0 0-2 2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M7 7H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-1M8 12h8M8 16h5"/></svg>' +
+      '<span>Daily Truck Tracker</span></a>' +
     '';
     // Day-of-week filter lives in the timeline panel now (see #contract-filter),
     // next to the other time-window filters, so it's grouped with the controls
@@ -7054,6 +7090,48 @@ window.closeMobileSheet = function() {
 })();
 
 } // end initMap
+</script>
+<script>
+/* ---- Deep-link handler (Daily Truck Tracker -> map) ----
+   /?routes_truck=<truck>&routes_date=<YYYY-MM-DD> switches to the Routes layer,
+   sets the date, and solos that truck's route. Fully defensive: if anything is
+   unavailable it simply gives up after ~18s and the map behaves normally. */
+(function(){
+  var p = new URLSearchParams(location.search);
+  var truck = p.get('routes_truck'), date = p.get('routes_date');
+  if(!truck) return;
+  // Routes layer is active when the dispatch panel carries the 'show' class.
+  function routesOn(){ var pn = document.getElementById('dispatch-panel'); return !!(pn && pn.classList.contains('show')); }
+  function fnsReady(){ return typeof window.toggleLayer==='function' && typeof window.setDispatchDate==='function' && typeof window.soloDispatchTruck==='function' && document.getElementById('dispatch-panel'); }
+  var n = 0, dateApplied = false;
+  function tick(){
+    if(++n > 45){ return; }   // give up after ~22s past the initial delay
+    if(!fnsReady()){ return setTimeout(tick, 450); }
+    // 1) ensure Routes is on; if it flips back to Revenue, re-assert and re-apply the date
+    if(!routesOn()){ try{ window.toggleLayer('dispatch'); }catch(e){} dateApplied = false; return setTimeout(tick, 500); }
+    try{
+      // 2) set the date once — setDispatchDate drives the data; setTimelineRange
+      //    syncs the visible date label. Both reset the truck selection, so they
+      //    must run BEFORE the solo below.
+      if(date && !dateApplied){
+        var di = document.getElementById('dp-date-input'); if(di) di.value = date;
+        window.setDispatchDate(date);
+        if(typeof setTimelineRange==='function'){ try{ setTimelineRange(date, date); }catch(e){} }
+        dateApplied = true;
+      }
+      // 3) solo the truck once its row exists (i.e. the date's dispatch data has loaded)
+      var key = (window.CSS && CSS.escape) ? CSS.escape(truck) : truck;
+      var row = document.querySelector('.dp-truck-row[data-truck="'+key+'"]');
+      if(row) window.soloDispatchTruck(truck);
+      // success only when EXACTLY this truck is soloed (guards against a late rebuild reset)
+      var onRows = document.querySelectorAll('.dp-truck-row.on');
+      if(onRows.length===1 && onRows[0].getAttribute('data-truck')===truck && routesOn()) return;
+    }catch(e){}
+    setTimeout(tick, 500);
+  }
+  // Start AFTER the map's default layer + timeline have settled, so the toggle sticks.
+  setTimeout(tick, 1500);
+})();
 </script>
 </body>
 </html>

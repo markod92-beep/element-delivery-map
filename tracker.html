@@ -100,7 +100,11 @@
   .vt-pos{color:var(--green);font-weight:600;} .vt-neg{color:var(--red);font-weight:600;}
   /* Truck-fill icons (delivery / pickup legs) */
   .fill-cell{white-space:nowrap;}
-  .fill-leg{display:flex;align-items:center;gap:6px;line-height:1;margin:2px 0;cursor:default;}
+  .fill-leg{display:flex;align-items:center;gap:6px;line-height:1;height:22px;margin:0;cursor:default;}
+  /* Align the D/P fill icons to the D/P revenue lines: top-align both cells and
+     give each leg/rev row the same 22px height so they share vertical rhythm. */
+  td.rev,td.fill-td{vertical-align:top;}
+  .rev-split .rev-d,.rev-split .rev-p{height:22px;display:flex;align-items:center;justify-content:flex-end;}
   .fill-leg svg{flex:0 0 auto;display:block;}
   .fill-pct{font-size:11.5px;font-weight:700;font-variant-numeric:tabular-nums;min-width:54px;}
   .fill-pct .leg-k{font-weight:700;color:var(--element-muted);margin-right:3px;}
@@ -122,6 +126,7 @@
     <div class="ctrl">
       <label for="datePick">Date</label>
       <input type="date" id="datePick">
+      <a class="btn ghost" href="/intelligence.html" title="Open Delivery Intelligence">Intelligence</a>
       <a class="btn ghost" href="/dashboard.html" title="Open the Executive Dashboard">Dashboard</a>
       <a class="btn ghost" href="/" title="Back to the delivery map">&larr; Map</a>
       <button class="btn" id="dlBtn" title="Download this day as an Excel file">&#8595; Excel</button>
@@ -536,8 +541,8 @@ function render(){
         '<td class="truck-cell"><span class="ragdot dot-'+c.rag+'"></span><a class="truck-link" href="/?routes_truck='+encodeURIComponent(row.truckLabel||row.truck)+'&routes_date='+curDate+'" title="Show this truck&#39;s route on the map">'+row.truck+'</a></td>'+
         '<td class="drv-cell">'+(row.driver||'')+'</td>'+
         '<td class="num rev">'+revSplitHtml(row)+'</td>'+
+        '<td class="fill-td">'+fillCellHtml(row)+'</td>'+
         '<td class="num">'+row.stops+'</td>'+
-        '<td>'+fillCellHtml(row)+'</td>'+
         '<td class="quotes-cell">'+quotesCellHtml(row)+'</td>'+
         '<td class="num hrs"><input type="number" step="0.5" min="0" data-f="proj" value="'+(manual[row.truck]&&manual[row.truck].proj!=null?manual[row.truck].proj:'')+'" placeholder="—"></td>'+
         '<td class="num hrs"><input type="number" step="0.5" min="0" data-f="actual" class="'+(actPW?'pw':'')+'" title="'+(actPW?'Auto-filled from Payworks timesheet — type to override':'')+'" value="'+actVal+'" placeholder="—"></td>'+
@@ -595,8 +600,8 @@ function render(){
     '<div class="tbl-scroll"><table>'+
       '<thead><tr>'+
         sortableTh('truck','Truck','')+'<th>Driver</th>'+
-        sortableTh('rev','Revenue','num')+sortableTh('stops','Stops','num')+
-        sortableTh('fill','Truck Fill','')+'<th>Quotes</th>'+
+        sortableTh('rev','Revenue','num')+sortableTh('fill','Truck Fill','')+
+        sortableTh('stops','Stops','num')+'<th>Quotes</th>'+
         sortableTh('proj','Proj Hrs','num hrs')+sortableTh('actual','Actual Hrs','num hrs')+
         sortableTh('revActual','Rev / Actual Hr','num')+'<th class="num">vs Target</th><th>Notes</th>'+
       '</tr></thead>'+
@@ -604,7 +609,7 @@ function render(){
       '<tfoot><tr>'+
         '<td colspan="2">FLEET TOTAL ('+nActive+' trucks)</td>'+
         '<td class="num">'+fmtMoney(totRev)+'</td>'+
-        '<td class="num">'+totStops+'</td><td>'+fleetFillHtml+'</td><td></td>'+
+        '<td>'+fleetFillHtml+'</td><td class="num">'+totStops+'</td><td></td>'+
         '<td class="num hrs">'+(totProjHrs?fmt1(totProjHrs):'')+'</td>'+
         '<td class="num hrs">'+(totActualHrs?fmt1(totActualHrs):'')+'</td>'+
         '<td class="num">'+(fleetRevHr!=null?fmtMoney(fleetRevHr):'')+'</td>'+
@@ -775,7 +780,7 @@ function recompute(){
     const pct=(cGreen+cYellow+cRed)>0?Math.round(100*cGreen/(cGreen+cYellow+cRed)):0;
     cards[6].textContent=pct+'%';
   }
-  // tfoot tds: 0 label(colspan2) · 1 totRev · 2 totStops · 3 TruckFill · 4 quotes ·
+  // tfoot tds: 0 label(colspan2) · 1 totRev · 2 TruckFill · 3 totStops · 4 quotes ·
   // 5 ProjHrs · 6 ActualHrs · 7 Rev/ActualHr · 8 vsTarget · 9 notes
   const ft=document.querySelectorAll('tfoot td');
   if(ft.length>=8){

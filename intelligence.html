@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delivery Intelligence — Element Delivery Map</title>
+<link rel="icon" type="image/svg+xml" href="/assets/element-logo.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Warm-neutral palette — the only theme (slate toggle from the prototype removed per handoff). */
+  :root{
+    --bg:#efe9dd; --panel:#fbf9f3; --panel2:#f4efe5; --inset:#f0ebdf;
+    --ink:#232c27; --ink2:#5b6159; --ink3:#928c7d; --line:#e2dccd; --line2:#ece6d8;
+    --accent:#3f6b46; --accentSoft:#e3ede0;
+    --good:#3f6b46; --goodSoft:#e3ede0; --warn:#9a6a1d; --warnSoft:#f3e8cf;
+    --bad:#a8423d; --badSoft:#f2dcd8; --chip:#eef5ec;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Hanken Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.45;}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
+  a{color:var(--accent);}
+  .num{font-family:'Space Grotesk';font-variant-numeric:tabular-nums;}
+  header.bar{position:sticky;top:0;z-index:20;background:color-mix(in srgb, var(--bg) 86%, transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding:14px 30px;display:flex;align-items:center;gap:28px;}
+  .seg{display:flex;gap:4px;background:var(--inset);border:1px solid var(--line);border-radius:11px;padding:4px;flex:0 0 auto;}
+  .seg button{cursor:pointer;border:none;border-radius:8px;padding:7px 15px;font-family:'Hanken Grotesk';font-weight:600;font-size:13px;background:transparent;color:var(--ink2);}
+  .seg button.on{font-weight:700;background:var(--panel);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12);}
+  main{padding:26px 30px 80px;max-width:1440px;margin:0 auto;}
+  h1.page{margin:0;font-size:21px;font-weight:800;letter-spacing:-.4px;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;}
+  h3.sec{margin:0;font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;}
+  .muted{color:var(--ink2);} .muted3{color:var(--ink3);}
+  .bu-seg{display:flex;gap:3px;background:var(--inset);border:1px solid var(--line);border-radius:10px;padding:3px;}
+  .bu-seg button{cursor:pointer;border:none;border-radius:8px;padding:6px 11px;font-family:'Hanken Grotesk';font-size:12.5px;display:flex;align-items:center;gap:6px;font-weight:600;background:transparent;color:var(--ink2);}
+  .bu-seg button.on{font-weight:700;background:var(--panel);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12);}
+  .bu-seg .cnt{font-family:'Space Grotesk';font-size:10.5px;font-weight:700;color:var(--ink3);}
+  .bu-seg button.on .cnt{color:var(--accent);}
+  .empty{padding:48px;text-align:center;color:var(--ink3);}
+  .csvbtn{cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--ink2);border-radius:8px;padding:6px 11px;font-family:'Hanken Grotesk';font-weight:600;font-size:11.5px;display:flex;align-items:center;gap:6px;white-space:nowrap;flex:none;}
+  @media(max-width:980px){ main{padding:20px 14px 60px} header.bar{padding:12px 14px;gap:14px;flex-wrap:wrap} }
+</style>
+</head>
+<body>
+  <header class="bar">
+    <div style="flex:0 0 auto;line-height:1.05;">
+      <div style="font-weight:700;font-size:15px;letter-spacing:-.2px;">Delivery Intelligence</div>
+      <div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);font-weight:600;">Fleet · Labour · Margin</div>
+    </div>
+    <nav class="seg" id="tabNav"></nav>
+    <div style="flex:1 1 auto;"></div>
+    <div style="flex:0 0 auto;display:flex;align-items:center;gap:16px;">
+      <div style="text-align:right;line-height:1.1;">
+        <div style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);font-weight:600;">As of</div>
+        <div class="num" style="font-weight:700;font-size:14px;" id="asOf">—</div>
+      </div>
+      <input type="date" id="datePick" style="font-family:inherit;font-size:13px;padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);">
+      <a class="seg" style="text-decoration:none;color:var(--ink2);font-weight:600;font-size:12.5px;padding:7px 12px;" href="/tracker.html" title="Daily Truck Tracker">Tracker</a>
+      <a class="seg" style="text-decoration:none;color:var(--ink2);font-weight:600;font-size:12.5px;padding:7px 12px;" href="/" title="Back to the delivery map">← Map</a>
+    </div>
+  </header>
+  <main id="app"><div class="empty" id="loadingMsg">Loading dispatch data…</div></main>
+
+<script>
+"use strict";
+
+/* ============================== formatters ============================== */
+const fmt0 = n => (n==null||isNaN(n))?'—':Math.round(n).toLocaleString('en-CA');
+const money = n => (n==null||isNaN(n))?'—':'$'+Math.round(n).toLocaleString('en-CA');
+const fmt1 = n => (n==null||isNaN(n))?'—':(Math.round(n*10)/10).toLocaleString('en-CA',{minimumFractionDigits:1,maximumFractionDigits:1});
+const moneyK = n => { if(n==null||isNaN(n)) return '—'; const k=n/1000; return '$'+(k>=10?Math.round(k):(Math.round(k*10)/10))+'k'; };
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ============================== config ============================== */
+const TREND_DAYS = 28;
+// Per-BU rev/truck-day target bands (starting estimates from the handoff — confirm with real history).
+const TARGETS = {'All':7000,'GTA':5000,'GTA Tents':20000,'West':9000,'East':8000,'Other':7000};
+const BU_ORDER = ['GTA','GTA Tents','West','East','Other'];
+const SCALE_MAXH = 96, OPS_MAXH = 140;
+
+/* ============================== data layer (shared with dashboard.html) ============================== */
+let DATA=null, PW=null, PW_FULL=null, PW_INIT=null, LOAD=null;
+let curDate=null;
+const STATE = { tab:'ops', bu:'All', hoverIdx:null, selDay:null };
+let OPSCTX = null;  // {series,target,scopeLabel} — lets hover update the chart without a full re-render
+
+const HS_TO_CO = {'001':'GTA','002':'GTA','003':'East','004':'GTA Tents','005':'West','006':'GTA','007':'West','008':'GTA','009':'GTA'};
+function buOf(hs){ return HS_TO_CO[hs] || 'Other'; }
+const STORE_TO_BU = {'CFR':'GTA','CMM':'GTA','ERG':'GTA','HIG':'GTA','ATR':'GTA Tents','RT':'GTA Tents','MFL':'East','A&B':'West','LW':'West'};
+function cubeOf(con){ return (LOAD&&LOAD.cube_by_con&&LOAD.cube_by_con[con])||0; }
+function capOf(bu){ return (LOAD&&LOAD.capacity_by_bu&&LOAD.capacity_by_bu[bu])||0; }
+
+const PW_ALIASES = { 'JOEY SARMIENTO': 'HUSEP SARMIENTO' };
+function normToks(s){ return String(s||'').replace(/\([^)]*\)/g,'').toUpperCase().replace(/[^A-Z ]/g,' ').split(/\s+/).filter(Boolean); }
+function buildPwIndex(){
+  PW_FULL=new Map(); PW_INIT=new Map();
+  if(!PW||!PW.drivers) return;
+  for(const rec of PW.drivers){
+    const fn=normToks(rec.f).join(' '), ln=normToks(rec.l).join(' ');
+    if(!fn) continue;
+    const full=(fn+' '+ln).trim();
+    if(!PW_FULL.has(full)) PW_FULL.set(full, rec);
+    if(ln && !PW_INIT.has(fn+'|'+ln[0])) PW_INIT.set(fn+'|'+ln[0], rec);
+  }
+}
+function pwMatch(driver){
+  if(!PW_FULL) return null;
+  const t=normToks(driver); if(!t.length) return null;
+  const alias=PW_ALIASES[t.join(' ')]; if(alias){ const ar=PW_FULL.get(alias); if(ar) return ar; }
+  const fn=t[0], ln=t.slice(1).join(' ');
+  let r=PW_FULL.get((fn+' '+ln).trim()); if(r) return r;
+  if(t.length>=2){ r=PW_FULL.get(fn+' '+t[t.length-1]); if(r) return r; }
+  if(t.length>=2){ r=PW_INIT.get(fn+'|'+t[1][0]); if(r) return r; }
+  return null;
+}
+function pwHoursFor(driver, isoDate){
+  const r=pwMatch(driver); if(!r||!r.d) return null;
+  const h=r.d[isoDate]; return (typeof h==='number')?h:null;
+}
+
+// aggregate routes -> per-truck rows for a date (rev split by stop class + truck-fill cube per leg).
+// Memoized by date: re-renders (hover/click/filter) reuse the parse instead of re-walking 25MB of routes.
+const AGG_CACHE={};
+function aggregate(d){
+  if(AGG_CACHE[d]) return AGG_CACHE[d];
+  return (AGG_CACHE[d]=aggregateRaw(d));
+}
+function aggregateRaw(d){
+  const rts=(DATA.routes&&DATA.routes[d])?DATA.routes[d]:[];
+  const byTruck={};
+  for(const r of rts){
+    const t=(r.tnum||r.truck||'').toString().replace(/^#/,'').trim();
+    if(!t) continue;
+    if(!byTruck[t]) byTruck[t]={truck:t, driver:'', rev:0, revD:0, revP:0, stops:0, hs:'', bu:'Other', dCube:0, pCube:0, _sv:{}, fillBU:null};
+    const o=byTruck[t];
+    o.stops += (r.stps||0);
+    o.rev   += (r.stops||[]).reduce((s,x)=>s+(x.rev||0),0);
+    for(const s of (r.stops||[])){
+      const rv=s.rev||0; if(s.cls==='D') o.revD+=rv; else if(s.cls==='P') o.revP+=rv;
+      const sc=String(s.store||'').trim().toUpperCase();
+      if(STORE_TO_BU[sc]) o._sv[STORE_TO_BU[sc]]=(o._sv[STORE_TO_BU[sc]]||0)+1;
+      const con=(s.con==null?'':String(s.con)).trim();
+      if(con && LOAD){ const cube=cubeOf(con); if(cube>0){ if(s.cls==='D') o.dCube+=cube; else if(s.cls==='P') o.pCube+=cube; } }
+    }
+    if(!o.driver && r.drv) o.driver=r.drv;
+    if((!o.hs||o.bu==='Other') && r.hs!=null && String(r.hs).trim()){ o.hs=String(r.hs).trim(); o.bu=buOf(o.hs); }
+  }
+  const arr=Object.values(byTruck);
+  arr.forEach(o=>{ let best=null,bn=-1; for(const k in o._sv){ if(o._sv[k]>bn){best=k;bn=o._sv[k];} } o.fillBU=best||(o.bu!=='Other'?o.bu:null); delete o._sv;
+    const cap=capOf(o.fillBU); o.dFill=cap?Math.round(100*o.dCube/cap):null; o.pFill=cap?Math.round(100*o.pCube/cap):null; });
+  return arr;
+}
+
+/* ============================== date helpers ============================== */
+const WK=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function addDays(iso, n){ const p=iso.split('-').map(Number); const dt=new Date(p[0],p[1]-1,p[2]+n); return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'); }
+function localToday(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function dateLabel(iso){ const p=iso.split('-').map(Number); const d=new Date(p[0],p[1]-1,p[2]); return WK[d.getDay()]+' '+String(p[2]).padStart(2,'0')+' '+MO[p[1]-1]; }
+function dateLong(iso){ const p=iso.split('-').map(Number); const d=new Date(p[0],p[1]-1,p[2]); return WK[d.getDay()]+' '+String(p[2]).padStart(2,'0')+' '+MO[p[1]-1]+' '+p[0]; }
+
+/* ============================== scope metrics ============================== */
+// Today's metrics for the active business-unit scope.
+function scopeMetrics(bu){
+  const all=aggregate(curDate);
+  const ts = (bu==='All') ? all : all.filter(t=>t.bu===bu);
+  const trucks=ts.length;
+  const rev=ts.reduce((s,t)=>s+t.rev,0);
+  const stops=ts.reduce((s,t)=>s+t.stops,0);
+  const fillT=ts.filter(t=>t.dFill!=null);
+  const avgD=fillT.length?Math.round(fillT.reduce((s,t)=>s+(t.dFill||0),0)/fillT.length):null;
+  const avgP=fillT.length?Math.round(fillT.reduce((s,t)=>s+(t.pFill||0),0)/fillT.length):null;
+  const bh=(avgD&&avgD>0&&avgP!=null)?Math.round(avgP/avgD*100):null;
+  let nHrs=0; ts.forEach(t=>{ const h=pwHoursFor(t.driver,curDate); if(h!=null&&h>0) nHrs++; });
+  const cov=trucks?Math.round(100*nHrs/trucks):0;
+  const target=TARGETS[bu]||TARGETS.All;
+  return {ts,trucks,rev,revTd:trucks?rev/trucks:0,stops,stopsPer:trucks?stops/trucks:0,avgD,avgP,bh,cov,nHrs,target};
+}
+
+// 28-day rev/truck-day series for a scope, with per-BU revenue split each day.
+function buildSeries(scope){
+  const out=[];
+  for(let i=TREND_DAYS-1;i>=0;i--){
+    const d=addDays(curDate,-i);
+    const ts=aggregate(d);
+    const byBU={}; let fleetRev=0;
+    ts.forEach(t=>{ fleetRev+=t.rev; (byBU[t.bu]=byBU[t.bu]||{rev:0,trucks:0}); byBU[t.bu].rev+=t.rev; byBU[t.bu].trucks++; });
+    const fleetTrucks=ts.length;
+    const scopeRev = scope==='All'?fleetRev:((byBU[scope]||{}).rev||0);
+    const scopeTrucks = scope==='All'?fleetTrucks:((byBU[scope]||{}).trucks||0);
+    out.push({i:TREND_DAYS-1-i, iso:d, label:dateLabel(d), fleetRev, fleetTrucks, scopeRev, scopeTrucks,
+      revTd: scopeTrucks?scopeRev/scopeTrucks:0,
+      split:['GTA','GTA Tents','West','East'].map(n=>({name:n,rev:(byBU[n]||{}).rev||0}))});
+  }
+  return out;
+}
+
+/* ============================== CSV export ============================== */
+function exportCsv(){
+  const days=buildSeries('All');
+  const target=TARGETS.All;
+  const head=['date','rev_per_truck_day','fleet_revenue','active_trucks','vs_band','gta_rev','tents_rev','west_rev','east_rev'];
+  const lines=[head.join(',')].concat(days.map(d=>[d.iso,Math.round(d.revTd),d.fleetRev,d.fleetTrucks,(d.revTd>=target?'at_or_above':'below'),
+    d.split[0].rev,d.split[1].rev,d.split[2].rev,d.split[3].rev].join(',')));
+  const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='rev-per-truck-day-28d.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+
+/* ============================== render ============================== */
+const TABS=[['north','North Star'],['ops','Operations'],['econ','Unit Economics'],['advisory','Advisory']];
+
+function renderHeader(){
+  document.getElementById('asOf').textContent=dateLong(curDate);
+  document.getElementById('tabNav').innerHTML = TABS.map(([id,label])=>
+    '<button class="'+(STATE.tab===id?'on':'')+'" data-tab="'+id+'">'+label+'</button>').join('');
+}
+
+function render(){
+  renderHeader();
+  const app=document.getElementById('app');
+  if(STATE.tab==='north') app.innerHTML=renderNorth();
+  else if(STATE.tab==='ops') app.innerHTML=renderOps();
+  else if(STATE.tab==='econ') app.innerHTML=renderEcon();
+  else app.innerHTML=renderAdvisory();
+  wire();
+}
+
+/* ---------------- bar chart helper (CSS/flex bars, dashed target line) ---------------- */
+function barsHtml(series, target, maxH, interactive){
+  const viewMax=Math.max(target, ...series.map(d=>d.revTd))*1.12 || 1;
+  const tb=Math.round(target/viewMax*maxH);
+  let bars='';
+  series.forEach(d=>{
+    const h=Math.max(4,Math.round(d.revTd/viewMax*maxH));
+    const over=d.revTd>=target;
+    const isSel=STATE.selDay===d.i, isHov=STATE.hoverIdx===d.i;
+    const dim=interactive&&(STATE.hoverIdx!=null||STATE.selDay!=null)&&!isHov&&!isSel;
+    const st='flex:1;height:'+h+'px;border-radius:3px 3px 0 0;background:'+(over?'var(--accent)':'var(--bad)')+';transition:opacity .12s;opacity:'+(dim?0.4:1)+';'
+      +(interactive?'cursor:pointer;':'')+(isSel?'box-shadow:0 0 0 2px var(--ink);':'');
+    bars+='<div '+(interactive?'data-bar="'+d.i+'" ':'')+'title="'+esc(d.label+' · '+money(d.revTd))+'" style="'+st+'"></div>';
+  });
+  return {bars, tb};
+}
+
+/* ============================== OPERATIONS (live) ============================== */
+function renderOps(){
+  const all=aggregate(curDate);
+  const buCounts={}; all.forEach(t=>{ buCounts[t.bu]=(buCounts[t.bu]||0)+1; });
+  const buList=['All'].concat(BU_ORDER.filter(b=>buCounts[b]));
+  if(STATE.bu!=='All' && !buCounts[STATE.bu]) STATE.bu='All';
+  const scope=STATE.bu, scopeLabel=scope==='All'?'Fleet':scope;
+  const M=scopeMetrics(scope);
+  const target=M.target;
+
+  // ---- BU filter chips ----
+  const buChips = buList.map(b=>{
+    const cnt=b==='All'?all.length:(buCounts[b]||0);
+    return '<button class="'+(STATE.bu===b?'on':'')+'" data-bu="'+esc(b)+'">'+esc(b)+'<span class="cnt">'+cnt+'</span></button>';
+  }).join('');
+
+  // ---- KPI strip ----
+  const revDelta=Math.round((M.revTd/target-1)*100);
+  const kpi=(label,value,flag,delta,dColor)=>
+    '<div class="panel" style="border-radius:13px;padding:15px 16px;">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;min-height:28px;">'+
+        '<span style="font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);line-height:1.25;">'+label+'</span>'+
+        '<span style="font-size:13px;flex:none;">'+(flag||'')+'</span></div>'+
+      '<div class="num" style="font-weight:700;font-size:27px;margin-top:8px;line-height:1;">'+value+'</div>'+
+      '<div style="font-size:11px;color:'+dColor+';margin-top:4px;font-weight:600;">'+delta+'</div></div>';
+  const kpis=
+    kpi('Rev / truck-day', money(M.revTd),'',(revDelta>=0?'▲ '+revDelta:'▼ '+Math.abs(revDelta))+'% vs target',revDelta>=0?'var(--good)':'var(--bad)')+
+    kpi('Outbound fill', M.avgD!=null?M.avgD+'%':'—','',M.avgD!=null?((M.avgD>=55?'▲ ':'▼ ')+Math.abs(M.avgD-55)+' pts vs target'):'△ needs cube capacity',M.avgD==null?'var(--ink3)':M.avgD>=55?'var(--good)':'var(--bad)')+
+    kpi('Backhaul recovery', M.bh!=null?M.bh+'%':'—','',M.bh!=null?((M.bh>=60?'▲ ':'▼ ')+Math.abs(M.bh-60)+' pts vs target'):'△ needs cube capacity',M.bh==null?'var(--ink3)':M.bh>=60?'var(--good)':M.bh>=45?'var(--warn)':'var(--bad)')+
+    kpi('Stops / truck', fmt1(M.stopsPer),'','drop density △ needs miles','var(--ink3)')+
+    kpi('Truck utilization', M.trucks+' active','△','△ fleet roster needed for %','var(--ink3)')+
+    kpi('On-time %','—','△','needs delivery windows','var(--ink3)');
+
+  // ---- trend ----  (hover updates the tooltip/opacities live — NO full re-render, so click-to-drill is reliable)
+  const series=buildSeries(scope);
+  const {bars,tb}=barsHtml(series,target,OPS_MAXH,true);
+  OPSCTX={series,target,scopeLabel};
+  const trendCard=
+    '<div class="panel">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:10px;">'+
+        '<h3 class="sec">Revenue per truck-day · 28d</h3>'+
+        '<button class="csvbtn" id="csvBtn" title="Download the 28-day series as CSV">↓ Export CSV</button></div>'+
+      '<div style="position:relative;height:150px;">'+
+        '<div id="trendTip" style="position:absolute;top:-4px;z-index:6;transform:translate(-50%,-100%);background:var(--ink);color:var(--bg);border-radius:10px;padding:10px 12px;min-width:162px;pointer-events:none;box-shadow:0 10px 24px rgba(0,0,0,.24);display:none;"></div>'+
+        '<div id="trendBars" style="position:absolute;inset:0;display:flex;align-items:flex-end;gap:4px;">'+
+          '<div style="position:absolute;left:0;right:0;bottom:'+tb+'px;border-top:1.5px dashed var(--ink3);opacity:.5;pointer-events:none;"></div>'+bars+
+        '</div></div>'+
+      '<div style="display:flex;gap:16px;margin-top:12px;font-size:11px;color:var(--ink2);align-items:center;">'+
+        '<span style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:2px;background:var(--accent);"></span>at / above band</span>'+
+        '<span style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:2px;background:var(--bad);"></span>below band</span>'+
+        '<span style="margin-left:auto;color:var(--ink3);">hover for detail · click a day to drill in</span></div></div>';
+
+  // ---- by business unit ----
+  let buRows='';
+  BU_ORDER.filter(b=>buCounts[b]).forEach(b=>{
+    const m=scopeMetrics(b); const active=b===STATE.bu;
+    const bhColor=m.bh==null?'var(--ink3)':m.bh>=60?'var(--good)':m.bh>=40?'var(--warn)':'var(--bad)';
+    buRows+='<div data-burow="'+esc(b)+'" style="display:grid;grid-template-columns:1.3fr .7fr .9fr .8fr .8fr;gap:8px;align-items:center;padding:9px 10px;border-radius:8px;font-family:\'Space Grotesk\';font-size:13px;cursor:pointer;margin:0 -10px;'+(active?'background:var(--accentSoft);':'')+'">'+
+      '<span style="font-weight:600;font-family:\'Hanken Grotesk\';">'+esc(b)+'</span>'+
+      '<span style="text-align:right;color:var(--ink2);">'+m.trucks+'</span>'+
+      '<span style="text-align:right;font-weight:600;">'+money(m.revTd)+'</span>'+
+      '<span style="text-align:right;">'+(m.avgD!=null?m.avgD+'%':'—')+'</span>'+
+      '<span style="text-align:right;color:'+bhColor+';font-weight:600;">'+(m.bh!=null?m.bh+'%':'—')+'</span></div>';
+  });
+  const buCard=
+    '<div class="panel">'+
+      '<h3 class="sec" style="margin-bottom:12px;">By business unit</h3>'+
+      '<div style="display:grid;grid-template-columns:1.3fr .7fr .9fr .8fr .8fr;gap:8px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);padding-bottom:8px;border-bottom:1px solid var(--line);">'+
+        '<span>Unit</span><span style="text-align:right;">Trucks</span><span style="text-align:right;">Rev/TD</span><span style="text-align:right;">Out fill</span><span style="text-align:right;">Backhaul</span></div>'+
+      buRows+'</div>';
+
+  // ---- drill-down ----
+  let drill='';
+  if(STATE.selDay!=null){
+    const d=series.find(x=>x.i===STATE.selDay);
+    if(d){ const over=d.revTd>=target;
+      const busHtml=d.split.map(b=>{ const act=scope!=='All'&&b.name===scope; const pct=d.fleetRev?Math.round(b.rev/d.fleetRev*100):0;
+        return '<div style="display:flex;align-items:center;gap:11px;margin-bottom:7px;">'+
+          '<span style="flex:0 0 82px;font-size:12px;font-weight:600;color:'+(act?'var(--accent)':'var(--ink)')+';">'+esc(b.name)+'</span>'+
+          '<div style="flex:1;height:9px;background:var(--inset);border-radius:6px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:'+(act?'var(--accent)':'var(--ink3)')+';border-radius:6px;"></div></div>'+
+          '<span class="num" style="flex:0 0 72px;text-align:right;font-size:12px;">'+money(b.rev)+'</span>'+
+          '<span class="num" style="flex:0 0 34px;text-align:right;font-size:11px;color:var(--ink3);">'+pct+'%</span></div>';
+      }).join('');
+      drill='<div class="panel" style="margin-top:16px;">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:12px;flex-wrap:wrap;">'+
+          '<div style="display:flex;align-items:center;gap:10px;">'+
+            '<span style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);background:var(--accentSoft);padding:3px 9px;border-radius:20px;">Drill-down</span>'+
+            '<h3 style="margin:0;font-size:15px;font-weight:800;">'+esc(d.label)+'</h3>'+
+            '<span style="font-size:10.5px;font-weight:700;padding:2px 9px;border-radius:20px;background:'+(over?'var(--goodSoft)':'var(--badSoft)')+';color:'+(over?'var(--good)':'var(--bad)')+';">'+(over?'At / above band':'Below band')+'</span>'+
+            '<span style="font-size:11px;font-weight:600;color:var(--ink3);">'+scopeLabel+'</span></div>'+
+          '<div style="display:flex;align-items:center;gap:10px;">'+
+            '<a href="/tracker.html" style="font-size:12px;font-weight:600;color:var(--accent);text-decoration:none;">Open this day in Daily Truck Tracker →</a>'+
+            '<button id="drillClose" title="Close" style="cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--ink2);width:28px;height:28px;border-radius:8px;font-size:15px;line-height:1;">×</button></div></div>'+
+        '<div style="display:grid;grid-template-columns:auto auto auto 1fr;gap:26px;align-items:start;">'+
+          drillStat('Rev / truck-day',money(d.revTd))+
+          drillStat(scopeLabel+' revenue',money(d.scopeRev))+
+          drillStat('Active trucks',String(d.scopeTrucks))+
+          '<div style="border-left:1px solid var(--line);padding-left:26px;"><div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin-bottom:9px;">Revenue by business unit</div>'+busHtml+'</div></div></div>';
+    }
+  }
+
+  // ---- gauges ----
+  const gauge=(label,val,tgt)=>{
+    const color=val!=null&&val>=tgt?'var(--good)':'var(--bad)';
+    const pct=Math.min(100,val||0), tpct=Math.min(100,tgt);
+    return '<div style="margin-bottom:16px;">'+
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">'+
+        '<span style="font-size:12px;font-weight:600;">'+label+'</span>'+
+        '<span class="num" style="font-weight:700;font-size:18px;color:'+color+';">'+(val!=null?val+'%':'—')+'<span style="font-size:11px;color:var(--ink3);"> / '+tgt+'% target</span></span></div>'+
+      '<div style="height:11px;background:var(--inset);border-radius:7px;overflow:hidden;position:relative;">'+
+        '<div style="position:absolute;left:'+tpct+'%;top:0;bottom:0;width:2px;background:var(--ink3);opacity:.6;"></div>'+
+        '<div style="height:100%;width:'+pct+'%;background:'+color+';border-radius:7px;"></div></div></div>';
+  };
+  const gaugesCard=
+    '<div class="panel">'+
+      '<h3 class="sec" style="margin-bottom:16px;">Cube utilization</h3>'+
+      gauge('Avg outbound fill',M.avgD,55)+gauge('Avg return (backhaul) fill',M.avgP,33)+
+      '<div style="margin-top:4px;padding:11px 13px;background:var(--inset);border-radius:10px;font-size:11.5px;color:var(--ink2);">Outbound <b style="color:var(--ink);">'+(M.avgD!=null?M.avgD+'%':'—')+'</b> · backhaul <b style="color:var(--ink);">'+(M.avgP!=null?M.avgP+'%':'—')+'</b> — vs the 55% / 33% targets.</div></div>';
+
+  // ---- worst backhaul gaps ----
+  const gaps=M.ts.filter(t=>t.dFill!=null&&t.pFill!=null&&(t.dFill-t.pFill)>0)
+    .map(t=>({truck:t.truck,bu:t.fillBU||t.bu,deliv:t.dFill,pickup:t.pFill,gap:t.dFill-t.pFill,lost:(t.dFill-t.pFill)/100*M.revTd}))
+    .sort((a,b)=>b.gap-a.gap).slice(0,6);
+  let gapRows='';
+  if(gaps.length){
+    gapRows=gaps.map(r=>'<div style="display:grid;grid-template-columns:.9fr .9fr .8fr .8fr 1fr 1.1fr;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line2);font-size:12.5px;">'+
+      '<span class="num" style="font-weight:700;">'+esc(r.truck)+'</span>'+
+      '<span style="color:var(--ink2);">'+esc(r.bu||'')+'</span>'+
+      '<span class="num" style="text-align:right;">'+r.deliv+'%</span>'+
+      '<span class="num" style="text-align:right;color:var(--ink3);">'+r.pickup+'%</span>'+
+      '<span class="num" style="text-align:right;font-weight:700;color:var(--bad);">+'+r.gap+'</span>'+
+      '<span class="num" style="text-align:right;color:var(--ink2);">~'+moneyK(r.lost)+'</span></div>').join('');
+  } else {
+    gapRows='<div style="padding:20px 0;text-align:center;color:var(--ink3);font-size:12.5px;">No out-full / back-empty trucks for '+esc(scopeLabel)+' today.</div>';
+  }
+  const gapsCard=
+    '<div class="panel">'+
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;"><h3 class="sec">Worst backhaul gaps today</h3><span style="font-size:11px;color:var(--ink3);font-weight:600;">top 6 by gap</span></div>'+
+      '<p style="margin:0 0 12px;font-size:11.5px;color:var(--ink3);">Out full → back empty — candidates to pair with a return run.</p>'+
+      '<div style="display:grid;grid-template-columns:.9fr .9fr .8fr .8fr 1fr 1.1fr;gap:8px;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink3);padding-bottom:8px;border-bottom:1px solid var(--line);">'+
+        '<span>Truck</span><span>BU</span><span style="text-align:right;">Deliv</span><span style="text-align:right;">Pickup</span><span style="text-align:right;">Gap</span><span style="text-align:right;">Lost cap △</span></div>'+
+      gapRows+'</div>';
+
+  return ''+
+    '<div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap;">'+
+      '<h1 class="page">Operations</h1>'+
+      '<div style="display:flex;align-items:center;gap:9px;"><span style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);">Business unit</span>'+
+        '<div class="bu-seg">'+buChips+'</div></div></div>'+
+    // data-quality banner
+    '<div style="display:flex;gap:12px;align-items:center;background:var(--warnSoft);border:1px solid color-mix(in srgb,var(--warn) 30%,transparent);border-radius:12px;padding:12px 16px;margin-bottom:16px;">'+
+      '<span style="font-size:16px;color:var(--warn);">◷</span>'+
+      '<div style="font-size:13px;flex:1;"><b>Labour hours captured for '+M.nHrs+' of '+M.trucks+' trucks'+(scope==='All'?'':' ('+esc(scope)+')')+'.</b> <span style="color:var(--ink2);">Rev/hr, on-target and overtime are suppressed until hours coverage improves.</span></div>'+
+      '<span style="font-size:11px;font-weight:700;color:var(--warn);white-space:nowrap;">Coverage '+M.cov+'% △</span></div>'+
+    '<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:16px;">'+kpis+'</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">'+trendCard+buCard+'</div>'+
+    drill+
+    '<div style="display:grid;grid-template-columns:.9fr 1.4fr;gap:16px;margin-top:16px;">'+gaugesCard+gapsCard+'</div>';
+}
+function drillStat(label,val){
+  return '<div><div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);">'+label+'</div>'+
+    '<div class="num" style="font-weight:700;font-size:25px;margin-top:3px;">'+val+'</div></div>';
+}
+// Lightweight hover: position+fill the tooltip and dim non-active bars, without rebuilding the DOM.
+function updateHover(){
+  if(!OPSCTX) return;
+  const tipEl=document.getElementById('trendTip');
+  const barEls=document.querySelectorAll('#trendBars [data-bar]');
+  barEls.forEach(b=>{ const i=+b.dataset.bar, isHov=STATE.hoverIdx===i, isSel=STATE.selDay===i;
+    const dim=(STATE.hoverIdx!=null||STATE.selDay!=null)&&!isHov&&!isSel;
+    b.style.opacity=dim?0.4:1; });
+  if(!tipEl) return;
+  if(STATE.hoverIdx==null){ tipEl.style.display='none'; return; }
+  const d=OPSCTX.series.find(x=>x.i===STATE.hoverIdx); if(!d){ tipEl.style.display='none'; return; }
+  const over=d.revTd>=OPSCTX.target;
+  tipEl.style.left=Math.min(92,Math.max(8,(STATE.hoverIdx/(TREND_DAYS-1))*100))+'%';
+  tipEl.style.display='block';
+  tipEl.innerHTML=
+    '<div style="font-size:10.5px;opacity:.65;font-weight:600;letter-spacing:.03em;">'+esc(d.label)+'</div>'+
+    '<div class="num" style="font-weight:700;font-size:21px;margin:1px 0 6px;">'+money(d.revTd)+'<span style="font-size:11px;opacity:.6;font-weight:500;"> /truck-day</span></div>'+
+    '<div style="display:flex;justify-content:space-between;font-size:11px;gap:16px;"><span style="opacity:.65;">'+OPSCTX.scopeLabel+' revenue</span><span class="num">'+money(d.scopeRev)+'</span></div>'+
+    '<div style="display:flex;justify-content:space-between;font-size:11px;gap:16px;margin-top:2px;"><span style="opacity:.65;">Active trucks</span><span class="num">'+d.scopeTrucks+'</span></div>'+
+    '<div style="margin-top:6px;font-size:10.5px;font-weight:700;color:'+(over?'#86d3a6':'#ec9a93')+';">● '+(over?'at / above band':'below band')+'</div>';
+}
+
+/* ============================== NORTH STAR (live) ============================== */
+function renderNorth(){
+  const M=scopeMetrics('All');
+  const target=TARGETS.All;
+  const series=buildSeries('All');
+  const {bars,tb}=barsHtml(series,target,SCALE_MAXH,false);
+  const avg=Math.round(series.reduce((s,d)=>s+d.revTd,0)/series.length);
+  const revDelta=Math.round((M.revTd/target-1)*100);
+
+  // biggest leak — out-full / back-empty trucks (gap > 40 pts) and estimated wasted backhaul $
+  const big=M.ts.filter(t=>t.dFill!=null&&t.pFill!=null&&(t.dFill-t.pFill)>40);
+  const lostSum=big.reduce((s,t)=>s+(t.dFill-t.pFill)/100*M.revTd,0);
+  const belowBand=M.ts.filter(t=>t.rev<target).length;
+  const idle=M.ts.filter(t=>t.rev<=0).length;
+
+  const verdict=(val,tgt,goodTxt,warnTxt,badTxt)=>{
+    if(val==null) return {v:'No data',kind:'bad'};
+    if(val>=tgt) return {v:goodTxt,kind:'good'};
+    if(val>=tgt*0.7) return {v:warnTxt,kind:'warn'};
+    return {v:badTxt,kind:'bad'};
+  };
+  const drivers=[
+    ['Cube utilization',(M.avgD!=null?M.avgD+'%':'—'),'55%',verdict(M.avgD,55,'On track','Watch','Critical'),'Trucks carrying air on the outbound leg — biggest single lever.'],
+    ['Backhaul recovery',(M.bh!=null?M.bh+'%':'—'),'60%',verdict(M.bh,60,'On track','Watch','Critical'),'Return legs run near-empty. Pair deliveries with pickups on the same route.'],
+    ['Labour coverage',M.cov+'%','100%',verdict(M.cov,100,'On track','Partial','Broken'),'Hours logged for '+M.nHrs+' of '+M.trucks+' trucks — fix capture before trusting any rev/hr.'],
+  ];
+  const driverCards=drivers.map(([name,value,tgt,vd,note])=>{
+    const c=vd.kind==='good'?'var(--good)':vd.kind==='warn'?'var(--warn)':'var(--bad)';
+    const bg=vd.kind==='good'?'var(--goodSoft)':vd.kind==='warn'?'var(--warnSoft)':'var(--badSoft)';
+    return '<div style="background:var(--panel);border:1px solid var(--line);border-left:3px solid '+c+';border-radius:13px;padding:14px 17px;display:flex;flex-direction:column;gap:3px;">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span style="font-weight:700;font-size:13px;white-space:nowrap;">'+name+'</span>'+
+        '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:'+bg+';color:'+c+';white-space:nowrap;">'+vd.v+'</span></div>'+
+      '<div style="display:flex;align-items:flex-end;gap:9px;margin-top:7px;"><span class="num" style="font-weight:700;font-size:30px;line-height:1;">'+value+'</span>'+
+        '<span style="color:var(--ink3);font-size:11.5px;padding-bottom:4px;">target '+tgt+'</span></div>'+
+      '<div style="color:var(--ink2);font-size:11.5px;margin-top:5px;">'+note+'</div></div>';
+  }).join('');
+
+  const exc=[
+    ['Trucks below band',String(belowBand),'of '+M.trucks,'rev/truck-day under target','var(--bad)'],
+    ['Out-full / back-empty',String(big.length),'trucks','backhaul gap > 40 pts','var(--warn)'],
+    ['Idle assigned trucks',String(idle),'trucks','$0 revenue, still dispatched','var(--bad)'],
+    ['On-time delivery','—','△','not captured yet','var(--ink3)'],
+  ].map(([label,value,unit,sub,color])=>
+    '<div class="panel" style="border-radius:12px;padding:13px 15px;">'+
+      '<div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);">'+label+'</div>'+
+      '<div style="display:flex;align-items:baseline;gap:7px;margin-top:3px;"><span class="num" style="font-weight:700;font-size:26px;color:'+color+';">'+value+'</span>'+
+        '<span style="font-size:11px;color:var(--ink3);">'+unit+'</span></div>'+
+      '<div style="font-size:11px;color:var(--ink2);margin-top:2px;">'+sub+'</div></div>').join('');
+
+  return ''+
+    '<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:18px;">'+
+      '<div><h1 class="page">The 10-second read</h1>'+
+        '<p style="margin:5px 0 0;color:var(--ink2);max-width:560px;">One question for leadership every morning: <b style="color:var(--ink);">are we moving product efficiently and is each truck-day paying for itself?</b> Everything else is a drill-down.</p></div>'+
+      '<div style="font-size:12px;color:var(--ink3);text-align:right;">Fleet · '+M.trucks+' trucks active<br>'+BU_ORDER.filter(b=>M.ts.some(t=>t.bu===b)).length+' business units</div></div>'+
+    '<div style="display:grid;grid-template-columns:1.45fr 1fr;gap:16px;align-items:start;">'+
+      // hero
+      '<div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px 26px;display:flex;flex-direction:column;">'+
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;"><span style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);">North-star · Revenue per truck-day</span>'+
+          '<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:var(--accentSoft);color:var(--accent);">replaces $200/hr</span></div>'+
+        '<div style="display:flex;align-items:flex-end;gap:16px;margin-top:6px;"><div class="num" style="font-weight:700;font-size:62px;line-height:.9;letter-spacing:-2px;">'+money(M.revTd)+'</div>'+
+          '<div style="padding-bottom:9px;"><div style="font-weight:700;color:'+(revDelta>=0?'var(--good)':'var(--bad)')+';font-size:15px;">'+(revDelta>=0?'▲ ':'▼ ')+Math.abs(revDelta)+'% vs target</div>'+
+            '<div style="color:var(--ink3);font-size:12px;">target '+money(target)+' · 28-day avg '+money(avg)+'</div></div></div>'+
+        '<div style="position:relative;height:108px;margin:22px 0 8px;display:flex;align-items:flex-end;gap:3px;">'+
+          '<div style="position:absolute;left:0;right:0;bottom:'+tb+'px;border-top:1.5px dashed var(--ink3);opacity:.55;"></div>'+
+          '<div style="position:absolute;right:0;bottom:'+tb+'px;transform:translateY(-50%);font-size:10px;color:var(--ink3);background:var(--panel);padding:0 4px;">target</div>'+bars+'</div>'+
+        '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--ink3);" class="num"><span>'+dateLabel(series[0].iso).slice(4)+'</span><span>last 28 days</span><span>'+dateLabel(series[series.length-1].iso).slice(4)+'</span></div>'+
+        '<div style="margin-top:18px;padding:13px 15px;background:var(--badSoft);border:1px solid color-mix(in srgb,var(--bad) 25%,transparent);border-radius:11px;display:flex;gap:12px;align-items:flex-start;">'+
+          '<span style="font-size:17px;line-height:1;color:var(--bad);">⚠</span>'+
+          '<div style="font-size:13px;"><b>Today\'s biggest leak —</b> '+big.length+' trucks went out full and came back near-empty. '+
+            '<span style="color:var(--ink2);">That\'s an estimated <b style="color:var(--ink);">'+moneyK(lostSum)+'</b> of wasted backhaul capacity that paired delivery+pickup routing could recover.</span> '+
+            '<span style="font-size:11px;font-weight:700;color:var(--bad);">△ estimate — needs true cube capacity</span></div></div></div>'+
+      // drivers
+      '<div style="display:flex;flex-direction:column;gap:12px;"><div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);padding-left:2px;">The three drivers underneath it</div>'+driverCards+'</div></div>'+
+    '<div style="margin-top:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">'+exc+'</div>';
+}
+
+/* ============================== UNIT ECONOMICS (strategic — needs data) ============================== */
+function renderEcon(){
+  const wf=(label,amount,pct,kind,tag)=>{
+    const fill=kind==='rev'?'var(--accent)':kind==='final'?'var(--good)':'var(--ink3)';
+    const labelColor=kind==='rev'?'var(--ink)':kind==='final'?'var(--good)':'var(--ink2)';
+    const weight=(kind==='rev'||kind==='final')?700:500;
+    return '<div style="display:flex;align-items:center;gap:12px;margin-bottom:11px;">'+
+      '<span style="flex:0 0 152px;font-size:12.5px;font-weight:'+weight+';color:'+labelColor+';">'+label+'</span>'+
+      '<div style="flex:1;height:24px;background:var(--inset);border-radius:6px;overflow:hidden;display:flex;"><div style="height:100%;width:'+pct+'%;background:'+fill+';border-radius:6px;"></div></div>'+
+      '<span class="num" style="flex:0 0 70px;text-align:right;font-weight:700;font-size:13px;color:'+labelColor+';">'+amount+'</span>'+
+      '<span style="flex:0 0 16px;text-align:center;font-size:11px;color:var(--bad);">'+(tag||'')+'</span></div>';
+  };
+  const waterfall=[
+    wf('Delivered revenue','$100',100,'rev',''),wf('Driver + helper labour','–$19',19,'cost','△'),
+    wf('Pickup / return labour','–$11',11,'cost','△'),wf('Fuel & mileage','–$6',6,'cost','△'),
+    wf('Vehicle (lease, maint, ins.)','–$9',9,'cost','△'),wf('Damage / loss','–$2',2,'cost','△'),
+    wf('Dispatch & allocated overhead','–$13',13,'cost','△'),wf('Contribution margin','$40',40,'final',''),
+  ].join('');
+  const unlocks=[
+    ['1','var(--accentSoft)','var(--accent)','Labour (deliver + return)','Driver clock-in/out by route → join payroll. Already collected, not structured.'],
+    ['2','var(--accentSoft)','var(--accent)','Fuel & mileage','Telematics/GPS + fuel-card join. One feed, route-level cost.'],
+    ['3','var(--warnSoft)','var(--warn)','Vehicle cost per route','Allocate lease/maint/insurance per truck-day from fleet ledger.'],
+    ['4','var(--warnSoft)','var(--warn)','Damage / loss','Capture damage at return inspection, tie to contract.'],
+    ['5','var(--badSoft)','var(--bad)','Overhead allocation','Dispatch + facility cost ÷ truck-days. Finance rule, set once.'],
+  ].map(([n,bg,fg,cost,source])=>'<div style="display:flex;gap:12px;padding:11px 0;border-bottom:1px solid var(--line2);">'+
+    '<span style="flex:0 0 22px;height:22px;border-radius:6px;background:'+bg+';color:'+fg+';font-size:11px;font-weight:800;display:grid;place-items:center;">'+n+'</span>'+
+    '<div><div style="font-weight:600;font-size:12.5px;">'+cost+'</div><div style="font-size:11.5px;color:var(--ink2);">'+source+'</div></div></div>').join('');
+
+  return ''+
+    '<div style="margin-bottom:16px;"><h1 class="page">Unit economics — the view you can\'t build yet</h1>'+
+      '<p style="margin:5px 0 0;color:var(--ink2);max-width:720px;">Revenue is only half the equation. Today there\'s no cost-to-serve, so no route, order, or BU can be called profitable or not. This is the highest-value gap. Below is the shape of the answer — and exactly what to instrument to populate it.</p></div>'+
+    '<div style="display:grid;grid-template-columns:1.25fr 1fr;gap:16px;">'+
+      '<div class="panel" style="padding:20px 22px;">'+
+        '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;"><h3 class="sec">Cost-to-serve per $100 delivered</h3><span style="font-size:10px;font-weight:700;color:var(--bad);">illustrative · △ needs data</span></div>'+
+        '<p style="margin:0 0 18px;font-size:11.5px;color:var(--ink3);">Drop in real figures and this becomes contribution margin per route, per order, per BU.</p>'+waterfall+'</div>'+
+      '<div class="panel" style="padding:20px 22px;">'+
+        '<h3 class="sec" style="margin-bottom:4px;">What unlocks each line</h3>'+
+        '<p style="margin:0 0 16px;font-size:11.5px;color:var(--ink3);">Most of this is one telematics feed and one payroll join away.</p>'+unlocks+'</div></div>'+
+    '<div style="margin-top:16px;background:var(--accentSoft);border:1px solid color-mix(in srgb,var(--accent) 28%,transparent);border-radius:13px;padding:16px 20px;display:flex;gap:14px;align-items:center;">'+
+      '<span style="font-size:22px;">◎</span><div style="font-size:13px;"><b>Why this is the priority:</b> <span style="color:var(--ink2);">on $60M of revenue, a 1-point swing in contribution margin is ~$600k. You cannot manage it because you cannot see it. Every other metric here optimizes a cost you can\'t yet name.</span></div></div>';
+}
+
+/* ============================== ADVISORY (strategic) ============================== */
+function renderAdvisory(){
+  const cad=c=>({Daily:'var(--accent)',Weekly:'var(--ink2)',Monthly:'var(--ink3)',Leading:'var(--warn)'}[c]||'var(--ink2)');
+  const statusPill=s=> s==='Have'?{t:'Have',bg:'var(--goodSoft)',fg:'var(--good)'}:s==='Partial'?{t:'Partial',bg:'var(--warnSoft)',fg:'var(--warn)'}:{t:'Needs data',bg:'var(--badSoft)',fg:'var(--bad)'};
+  const metrics=[
+    ['Revenue per truck-day','Asset productivity without depending on broken hours data. Drives fleet sizing & routing.','Daily','Have'],
+    ['Outbound cube fill %','How full trucks leave. Drives load consolidation & route merging.','Daily','Have'],
+    ['Backhaul recovery %','Return-leg fill vs outbound. Drives paired delivery+pickup scheduling.','Daily','Have'],
+    ['Cost-to-serve % of revenue','The missing half. Drives pricing, route keep/drop, BU profitability.','Weekly','Needs'],
+    ['Contribution margin / route','Which routes actually make money. Drives re-price or re-route.','Weekly','Needs'],
+    ['Labour hrs coverage & rev/hr','Productivity — but fix capture first; today it is a data-quality alarm.','Daily','Partial'],
+    ['On-time within promised window','Service quality & overtime driver. Drives window & dispatch policy.','Daily','Needs'],
+    ['Stops/truck & drops per mile','Route density / efficiency. Drives territory & sequencing.','Daily','Partial'],
+    ['Overtime % of labour','Cost control + burnout signal. Drives staffing & shift design.','Weekly','Needs'],
+    ['Rental asset turns','Utilization of the inventory itself. Drives buy / repair / retire.','Monthly','Needs'],
+    ['Truck utilization (active/avail)','Are we running the fleet we own? Drives right-sizing.','Weekly','Partial'],
+    ['Demand concentration / peak ratio','Peak-day load vs avg. Drives flex staffing & surge pricing.','Weekly','Have'],
+  ].map(([name,why,c,s])=>{ const p=statusPill(s);
+    return '<div style="display:grid;grid-template-columns:1.5fr 2.4fr .7fr .8fr;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line2);">'+
+      '<span style="font-weight:700;font-size:12.5px;">'+name+'</span><span style="font-size:12px;color:var(--ink2);">'+why+'</span>'+
+      '<span style="font-size:10.5px;font-weight:700;color:'+cad(c)+';">'+c+'</span>'+
+      '<span><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:'+p.bg+';color:'+p.fg+';">'+p.t+'</span></span></div>';
+  }).join('');
+  const targets=[['Rev/truck-day · GTA','$5.0–6.0k'],['Rev/truck-day · Tents','$18–22k'],['Rev/truck-day · West / East','$8–10k'],['Outbound fill','≥ 55%'],['Backhaul recovery','≥ 60%'],['On-time delivery','≥ 95%']]
+    .map(([n,b])=>'<div style="display:grid;grid-template-columns:1.4fr 1fr;gap:7px;padding:7px 0;border-bottom:1px solid var(--line2);font-size:12px;"><span style="color:var(--ink2);">'+n+'</span><span class="num" style="text-align:right;font-weight:600;">'+b+'</span></div>').join('');
+  const roadmap=[
+    ['Now','0–60 days · cheap, high ROI','var(--accentSoft)','var(--accent)',[
+      ['Fix driver clock-in/out per route','unlocks the entire labour + rev/hr layer; ~$0 capex'],
+      ['Log true cube/weight capacity per truck class','turns fill % from a guess into a real number'],
+      ['Promised delivery window on every order','likely already in the quote — enables on-time %']]],
+    ['Next','2–6 months · moderate','var(--warnSoft)','var(--warn)',[
+      ['Telematics / GPS (miles, time, idle, on-time stamps)','fuel + cost-per-route + on-time in one feed; payback <1yr'],
+      ['Payroll overtime split + fuel-card join','real labour & fuel cost per route']]],
+    ['Later','6–12 months · integration','var(--badSoft)','var(--bad)',[
+      ['Join rental-inventory system for asset turns','capex & buy/retire decisions on the product itself'],
+      ['Customer window flexibility flag + damage/loss capture','consolidation upside + margin leakage']]],
+  ].map(([phase,horizon,bg,fg,items])=>'<div style="margin-bottom:14px;">'+
+    '<div style="display:flex;align-items:center;gap:9px;margin-bottom:7px;"><span style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:'+fg+';background:'+bg+';padding:3px 9px;border-radius:20px;">'+phase+'</span>'+
+      '<span style="font-size:11px;color:var(--ink3);">'+horizon+'</span></div>'+
+    items.map(([what,roi])=>'<div style="display:flex;gap:9px;padding:5px 0;font-size:12px;"><span style="color:'+fg+';font-size:9px;padding-top:4px;">●</span><div><b>'+what+'</b> <span style="color:var(--ink2);">— '+roi+'</span></div></div>').join('')+'</div>').join('');
+  const critique=[
+    ['Daily Truck Tracker',[
+      ['Keep','var(--goodSoft)','var(--good)','Per-truck rows & contract click-through','the item-level drill-down is genuinely useful — keep it.'],
+      ['Fix','var(--badSoft)','var(--bad)','"+10,857% vs target"','absurd output from 0.5 logged hours. Validate inputs; cap or suppress nonsense.'],
+      ['Fix','var(--badSoft)','var(--bad)','"Rev/Lab Hr $21,915" headline','meaningless on one truck. Hide fleet rev/hr until coverage clears a threshold.'],
+      ['Add','var(--accentSoft)','var(--accent)','Backhaul gap + exception highlighting','make it a triage tool, not a sortable spreadsheet — float the worst trucks up.']]],
+    ['Executive Dashboard',[
+      ['Keep','var(--goodSoft)','var(--good)','"Most imbalanced trucks" panel','the best, most actionable thing here. Promote it, do not bury it.'],
+      ['Cut','var(--badSoft)','var(--bad)','Three empty hero tiles','rev/hr, %-on-target, coverage all read 0 because hours are not captured — trains people to ignore the page.'],
+      ['Fix','var(--badSoft)','var(--bad)','Trend chart scale','the dashed projection rockets to $21k while actuals hug $0 — a broken axis artifact.'],
+      ['Reframe','var(--warnSoft)','var(--warn)','Lead with populated metrics','rev/truck-day, fill, backhaul, $ leak up top; gate labour behind a data-quality banner.']]],
+  ].map(([tool,points])=>'<div><div style="font-size:12.5px;font-weight:800;margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid var(--line);">'+tool+'</div>'+
+    points.map(([kind,bg,fg,head,body])=>'<div style="display:flex;gap:10px;margin-bottom:10px;"><span style="flex:0 0 52px;font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:'+fg+';background:'+bg+';border-radius:6px;height:fit-content;padding:3px 6px;text-align:center;">'+kind+'</span>'+
+      '<div style="font-size:12px;color:var(--ink2);"><b style="color:var(--ink);">'+head+'</b> — '+body+'</div></div>').join('')+'</div>').join('');
+
+  return ''+
+    '<div style="margin-bottom:18px;"><h1 class="page">If I ran this fleet — the thinking</h1>'+
+      '<p style="margin:5px 0 0;color:var(--ink2);max-width:760px;">The shortlist of metrics that matter, the targets I\'d actually set, what\'s missing from the data, and a candid read on the current tools.</p></div>'+
+    '<div class="panel" style="padding:20px 22px;margin-bottom:16px;">'+
+      '<h3 style="margin:0 0 3px;font-size:14px;font-weight:800;">1 · The metric shortlist — 12 that earn their place</h3>'+
+      '<p style="margin:0 0 14px;font-size:12px;color:var(--ink3);">Ruthlessly cut. Cadence tells you who looks at it and when.</p>'+
+      '<div style="display:grid;grid-template-columns:1.5fr 2.4fr .7fr .8fr;gap:10px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);padding-bottom:9px;border-bottom:1px solid var(--line);"><span>Metric</span><span>Why it matters / the decision it drives</span><span>Cadence</span><span>Status</span></div>'+
+      metrics+
+      '<div style="margin-top:12px;font-size:11.5px;color:var(--ink3);"><b style="color:var(--ink2);">Leading indicators</b> (watch to get ahead of the day): forward-booked cube vs capacity for the next 7–14 days · quote→truck assignment lead time · seasonal/weather demand index.</div></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">'+
+      '<div class="panel" style="padding:20px 22px;"><h3 style="margin:0 0 10px;font-size:14px;font-weight:800;">2 · Targets — kill the single $200/hr north star</h3>'+
+        '<div style="font-size:12.5px;color:var(--ink2);"><p style="margin:0 0 10px;"><b style="color:var(--bad);">Why $200 rev/hr is the wrong north star today:</b></p>'+
+          '<ul style="margin:0 0 14px;padding-left:18px;display:flex;flex-direction:column;gap:6px;">'+
+            '<li>It\'s built on hours captured for <b style="color:var(--ink);">1 of 27 trucks</b> — the number is noise, and "100% on target" of one truck is false comfort.</li>'+
+            '<li>It <b style="color:var(--ink);">rewards high-ticket tent jobs</b> (few stops, huge $) and punishes dense multi-stop GTA routes that are actually efficient.</li>'+
+            '<li>It\'s a <b style="color:var(--ink);">lagging average</b> that hides the real waste — trucks running 21% full.</li></ul>'+
+          '<p style="margin:0 0 8px;"><b style="color:var(--accent);">What I\'d set instead — banded, by BU, exception-driven:</b></p></div>'+
+        '<div style="display:grid;grid-template-columns:1.4fr 1fr;gap:7px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);border-bottom:1px solid var(--line);padding-bottom:7px;margin-top:4px;"><span>Target</span><span style="text-align:right;">Starting band</span></div>'+
+        targets+
+        '<div style="margin-top:11px;font-size:11.5px;color:var(--ink3);">Surface problems <b style="color:var(--ink2);">early</b>: measure variance vs a rolling forecast (not a static line), show the worst exceptions not the mean, and use 7-day rolling to cut single-day noise.</div></div>'+
+      '<div class="panel" style="padding:20px 22px;"><h3 style="margin:0 0 10px;font-size:14px;font-weight:800;">3 · What\'s missing — phased capture roadmap</h3>'+roadmap+'</div></div>'+
+    '<div class="panel" style="padding:20px 22px;"><h3 style="margin:0 0 4px;font-size:14px;font-weight:800;">4 · Candid critique of the current tools</h3>'+
+      '<p style="margin:0 0 16px;font-size:12px;color:var(--ink3);">What to keep, cut, and reframe — from the two screenshots.</p>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;">'+critique+'</div></div>';
+}
+
+/* ============================== event wiring ============================== */
+function wire(){
+  document.querySelectorAll('#tabNav [data-tab]').forEach(b=>b.onclick=()=>{ STATE.tab=b.dataset.tab; STATE.selDay=null; STATE.hoverIdx=null; render(); });
+  document.querySelectorAll('[data-bu]').forEach(b=>b.onclick=()=>{ STATE.bu=b.dataset.bu; STATE.selDay=null; render(); });
+  document.querySelectorAll('[data-burow]').forEach(b=>b.onclick=()=>{ const v=b.dataset.burow; STATE.bu=(STATE.bu===v?'All':v); STATE.selDay=null; render(); });
+  document.querySelectorAll('[data-bar]').forEach(b=>{
+    const i=+b.dataset.bar;
+    b.onmouseenter=()=>{ STATE.hoverIdx=i; updateHover(); };
+    b.onmouseleave=()=>{ STATE.hoverIdx=null; updateHover(); };
+    b.onclick=()=>{ STATE.hoverIdx=null; STATE.selDay=(STATE.selDay===i?null:i); render(); };
+  });
+  const csv=document.getElementById('csvBtn'); if(csv) csv.onclick=exportCsv;
+  const dc=document.getElementById('drillClose'); if(dc) dc.onclick=()=>{ STATE.selDay=null; render(); };
+}
+
+/* ============================== boot ============================== */
+function setupDates(){
+  const dates=Object.keys(DATA.routes||{}).sort();
+  const dp=document.getElementById('datePick');
+  if(dates.length){ dp.min=dates[0]; dp.max=dates[dates.length-1]; }
+  const today=localToday();
+  const past=dates.filter(d=>d<=today);
+  curDate=(DATA.routes&&DATA.routes[today])?today:(past.length?past[past.length-1]:(dates.length?dates[dates.length-1]:today));
+  dp.value=curDate;
+  dp.addEventListener('change', ()=>{ curDate=dp.value; STATE.selDay=null; STATE.hoverIdx=null; render(); });
+}
+
+(async function(){
+  try{
+    const res=await fetch('dispatch_data.json?v='+Date.now(), {cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    DATA=await res.json();
+  }catch(e){
+    document.getElementById('app').innerHTML='<div class="empty">Could not load dispatch data ('+e.message+').<br>If you are signed out, <a href="/">reload the map</a> and sign in, then return here.</div>';
+    return;
+  }
+  try{ const pwRes=await fetch('driver_hours.json?v='+Date.now(), {cache:'no-store'}); if(pwRes.ok){ PW=await pwRes.json(); buildPwIndex(); } }
+  catch(e){ console.warn('driver_hours.json unavailable:', e.message); }
+  try{ const clRes=await fetch('contract_load.json?v='+Date.now(), {cache:'no-store'}); if(clRes.ok){ LOAD=await clRes.json(); } }
+  catch(e){ console.warn('contract_load.json unavailable — fill metrics will read —:', e.message); }
+  setupDates();
+  render();
+})();
+</script>
+</body>
+</html>

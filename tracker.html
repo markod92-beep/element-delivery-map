@@ -90,6 +90,13 @@
   .dot-g{background:var(--green);} .dot-y{background:var(--yellow);} .dot-r{background:var(--red);} .dot-n{background:#C9C5BA;}
   td.rev{font-weight:600;}
   .vt-pos{color:var(--green);font-weight:600;} .vt-neg{color:var(--red);font-weight:600;}
+  /* Truck-fill icons (delivery / pickup legs) */
+  .fill-cell{white-space:nowrap;}
+  .fill-leg{display:flex;align-items:center;gap:6px;line-height:1;margin:2px 0;cursor:default;}
+  .fill-leg svg{flex:0 0 auto;display:block;}
+  .fill-pct{font-size:11.5px;font-weight:700;font-variant-numeric:tabular-nums;min-width:54px;}
+  .fill-pct .leg-k{font-weight:700;color:var(--element-muted);margin-right:3px;}
+  .fill-pct.g{color:var(--green);} .fill-pct.y{color:var(--yellow);} .fill-pct.r{color:var(--red);} .fill-pct.n{color:var(--element-muted);}
   tfoot td{padding:10px;font-weight:700;border-top:2px solid var(--element-teal);background:#F4F1E9;white-space:nowrap;}
   tfoot td.num{text-align:right;}
   .note{font-size:12px;color:var(--element-muted);margin:14px 2px;line-height:1.5;}
@@ -125,6 +132,10 @@
     Productivity colour: <span style="color:var(--green);font-weight:600;">green &ge; $200/hr</span>,
     <span style="color:var(--yellow);font-weight:600;">yellow $175&ndash;$199</span>,
     <span style="color:var(--red);font-weight:600;">red &lt; $175</span>. Target rate is adjustable above.
+    <br><strong>Truck&nbsp;Fill</strong> estimates how full each truck is on its delivery (D) and pickup (P) legs —
+    category quantities &times; rough cube factors, vs a per-business-unit &ldquo;full&rdquo; line (90th&nbsp;percentile of
+    historical truck-day delivery loads). Green &le;85%, amber 85&ndash;100%, red&nbsp;&gt;100% (overloaded). Hover an icon for
+    cube, fill% and the top categories on that leg. A big <em>D&nbsp;high&nbsp;/&nbsp;P&nbsp;low</em> gap = out full, back empty.
   </p>
 </div>
 
@@ -252,6 +263,63 @@ const HS_TO_CO = {'001':'GTA','002':'GTA','003':'East','004':'GTA Tents','005':'
 function buOf(hs){ return HS_TO_CO[hs] || 'Other'; }
 const BU_CHIPS = [['All','All'],['GTA','GTA'],['GTA Tents','Tents'],['East','East'],['West','West']];
 
+// ---- Truck-fill model (contract_load.json) ----
+// cube_by_con: per-contract "truck-space cube"; capacity_by_bu: ~90th-pct
+// per-truck-day delivery cube per business unit (the "full" line). A truck's
+// fill% on a leg = Σ cube of that leg's contracts / its BU capacity.
+// The truck's fill BU is the MAJORITY stop-store code (matches how
+// process_truckload.py calibrated capacity — more reliable than the route hs).
+let LOAD = null;            // parsed contract_load.json (or null if unavailable)
+const STORE_TO_BU = {'CFR':'GTA','CMM':'GTA','ERG':'GTA','HIG':'GTA','ATR':'GTA Tents','RT':'GTA Tents','MFL':'East','A&B':'West','LW':'West'};
+function cubeOf(con){ return (LOAD && LOAD.cube_by_con && LOAD.cube_by_con[con]) || 0; }
+function capOf(bu){ return (LOAD && LOAD.capacity_by_bu && LOAD.capacity_by_bu[bu]) || 0; }
+function fillRag(pct){ if(pct==null) return 'n'; if(pct>100) return 'r'; if(pct>=85) return 'y'; return 'g'; }
+function fillHex(rag){ return rag==='r'?'#B23A3A':rag==='y'?'#B8860B':rag==='g'?'#1B7F4B':'#C9C5BA'; }
+// Small right-facing truck; cargo box fills left→right to pct (clamped at 100% width).
+function truckFillSvg(pct){
+  const rag = fillRag(pct), col = fillHex(rag);
+  const bx=1, by=4, bw=23, bh=12;
+  const fw = (pct==null)?0 : bw*Math.max(0,Math.min(pct,100))/100;
+  return '<svg width="42" height="22" viewBox="0 0 42 22" aria-hidden="true">'+
+    '<rect x="'+bx+'" y="'+by+'" width="'+bw+'" height="'+bh+'" rx="1.5" fill="#F4F1E9" stroke="#9aa6a8" stroke-width="1"/>'+
+    (fw>0?'<rect x="'+bx+'" y="'+by+'" width="'+fw.toFixed(1)+'" height="'+bh+'" rx="1.5" fill="'+col+'" opacity="0.88"/>':'')+
+    '<path d="M25 7 h7 l4 4 v5 h-11 z" fill="#DDE6E2" stroke="#9aa6a8" stroke-width="1"/>'+
+    '<rect x="32" y="9" width="3.4" height="3" rx="0.5" fill="#9aa6a8"/>'+
+    '<circle cx="9" cy="18.5" r="2.6" fill="#3a4a4d"/><circle cx="30" cy="18.5" r="2.6" fill="#3a4a4d"/>'+
+    '</svg>';
+}
+// Build one leg's display: {pct, rag, cube, top:[[cat,cube],...], capBU}
+function legFill(cube, bu){
+  const cap = capOf(bu);
+  if(!cap || !bu) return {pct:null, rag:'n', cube:cube, cap:0, bu:bu};
+  return {pct: Math.round(100*cube/cap), rag: fillRag(Math.round(100*cube/cap)), cube:cube, cap:cap, bu:bu};
+}
+function legTooltip(legName, f, topCats){
+  if(f.pct==null) return legName+': cube '+fmt0(f.cube)+' — no capacity for this BU';
+  let t = legName+': '+f.pct+'% full  (cube '+fmt0(f.cube)+' / '+fmt0(f.cap)+' '+(f.bu||'')+' capacity)';
+  const tops=(topCats||[]).slice(0,3).map(c=>c[0]+' '+fmt0(c[1]));
+  if(tops.length) t += '\nTop: '+tops.join(', ');
+  return t;
+}
+// Truck-Fill table cell: two shaded icons (Delivery, Pickup) + % each.
+function fillCellHtml(row){
+  const bu = row.fillBU;
+  const dF = legFill(row.dCube||0, bu), pF = legFill(row.pCube||0, bu);
+  const dTop = topCatsList(row.dCatAgg), pTop = topCatsList(row.pCatAgg);
+  const legHtml = (k, name, f, top)=>{
+    const pctTxt = (f.pct==null)?'—':(f.pct+'%');
+    return '<div class="fill-leg" title="'+esc(legTooltip(name,f,top))+'">'+
+      truckFillSvg(f.pct)+
+      '<span class="fill-pct '+f.rag+'"><span class="leg-k">'+k+'</span>'+pctTxt+'</span></div>';
+  };
+  return '<div class="fill-cell">'+legHtml('D','Delivery',dF,dTop)+legHtml('P','Pickup',pF,pTop)+'</div>';
+}
+// {cat: cube} -> sorted [[cat, cube], ...]
+function topCatsList(agg){
+  if(!agg) return [];
+  return Object.keys(agg).map(k=>[k, agg[k]]).sort((a,b)=>b[1]-a[1]);
+}
+
 // ---- aggregate routes -> per-truck rows ----
 function aggregate(d){
   const rts = (DATA.routes && DATA.routes[d]) ? DATA.routes[d] : [];
@@ -259,7 +327,8 @@ function aggregate(d){
   for(const r of rts){
     const t = (r.tnum || r.truck || '').toString().replace(/^#/,'').trim();
     if(!t) continue;
-    if(!byTruck[t]) byTruck[t] = {truck:t, truckLabel:String(r.truck||r.tnum||t), driver:'', rev:0, revD:0, revP:0, stops:0, items:0, routes:0, hs:'', bu:'Other'};
+    if(!byTruck[t]) byTruck[t] = {truck:t, truckLabel:String(r.truck||r.tnum||t), driver:'', rev:0, revD:0, revP:0, stops:0, items:0, routes:0, hs:'', bu:'Other',
+      dCube:0, pCube:0, dCatAgg:{}, pCatAgg:{}, _storeVotes:{}, fillBU:null};
     const o = byTruck[t];
     o.routes++;
     o.stops += (r.stps||0);
@@ -273,6 +342,19 @@ function aggregate(d){
       // including those with no contract number attached)
       const rv = s.rev||0;
       if(s.cls==='D') o.revD += rv; else if(s.cls==='P') o.revP += rv;
+      // truck-fill: tally each stop's store (for BU) and its contract's cube per leg
+      const sc = String(s.store||'').trim().toUpperCase();
+      if(STORE_TO_BU[sc]) o._storeVotes[STORE_TO_BU[sc]] = (o._storeVotes[STORE_TO_BU[sc]]||0)+1;
+      const scon = (s.con==null?'':String(s.con)).trim();
+      if(scon && LOAD){
+        const cube = cubeOf(scon);
+        if(cube>0 && (s.cls==='D' || s.cls==='P')){
+          const aggT = (s.cls==='D') ? o.dCatAgg : o.pCatAgg;
+          if(s.cls==='D') o.dCube += cube; else o.pCube += cube;
+          const tc = (LOAD.top_cats_by_con && LOAD.top_cats_by_con[scon]) || [];
+          for(const c of tc){ aggT[c[0]] = (aggT[c[0]]||0) + c[1]; }
+        }
+      }
       const con = (s.con==null?'':String(s.con)).trim();
       if(!con) continue;
       if(!o._q) o._q = {};
@@ -286,11 +368,17 @@ function aggregate(d){
       if(!q.parr && s.parr) q.parr = s.parr;
     }
   }
-  // finalise each truck's quote list (sorted by revenue)
+  // finalise each truck's quote list (sorted by revenue) + resolve its fill BU
   for(const o of Object.values(byTruck)){
     o.quotes = Object.values(o._q || {}).map(q=>({con:q.con, cust:q.cust, store:q.store, rev:Math.round(q.rev), types:[...q.types], cls:[...q.cls], addr:q.addr, parr:q.parr}));
     o.quotes.sort((a,b)=> b.rev - a.rev);
     delete o._q;
+    // fill BU = majority stop-store bucket (matches capacity calibration);
+    // fall back to the hs-derived bu if no store codes mapped.
+    let best=null, bestN=-1;
+    for(const k in o._storeVotes){ if(o._storeVotes[k]>bestN){ best=k; bestN=o._storeVotes[k]; } }
+    o.fillBU = best || (o.bu!=='Other'?o.bu:null);
+    delete o._storeVotes;
   }
   const arr = Object.values(byTruck);
   arr.sort((a,b)=> b.rev - a.rev || (a.truck.localeCompare(b.truck, undefined, {numeric:true})));
@@ -376,6 +464,7 @@ function render(){
         '<td class="drv-cell">'+(row.driver||'')+'</td>'+
         '<td class="num rev">'+revSplitHtml(row)+'</td>'+
         '<td class="num">'+row.stops+'</td>'+
+        '<td>'+fillCellHtml(row)+'</td>'+
         '<td class="quotes-cell">'+quotesCellHtml(row)+'</td>'+
         '<td class="num"><input type="number" step="0.5" min="0" data-f="proj" value="'+(manual[row.truck]&&manual[row.truck].proj!=null?manual[row.truck].proj:'')+'" placeholder="—"></td>'+
         '<td class="num"><input type="number" step="0.5" min="0" data-f="actual" class="'+(actPW?'pw':'')+'" title="'+(actPW?'Auto-filled from Payworks timesheet — type to override':'')+'" value="'+actVal+'" placeholder="—"></td>'+
@@ -385,6 +474,23 @@ function render(){
         '<td><input type="text" class="notes" data-f="notes" value="'+((manual[row.truck]&&manual[row.truck].notes)?String(manual[row.truck].notes).replace(/"/g,'&quot;'):'')+'" placeholder="Notes"></td>'+
       '</tr>';
   }).join('');
+
+  // Fleet truck-fill: average delivery / pickup fill% across trucks that have a
+  // calibrated BU capacity (skip trucks whose BU we couldn't resolve a cap for).
+  let fillDsum=0, fillPsum=0, fillCnt=0;
+  trucks.forEach(row=>{
+    const cap = capOf(row.fillBU);
+    if(!cap) return;
+    fillDsum += 100*(row.dCube||0)/cap;
+    fillPsum += 100*(row.pCube||0)/cap;
+    fillCnt++;
+  });
+  const avgFillD = fillCnt? Math.round(fillDsum/fillCnt) : null;
+  const avgFillP = fillCnt? Math.round(fillPsum/fillCnt) : null;
+  const fleetFillHtml = (fillCnt && LOAD)
+    ? '<div class="fill-leg" title="Fleet avg delivery fill across '+fillCnt+' trucks"><span class="fill-pct '+fillRag(avgFillD)+'"><span class="leg-k">D</span>'+avgFillD+'%</span></div>'+
+      '<div class="fill-leg" title="Fleet avg pickup fill across '+fillCnt+' trucks"><span class="fill-pct '+fillRag(avgFillP)+'"><span class="leg-k">P</span>'+avgFillP+'%</span></div>'
+    : '';
 
   const fleetRevHr = (totActualHrs>0)? revWithActual/totActualHrs : (totProjHrs>0? revWithProj/totProjHrs : null);
   const avgStops = nActive? totStops/nActive : 0;
@@ -404,6 +510,7 @@ function render(){
       card('Rev / Lab Hr', fleetRevHr!=null? fmtMoney(fleetRevHr):'—', true, revHrSub)+
       card('Avg Stops', fmt1(avgStops), true, 'per truck')+
       card('% On Target', pctOnTarget+'%', true, 'of '+nEntered+' w/ hours')+
+      (LOAD && fillCnt ? card('Avg Truck Fill', '<span class="'+(avgFillD>100?'vt-neg':'')+'">'+avgFillD+'%</span> <span style="color:var(--element-muted)">D /</span> '+avgFillP+'% <span style="color:var(--element-muted)">P</span>', true, 'delivery vs pickup, '+fillCnt+' trucks') : '')+
     '</div>'+
     '<div class="rag">'+
       '<span class="pill g">&#9679; On Target (&ge;'+fmtMoney(target)+'/hr) <span class="n">'+cGreen+'</span></span>'+
@@ -416,7 +523,7 @@ function render(){
     '<div class="tbl-scroll"><table>'+
       '<thead><tr>'+
         '<th class="num">#</th><th>Truck</th><th>Driver</th>'+
-        '<th class="num">Revenue</th><th class="num">Stops</th><th>Quotes</th>'+
+        '<th class="num">Revenue</th><th class="num">Stops</th><th>Truck Fill</th><th>Quotes</th>'+
         '<th class="num">Proj Hrs</th><th class="num">Actual Hrs</th><th class="num">Volume (lbs)</th>'+
         '<th class="num">Rev / Actual Hr</th><th class="num">vs Target</th><th>Notes</th>'+
       '</tr></thead>'+
@@ -424,7 +531,7 @@ function render(){
       '<tfoot><tr>'+
         '<td></td><td colspan="2">FLEET TOTAL ('+nActive+' trucks)</td>'+
         '<td class="num">'+fmtMoney(totRev)+'</td>'+
-        '<td class="num">'+totStops+'</td><td></td>'+
+        '<td class="num">'+totStops+'</td><td>'+fleetFillHtml+'</td><td></td>'+
         '<td class="num">'+(totProjHrs?fmt1(totProjHrs):'')+'</td>'+
         '<td class="num">'+(totActualHrs?fmt1(totActualHrs):'')+'</td>'+
         '<td></td>'+
@@ -596,11 +703,13 @@ function recompute(){
     const pct=(cGreen+cYellow+cRed)>0?Math.round(100*cGreen/(cGreen+cYellow+cRed)):0;
     cards[6].textContent=pct+'%';
   }
+  // tfoot tds: 0 spacer · 1 label(colspan2) · 2 totRev · 3 totStops · 4 TruckFill ·
+  // 5 quotes · 6 ProjHrs · 7 ActualHrs · 8 volume · 9 Rev/ActualHr · 10 vsTarget · 11 notes
   const ft=document.querySelectorAll('tfoot td');
-  if(ft.length>=9){
-    ft[5].textContent=totProjHrs?fmt1(totProjHrs):'';     // Proj Hrs total
-    ft[6].textContent=totActualHrs?fmt1(totActualHrs):''; // Actual Hrs total
-    ft[8].textContent=fleetRevHr!=null?fmtMoney(fleetRevHr):''; // Rev/Actual Hr
+  if(ft.length>=10){
+    ft[6].textContent=totProjHrs?fmt1(totProjHrs):'';     // Proj Hrs total
+    ft[7].textContent=totActualHrs?fmt1(totActualHrs):''; // Actual Hrs total
+    ft[9].textContent=fleetRevHr!=null?fmtMoney(fleetRevHr):''; // Rev/Actual Hr
   }
 }
 
@@ -625,7 +734,7 @@ function exportXlsx(){
   if(!trucks.length) return;
   const target = getTarget(curDate);
   const manual = loadManual(curDate);
-  const head = ['#','Truck #','Driver','Revenue ($)','Delivery Rev','Pickup Rev','Stops','Quotes','Proj Lab Hrs','Actual Lab Hrs','Volume (lbs)','Rev / Proj Hr','Rev / Actual Hr','Vol / Actual Hr','vs Target','Hrs Source','Notes'];
+  const head = ['#','Truck #','Driver','Revenue ($)','Delivery Rev','Pickup Rev','Stops','Quotes','Proj Lab Hrs','Actual Lab Hrs','Volume (lbs)','Rev / Proj Hr','Rev / Actual Hr','Vol / Actual Hr','vs Target','Hrs Source','Notes','BU','Delivery Fill %','Pickup Fill %'];
   const rows = [head];
   let totRev=0,totRevD=0,totRevP=0,totProj=0,totActual=0,totStops=0,revWithActual=0;
   trucks.forEach((row,i)=>{
@@ -636,7 +745,10 @@ function exportXlsx(){
       c.revProj!=null?Math.round(c.revProj*100)/100:'', c.revActual!=null?Math.round(c.revActual*100)/100:'',
       c.volActual!=null?Math.round(c.volActual*100)/100:'', c.vsTarget!=null?Math.round(c.vsTarget*1000)/1000:'',
       c.actualFromPW?'Payworks':(c.actual>0?'Manual':''),
-      (manual[row.truck]&&manual[row.truck].notes)||'']);
+      (manual[row.truck]&&manual[row.truck].notes)||'',
+      row.fillBU||'',
+      (capOf(row.fillBU)? Math.round(100*(row.dCube||0)/capOf(row.fillBU)) : ''),
+      (capOf(row.fillBU)? Math.round(100*(row.pCube||0)/capOf(row.fillBU)) : '')]);
   });
   const fleetRevHr=(totActual>0)?revWithActual/totActual:(totProj>0?totRev/totProj:'');
   rows.push([]);
@@ -682,6 +794,10 @@ function exportXlsx(){
     const pwRes = await fetch('driver_hours.json?v='+Date.now(), {cache:'no-store'});
     if(pwRes.ok){ PW = await pwRes.json(); buildPwIndex(); }
   }catch(e){ console.warn('driver_hours.json unavailable:', e.message); }
+  try{
+    const clRes = await fetch('contract_load.json?v='+Date.now(), {cache:'no-store'});
+    if(clRes.ok){ LOAD = await clRes.json(); }
+  }catch(e){ console.warn('contract_load.json unavailable — truck-fill icons hidden:', e.message); }
   setupDates();
   document.getElementById('dlBtn').addEventListener('click', exportXlsx);
   await pullServer(curDate);   // load shared entries for the opening date

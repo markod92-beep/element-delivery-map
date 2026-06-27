@@ -114,6 +114,13 @@ const HS_TO_CO = {'001':'GTA','002':'GTA','003':'East','004':'GTA Tents','005':'
 function buOf(hs){ return HS_TO_CO[hs] || 'Other'; }
 const BU_ORDER = ['GTA','GTA Tents','East','West','Other'];
 
+// ---- Truck-fill model (contract_load.json — same as the tracker) ----
+let LOAD=null;
+const STORE_TO_BU = {'CFR':'GTA','CMM':'GTA','ERG':'GTA','HIG':'GTA','ATR':'GTA Tents','RT':'GTA Tents','MFL':'East','A&B':'West','LW':'West'};
+function cubeOf(con){ return (LOAD&&LOAD.cube_by_con&&LOAD.cube_by_con[con])||0; }
+function capOf(bu){ return (LOAD&&LOAD.capacity_by_bu&&LOAD.capacity_by_bu[bu])||0; }
+function fillRag(pct){ if(pct==null) return 'n'; if(pct>100) return 'r'; if(pct>=85) return 'y'; return 'g'; }
+
 // ---- Payworks matching (same approach as the tracker) ----
 const PW_ALIASES = { 'JOEY SARMIENTO': 'HUSEP SARMIENTO' };
 function normToks(s){ return String(s||'').replace(/\([^)]*\)/g,'').toUpperCase().replace(/[^A-Z ]/g,' ').split(/\s+/).filter(Boolean); }
@@ -150,15 +157,24 @@ function aggregate(d){
   for(const r of rts){
     const t=(r.tnum||r.truck||'').toString().replace(/^#/,'').trim();
     if(!t) continue;
-    if(!byTruck[t]) byTruck[t]={truck:t, driver:'', rev:0, revD:0, revP:0, stops:0, hs:'', bu:'Other'};
+    if(!byTruck[t]) byTruck[t]={truck:t, driver:'', rev:0, revD:0, revP:0, stops:0, hs:'', bu:'Other', dCube:0, pCube:0, _sv:{}, fillBU:null};
     const o=byTruck[t];
     o.stops += (r.stps||0);
     o.rev   += (r.stops||[]).reduce((s,x)=>s+(x.rev||0),0);
-    for(const s of (r.stops||[])){ const rv=s.rev||0; if(s.cls==='D') o.revD+=rv; else if(s.cls==='P') o.revP+=rv; }
+    for(const s of (r.stops||[])){
+      const rv=s.rev||0; if(s.cls==='D') o.revD+=rv; else if(s.cls==='P') o.revP+=rv;
+      const sc=String(s.store||'').trim().toUpperCase();
+      if(STORE_TO_BU[sc]) o._sv[STORE_TO_BU[sc]]=(o._sv[STORE_TO_BU[sc]]||0)+1;
+      const con=(s.con==null?'':String(s.con)).trim();
+      if(con && LOAD){ const cube=cubeOf(con); if(cube>0){ if(s.cls==='D') o.dCube+=cube; else if(s.cls==='P') o.pCube+=cube; } }
+    }
     if(!o.driver && r.drv) o.driver=r.drv;
     if((!o.hs||o.bu==='Other') && r.hs!=null && String(r.hs).trim()){ o.hs=String(r.hs).trim(); o.bu=buOf(o.hs); }
   }
-  return Object.values(byTruck);
+  const arr=Object.values(byTruck);
+  arr.forEach(o=>{ let best=null,bn=-1; for(const k in o._sv){ if(o._sv[k]>bn){best=k;bn=o._sv[k];} } o.fillBU=best||(o.bu!=='Other'?o.bu:null); delete o._sv;
+    const cap=capOf(o.fillBU); o.dFill=cap?Math.round(100*o.dCube/cap):null; o.pFill=cap?Math.round(100*o.pCube/cap):null; });
+  return arr;
 }
 
 function ragOf(rph){ if(rph==null||isNaN(rph)) return 'n'; if(rph>=TARGET) return 'g'; if(rph>=TARGET*0.875) return 'y'; return 'r'; }
@@ -235,6 +251,19 @@ function render(){
   const ranked=trucks.filter(t=>t.rph!=null).sort((a,b)=>b.rph-a.rph);
   const top=ranked.slice(0,5), bottom=ranked.slice(-5).reverse();
 
+  // ---- fleet utilization (truck fill) ----
+  // Trucks with a calibrated BU capacity get a delivery + pickup fill%. The
+  // "imbalance" view ranks the biggest gap between the two legs — a truck that
+  // goes out full and comes back near-empty (or vice-versa) is wasted capacity.
+  const util=trucks.filter(t=>t.dFill!=null||t.pFill!=null);
+  let avgD=null, avgP=null;
+  if(util.length){
+    avgD=Math.round(util.reduce((s,t)=>s+(t.dFill||0),0)/util.length);
+    avgP=Math.round(util.reduce((s,t)=>s+(t.pFill||0),0)/util.length);
+  }
+  const imbal=util.map(t=>({truck:t.truck, driver:t.driver, bu:t.fillBU, dFill:t.dFill||0, pFill:t.pFill||0, gap:(t.dFill||0)-(t.pFill||0)}))
+    .sort((a,b)=>Math.abs(b.gap)-Math.abs(a.gap)).slice(0,8);
+
   content.innerHTML=
     '<div class="dash">'+
       card('Fleet Revenue', fmtMoney(fRev), '', trucks.length+' trucks active')+
@@ -256,6 +285,26 @@ function render(){
         '</tbody><tfoot><tr><td>FLEET</td><td class="num">'+trucks.length+'</td><td class="num">'+fmtMoney(fRev)+'</td><td class="num">'+fmt1(fHrs)+'</td><td class="num">'+fmtMoney(fleetRph)+'</td><td></td></tr></tfoot></table>'+
       '</div>'+
     '</div></div>'+
+
+    (LOAD && util.length ?
+    '<div class="sec"><h2>Fleet Utilization — truck fill</h2><div class="grid2">'+
+      '<div class="panel"><h3>Average fill · '+util.length+' trucks</h3>'+
+        '<div class="dash" style="margin-bottom:0">'+
+          card('Avg Delivery Fill', (avgD!=null?avgD+'%':'—'), '', 'out-bound leg vs BU capacity')+
+          card('Avg Pickup Fill', (avgP!=null?avgP+'%':'—'), '', 'return leg vs BU capacity')+
+        '</div>'+
+        '<p style="font-size:11.5px;color:var(--element-muted);margin:12px 2px 0;line-height:1.45">Fill = leg cube &divide; per-BU capacity (90th&nbsp;pct of historical truck-day delivery load). A large delivery-vs-pickup gap means a truck runs out full and comes back near-empty (or vice-versa) — wasted backhaul capacity.</p>'+
+      '</div>'+
+      '<div class="panel"><h3>Most imbalanced trucks</h3>'+
+        '<table><thead><tr><th>Truck</th><th>BU</th><th class="num">Deliv</th><th class="num">Pickup</th><th class="num">Gap</th><th>Pattern</th></tr></thead><tbody>'+
+        imbal.map(t=>'<tr><td><strong>'+esc(t.truck)+'</strong></td><td style="color:var(--element-muted)">'+esc(t.bu||'')+'</td>'+
+          '<td class="num"><span class="tag '+fillRag(t.dFill)+'">'+t.dFill+'%</span></td>'+
+          '<td class="num"><span class="tag '+fillRag(t.pFill)+'">'+t.pFill+'%</span></td>'+
+          '<td class="num"><strong>'+(t.gap>=0?'+':'')+t.gap+'</strong></td>'+
+          '<td style="font-size:11.5px;color:var(--element-muted)">'+(t.gap>0?'out full &rarr; back empty':t.gap<0?'out empty &rarr; back full':'balanced')+'</td></tr>').join('')+
+        '</tbody></table>'+
+      '</div>'+
+    '</div></div>' : '')+
 
     '<div class="sec"><div class="grid2">'+
       '<div class="panel"><h3>Delivery vs Pickup revenue</h3><div class="chart-box"><canvas id="dpChart"></canvas></div></div>'+
@@ -356,6 +405,8 @@ function setupDates(){
   }
   try{ const pwRes=await fetch('driver_hours.json?v='+Date.now(), {cache:'no-store'}); if(pwRes.ok){ PW=await pwRes.json(); buildPwIndex(); } }
   catch(e){ console.warn('driver_hours.json unavailable:', e.message); }
+  try{ const clRes=await fetch('contract_load.json?v='+Date.now(), {cache:'no-store'}); if(clRes.ok){ LOAD=await clRes.json(); } }
+  catch(e){ console.warn('contract_load.json unavailable — utilization panel hidden:', e.message); }
   setupDates();
   await pullRange(addDays(curDate,-(TREND_DAYS-1)), curDate);
   render();

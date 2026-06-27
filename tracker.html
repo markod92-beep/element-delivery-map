@@ -56,11 +56,19 @@
   table{border-collapse:collapse;width:100%;min-width:940px;font-size:13px;}
   thead th{position:sticky;top:0;background:var(--element-teal);color:#fff;font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;padding:10px 10px;text-align:left;white-space:nowrap;}
   thead th.num{text-align:right;}
+  thead th.sortable{cursor:pointer;user-select:none;}
+  thead th.sortable:hover{background:var(--element-teal-dark);}
+  thead th.sorted{background:var(--element-teal-dark);}
+  .sort-ind{font-size:10px;margin-left:3px;opacity:.95;}
   tbody td{padding:7px 10px;border-top:1px solid var(--element-border);white-space:nowrap;}
   tbody td.num{text-align:right;font-variant-numeric:tabular-nums;}
   tbody tr:nth-child(even){background:#FBFAF6;}
   tbody td input{font-family:inherit;font-size:13px;width:74px;padding:5px 7px;border:1px solid var(--element-border);border-radius:6px;text-align:right;background:#fff;}
   tbody td input.notes{width:160px;text-align:left;}
+  /* compact hours columns (Proj / Actual) */
+  thead th.hrs{padding-left:6px;padding-right:6px;}
+  tbody td.hrs{padding-left:6px;padding-right:6px;}
+  tbody td.hrs input{width:48px;padding:5px 5px;}
   tbody td input.pw{background:#E9F3EC;border-color:#BFD9C6;color:var(--element-teal);font-weight:600;}
   .truck-cell{font-weight:700;color:var(--element-teal);}
   .truck-link{color:var(--element-teal);font-weight:700;text-decoration:none;border-bottom:1px dashed var(--element-teal-mid);}
@@ -126,7 +134,9 @@
 
   <p class="note" id="footNote" style="display:none;">
     Revenue, stops, truck&nbsp;# and driver are auto-pulled from the same dispatch data as the live map
-    (sum of stop revenue per truck for the selected day). <strong>Actual Hrs auto-fill from the Payworks timesheet</strong>
+    (sum of stop revenue per truck for the selected day; <strong>Stops</strong> = distinct delivery/pickup
+    locations, so several orders to one address count once). Click any column header to sort.
+    <strong>Actual Hrs auto-fill from the Payworks timesheet</strong>
     for each matched driver on that date (shown shaded green — type to override); Proj Hrs and notes are entered manually
     and saved in this browser per day. Payworks posts a day or two behind, so the most recent dates may be blank until entered.
     Productivity colour: <span style="color:var(--green);font-weight:600;">green &ge; $200/hr</span>,
@@ -166,6 +176,10 @@ function legLabel(clsArr, typesArr){
   const labs = [...new Set((clsArr||[]).map(c=>CLS_LABEL[c]).filter(Boolean))];
   return labs.length ? labs.join(' / ') : ((typesArr&&typesArr[0])||'—');
 }
+// "No truck assigned (…)" synthetic catch-all buckets have no real vehicle.
+function isUnassigned(row){ return /^No truck assigned/i.test(String((row&&(row.truckLabel||row.truck))||'')); }
+// Leading numeric part of a truck id (so 9 < 23 < 100); null if none.
+function truckNum(row){ const m=String((row&&row.truck)||'').match(/\d+/); return m?parseInt(m[0],10):null; }
 
 // ---- manual-entry persistence (per date, this browser) ----
 function storeKey(d){ return 'truck-tracker:'+d; }
@@ -303,6 +317,9 @@ function legTooltip(legName, f, topCats){
 }
 // Truck-Fill table cell: two shaded icons (Delivery, Pickup) + % each.
 function fillCellHtml(row){
+  // Synthetic "No truck assigned" buckets aren't a real vehicle — fill % is
+  // meaningless, so show a dash instead of icons.
+  if(isUnassigned(row)) return '<span style="color:var(--element-muted)">—</span>';
   const bu = row.fillBU;
   const dF = legFill(row.dCube||0, bu), pF = legFill(row.pCube||0, bu);
   const dTop = topCatsList(row.dCatAgg), pTop = topCatsList(row.pCatAgg);
@@ -328,10 +345,9 @@ function aggregate(d){
     const t = (r.tnum || r.truck || '').toString().replace(/^#/,'').trim();
     if(!t) continue;
     if(!byTruck[t]) byTruck[t] = {truck:t, truckLabel:String(r.truck||r.tnum||t), driver:'', rev:0, revD:0, revP:0, stops:0, items:0, routes:0, hs:'', bu:'Other',
-      dCube:0, pCube:0, dCatAgg:{}, pCatAgg:{}, _storeVotes:{}, fillBU:null};
+      dCube:0, pCube:0, dCatAgg:{}, pCatAgg:{}, _storeVotes:{}, _locs:new Set(), fillBU:null};
     const o = byTruck[t];
     o.routes++;
-    o.stops += (r.stps||0);
     o.items += (r.load>0 ? r.load : 0);
     o.rev   += (r.stops||[]).reduce((s,x)=>s+(x.rev||0),0);
     if(!o.driver && r.drv) o.driver = r.drv;
@@ -342,6 +358,14 @@ function aggregate(d){
       // including those with no contract number attached)
       const rv = s.rev||0;
       if(s.cls==='D') o.revD += rv; else if(s.cls==='P') o.revP += rv;
+      // Stops = distinct physical locations visited (D + P together). Dedupe by
+      // normalized address; if blank, fall back to rounded lat/lng. Multiple
+      // orders dropped at one address count as a single location.
+      let locKey = normAddr(s.addr);
+      if(!locKey && Array.isArray(s.ll) && s.ll[0]!=null && s.ll[1]!=null){
+        locKey = 'll:'+(+s.ll[0]).toFixed(4)+','+(+s.ll[1]).toFixed(4);
+      }
+      if(locKey) o._locs.add(locKey);
       // truck-fill: tally each stop's store (for BU) and its contract's cube per leg
       const sc = String(s.store||'').trim().toUpperCase();
       if(STORE_TO_BU[sc]) o._storeVotes[STORE_TO_BU[sc]] = (o._storeVotes[STORE_TO_BU[sc]]||0)+1;
@@ -379,6 +403,9 @@ function aggregate(d){
     for(const k in o._storeVotes){ if(o._storeVotes[k]>bestN){ best=k; bestN=o._storeVotes[k]; } }
     o.fillBU = best || (o.bu!=='Other'?o.bu:null);
     delete o._storeVotes;
+    // distinct-location count (see stop loop above)
+    o.stops = o._locs.size;
+    delete o._locs;
   }
   const arr = Object.values(byTruck);
   arr.sort((a,b)=> b.rev - a.rev || (a.truck.localeCompare(b.truck, undefined, {numeric:true})));
@@ -400,13 +427,59 @@ function computeRow(row, manual, target){
   let actual = parseFloat(m.actual);
   let actualFromPW = false;
   if(isNaN(actual) && row.pwActual!=null){ actual = row.pwActual; actualFromPW = true; }
-  const vol = parseFloat(m.vol);
   const revProj   = (proj>0)   ? row.rev/proj   : null;
   const revActual = (actual>0) ? row.rev/actual : null;
-  const volActual = (actual>0 && vol>0) ? vol/actual : null;
   const ragRef = (revActual!=null)?revActual:revProj;
   const vsTarget = (ragRef!=null)? (ragRef - target)/target : null;
-  return {proj,actual,actualFromPW,vol,revProj,revActual,volActual,vsTarget,rag:ragOf(ragRef,target)};
+  return {proj,actual,actualFromPW,revProj,revActual,vsTarget,rag:ragOf(ragRef,target)};
+}
+
+// ---- column sorting ----
+// Default = revenue desc (matches the historical aggregate order). Clicking a
+// header sets that key (numeric cols start desc, Truck starts asc); clicking the
+// active header toggles direction. Re-render reads typed values from storage, so
+// sorting never loses manual entries.
+let sortState = {key:'rev', dir:'desc'};
+function setSort(key){
+  if(sortState.key===key) sortState.dir = (sortState.dir==='asc')?'desc':'asc';
+  else { sortState.key=key; sortState.dir = (key==='truck')?'asc':'desc'; }
+  render();
+}
+function sortableTh(key,label,cls){
+  const active = sortState.key===key;
+  const ind = active ? (sortState.dir==='asc'?'▲':'▼') : '';
+  return '<th class="'+(cls?cls+' ':'')+'sortable'+(active?' sorted':'')+'" onclick="setSort(\''+key+'\')">'+
+    label+'<span class="sort-ind">'+ind+'</span></th>';
+}
+// Order the (already BU-filtered) trucks per the active sort. `manual`/`target`
+// let numeric hour columns resolve the same value the row displays.
+function sortTrucks(arr, manual, target){
+  const SK=sortState.key, SD=sortState.dir;
+  const sval=(row)=>{
+    switch(SK){
+      case 'rev': return row.rev;
+      case 'stops': return row.stops;
+      case 'proj': { const c=computeRow(row,manual,target); return (c.proj>0)?c.proj:null; }
+      case 'actual': { const c=computeRow(row,manual,target); return (c.actual>0)?c.actual:null; }
+      case 'revActual': { const c=computeRow(row,manual,target); return c.revActual; }
+      case 'fill': { if(isUnassigned(row)) return null; const cap=capOf(row.fillBU); return cap?(row.dCube||0)/cap:null; }
+      default: return null;
+    }
+  };
+  arr.sort((a,b)=>{
+    if(SK==='truck'){
+      const ua=isUnassigned(a), ub=isUnassigned(b);
+      if(ua!==ub) return ua?1:-1;              // unassigned buckets always last
+      const na=truckNum(a), nb=truckNum(b);
+      const cmp = (na!=null&&nb!=null) ? na-nb : String(a.truck).localeCompare(String(b.truck),undefined,{numeric:true});
+      return SD==='asc'?cmp:-cmp;
+    }
+    const va=sval(a), vb=sval(b);
+    const an=(va==null||isNaN(va)), bn=(vb==null||isNaN(vb));
+    if(an&&bn) return 0; if(an) return 1; if(bn) return -1;   // blanks always last
+    return SD==='asc'?(va-vb):(vb-va);
+  });
+  return arr;
 }
 
 // ---- render everything for curDate ----
@@ -432,7 +505,8 @@ function render(){
   Object.values(QIDX).forEach(e=>{ const k=normAddr(e.addr); if(!k) return; (ADDR_IDX[k]=ADDR_IDX[k]||[]).push(e.con); });
   // apply the business-unit filter (reset to All if the chosen BU has no trucks today)
   if(curBU!=='All' && !allTrucks.some(t=>t.bu===curBU)) curBU='All';
-  trucks = (curBU==='All') ? allTrucks : allTrucks.filter(t=>t.bu===curBU);
+  trucks = ((curBU==='All') ? allTrucks.slice() : allTrucks.filter(t=>t.bu===curBU));
+  sortTrucks(trucks, manual, target);
   const content = document.getElementById('content');
 
   if(!allTrucks.length){
@@ -459,16 +533,14 @@ function render(){
     const actPW = (mActual==null && row.pwActual!=null);
     return ''+
       '<tr data-truck="'+row.truck+'">'+
-        '<td class="num">'+(i+1)+'</td>'+
         '<td class="truck-cell"><span class="ragdot dot-'+c.rag+'"></span><a class="truck-link" href="/?routes_truck='+encodeURIComponent(row.truckLabel||row.truck)+'&routes_date='+curDate+'" title="Show this truck&#39;s route on the map">'+row.truck+'</a></td>'+
         '<td class="drv-cell">'+(row.driver||'')+'</td>'+
         '<td class="num rev">'+revSplitHtml(row)+'</td>'+
         '<td class="num">'+row.stops+'</td>'+
         '<td>'+fillCellHtml(row)+'</td>'+
         '<td class="quotes-cell">'+quotesCellHtml(row)+'</td>'+
-        '<td class="num"><input type="number" step="0.5" min="0" data-f="proj" value="'+(manual[row.truck]&&manual[row.truck].proj!=null?manual[row.truck].proj:'')+'" placeholder="—"></td>'+
-        '<td class="num"><input type="number" step="0.5" min="0" data-f="actual" class="'+(actPW?'pw':'')+'" title="'+(actPW?'Auto-filled from Payworks timesheet — type to override':'')+'" value="'+actVal+'" placeholder="—"></td>'+
-        '<td class="num"><input type="number" step="1" min="0" data-f="vol" value="'+(manual[row.truck]&&manual[row.truck].vol!=null?manual[row.truck].vol:'')+'" placeholder="—"></td>'+
+        '<td class="num hrs"><input type="number" step="0.5" min="0" data-f="proj" value="'+(manual[row.truck]&&manual[row.truck].proj!=null?manual[row.truck].proj:'')+'" placeholder="—"></td>'+
+        '<td class="num hrs"><input type="number" step="0.5" min="0" data-f="actual" class="'+(actPW?'pw':'')+'" title="'+(actPW?'Auto-filled from Payworks timesheet — type to override':'')+'" value="'+actVal+'" placeholder="—"></td>'+
         '<td class="num" data-c="revActual">'+(c.revActual!=null?fmtMoney(c.revActual):'')+'</td>'+
         '<td class="num" data-c="vsTarget">'+vsTxt+'</td>'+
         '<td><input type="text" class="notes" data-f="notes" value="'+((manual[row.truck]&&manual[row.truck].notes)?String(manual[row.truck].notes).replace(/"/g,'&quot;'):'')+'" placeholder="Notes"></td>'+
@@ -522,19 +594,19 @@ function render(){
       '<span class="status" id="saveStatus"></span></div>'+
     '<div class="tbl-scroll"><table>'+
       '<thead><tr>'+
-        '<th class="num">#</th><th>Truck</th><th>Driver</th>'+
-        '<th class="num">Revenue</th><th class="num">Stops</th><th>Truck Fill</th><th>Quotes</th>'+
-        '<th class="num">Proj Hrs</th><th class="num">Actual Hrs</th><th class="num">Volume (lbs)</th>'+
-        '<th class="num">Rev / Actual Hr</th><th class="num">vs Target</th><th>Notes</th>'+
+        sortableTh('truck','Truck','')+'<th>Driver</th>'+
+        sortableTh('rev','Revenue','num')+sortableTh('stops','Stops','num')+
+        sortableTh('fill','Truck Fill','')+'<th>Quotes</th>'+
+        sortableTh('proj','Proj Hrs','num hrs')+sortableTh('actual','Actual Hrs','num hrs')+
+        sortableTh('revActual','Rev / Actual Hr','num')+'<th class="num">vs Target</th><th>Notes</th>'+
       '</tr></thead>'+
       '<tbody>'+rowsHtml+'</tbody>'+
       '<tfoot><tr>'+
-        '<td></td><td colspan="2">FLEET TOTAL ('+nActive+' trucks)</td>'+
+        '<td colspan="2">FLEET TOTAL ('+nActive+' trucks)</td>'+
         '<td class="num">'+fmtMoney(totRev)+'</td>'+
         '<td class="num">'+totStops+'</td><td>'+fleetFillHtml+'</td><td></td>'+
-        '<td class="num">'+(totProjHrs?fmt1(totProjHrs):'')+'</td>'+
-        '<td class="num">'+(totActualHrs?fmt1(totActualHrs):'')+'</td>'+
-        '<td></td>'+
+        '<td class="num hrs">'+(totProjHrs?fmt1(totProjHrs):'')+'</td>'+
+        '<td class="num hrs">'+(totActualHrs?fmt1(totActualHrs):'')+'</td>'+
         '<td class="num">'+(fleetRevHr!=null?fmtMoney(fleetRevHr):'')+'</td>'+
         '<td></td><td></td>'+
       '</tr></tfoot>'+
@@ -703,13 +775,13 @@ function recompute(){
     const pct=(cGreen+cYellow+cRed)>0?Math.round(100*cGreen/(cGreen+cYellow+cRed)):0;
     cards[6].textContent=pct+'%';
   }
-  // tfoot tds: 0 spacer · 1 label(colspan2) · 2 totRev · 3 totStops · 4 TruckFill ·
-  // 5 quotes · 6 ProjHrs · 7 ActualHrs · 8 volume · 9 Rev/ActualHr · 10 vsTarget · 11 notes
+  // tfoot tds: 0 label(colspan2) · 1 totRev · 2 totStops · 3 TruckFill · 4 quotes ·
+  // 5 ProjHrs · 6 ActualHrs · 7 Rev/ActualHr · 8 vsTarget · 9 notes
   const ft=document.querySelectorAll('tfoot td');
-  if(ft.length>=10){
-    ft[6].textContent=totProjHrs?fmt1(totProjHrs):'';     // Proj Hrs total
-    ft[7].textContent=totActualHrs?fmt1(totActualHrs):''; // Actual Hrs total
-    ft[9].textContent=fleetRevHr!=null?fmtMoney(fleetRevHr):''; // Rev/Actual Hr
+  if(ft.length>=8){
+    ft[5].textContent=totProjHrs?fmt1(totProjHrs):'';     // Proj Hrs total
+    ft[6].textContent=totActualHrs?fmt1(totActualHrs):''; // Actual Hrs total
+    ft[7].textContent=fleetRevHr!=null?fmtMoney(fleetRevHr):''; // Rev/Actual Hr
   }
 }
 
@@ -734,26 +806,27 @@ function exportXlsx(){
   if(!trucks.length) return;
   const target = getTarget(curDate);
   const manual = loadManual(curDate);
-  const head = ['#','Truck #','Driver','Revenue ($)','Delivery Rev','Pickup Rev','Stops','Quotes','Proj Lab Hrs','Actual Lab Hrs','Volume (lbs)','Rev / Proj Hr','Rev / Actual Hr','Vol / Actual Hr','vs Target','Hrs Source','Notes','BU','Delivery Fill %','Pickup Fill %'];
+  const head = ['#','Truck #','Driver','Revenue ($)','Delivery Rev','Pickup Rev','Stops','Quotes','Proj Lab Hrs','Actual Lab Hrs','Rev / Proj Hr','Rev / Actual Hr','vs Target','Hrs Source','Notes','BU','Delivery Fill %','Pickup Fill %'];
   const rows = [head];
   let totRev=0,totRevD=0,totRevP=0,totProj=0,totActual=0,totStops=0,revWithActual=0;
   trucks.forEach((row,i)=>{
     const c=computeRow(row,manual,target);
     totRev+=row.rev;totRevD+=(row.revD||0);totRevP+=(row.revP||0);totStops+=row.stops;if(c.proj>0)totProj+=c.proj;if(c.actual>0){totActual+=c.actual;revWithActual+=row.rev;}
+    const unas = isUnassigned(row);
     rows.push([i+1,row.truck,row.driver||'',Math.round(row.rev*100)/100,Math.round((row.revD||0)*100)/100,Math.round((row.revP||0)*100)/100,row.stops,(row.quotes||[]).map(q=>q.con).join(', '),
-      isNaN(c.proj)?'':c.proj, isNaN(c.actual)?'':c.actual, isNaN(c.vol)?'':c.vol,
+      isNaN(c.proj)?'':c.proj, isNaN(c.actual)?'':c.actual,
       c.revProj!=null?Math.round(c.revProj*100)/100:'', c.revActual!=null?Math.round(c.revActual*100)/100:'',
-      c.volActual!=null?Math.round(c.volActual*100)/100:'', c.vsTarget!=null?Math.round(c.vsTarget*1000)/1000:'',
+      c.vsTarget!=null?Math.round(c.vsTarget*1000)/1000:'',
       c.actualFromPW?'Payworks':(c.actual>0?'Manual':''),
       (manual[row.truck]&&manual[row.truck].notes)||'',
-      row.fillBU||'',
-      (capOf(row.fillBU)? Math.round(100*(row.dCube||0)/capOf(row.fillBU)) : ''),
-      (capOf(row.fillBU)? Math.round(100*(row.pCube||0)/capOf(row.fillBU)) : '')]);
+      unas?'':(row.fillBU||''),
+      (!unas&&capOf(row.fillBU))? Math.round(100*(row.dCube||0)/capOf(row.fillBU)) : '',
+      (!unas&&capOf(row.fillBU))? Math.round(100*(row.pCube||0)/capOf(row.fillBU)) : '']);
   });
   const fleetRevHr=(totActual>0)?revWithActual/totActual:(totProj>0?totRev/totProj:'');
   rows.push([]);
-  rows.push(['','FLEET TOTAL','',Math.round(totRev*100)/100,Math.round(totRevD*100)/100,Math.round(totRevP*100)/100,totStops,'',totProj||'',totActual||'','',
-    '', fleetRevHr!==''?Math.round(fleetRevHr*100)/100:'', '','','','']);
+  rows.push(['','FLEET TOTAL','',Math.round(totRev*100)/100,Math.round(totRevD*100)/100,Math.round(totRevP*100)/100,totStops,'',totProj||'',totActual||'',
+    '', fleetRevHr!==''?Math.round(fleetRevHr*100)/100:'', '','','','','','']);
 
   let cG=0,cY=0,cR=0,cN=0;
   trucks.forEach(row=>{const c=computeRow(row,manual,target);
@@ -772,7 +845,7 @@ function exportXlsx(){
   const wb = XLSX.utils.book_new();
   const wsD = XLSX.utils.aoa_to_sheet(dash); wsD['!cols']=[{wch:26},{wch:16}];
   const wsT = XLSX.utils.aoa_to_sheet(rows);
-  wsT['!cols']=[{wch:4},{wch:9},{wch:22},{wch:12},{wch:12},{wch:12},{wch:7},{wch:7},{wch:11},{wch:12},{wch:11},{wch:11},{wch:12},{wch:12},{wch:8},{wch:10},{wch:22}];
+  wsT['!cols']=[{wch:4},{wch:9},{wch:22},{wch:12},{wch:12},{wch:12},{wch:7},{wch:22},{wch:11},{wch:12},{wch:11},{wch:12},{wch:8},{wch:10},{wch:22},{wch:10},{wch:13},{wch:13}];
   XLSX.utils.book_append_sheet(wb, wsD, 'Dashboard');
   XLSX.utils.book_append_sheet(wb, wsT, 'Tracker');
   XLSX.writeFile(wb, 'Daily_Truck_Tracker_'+curDate+'.xlsx');

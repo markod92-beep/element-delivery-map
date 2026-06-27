@@ -1,0 +1,7 @@
+name = "element-delivery-map"
+pages_build_output_dir = "."
+
+[[d1_databases]]
+binding = "DB"
+database_name = "element-tracker"
+database_id = "5a2e91b9-a448-4240-a877-761d18f1b778"

@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Executive Dashboard — Element Delivery Map</title>
+<link rel="icon" type="image/svg+xml" href="/assets/element-logo.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --element-teal:#1C3B42; --element-teal-dark:#0F2428; --element-teal-mid:#2A5A63;
+    --element-mint:#C0DEC7; --element-offwhite:#F7F3EC; --element-offwhite-tint:#CDC7B4;
+    --element-white:#FFFFFF; --element-ink:#1C3B42; --element-muted:#6B7A7E; --element-border:#E3DED1;
+    --green:#1B7F4B; --green-bg:#E4F3EA; --yellow:#B8860B; --yellow-bg:#FBF3DD; --red:#B23A3A; --red-bg:#F7E4E4;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Inter',system-ui,sans-serif;color:var(--element-ink);background:var(--element-offwhite);}
+  a{color:var(--element-teal-mid);}
+  .wrap{max-width:1320px;margin:0 auto;padding:18px 20px 60px;}
+  header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;border-bottom:2px solid var(--element-border);padding-bottom:14px;margin-bottom:18px;}
+  header img{height:34px;width:auto;}
+  header .title{font-size:20px;font-weight:700;color:var(--element-teal);letter-spacing:.01em;}
+  header .spacer{flex:1;}
+  .ctrl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .ctrl label{font-size:12px;font-weight:600;color:var(--element-muted);}
+  input[type=date]{font-family:inherit;font-size:14px;padding:7px 10px;border:1px solid var(--element-border);border-radius:8px;background:var(--element-white);color:var(--element-ink);}
+  .btn{font-family:inherit;font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;border:1px solid var(--element-teal);background:var(--element-teal);color:#fff;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;}
+  .btn:hover{background:var(--element-teal-dark);}
+  .btn.ghost{background:var(--element-white);color:var(--element-teal);}
+  .btn.ghost:hover{background:var(--element-mint);}
+  .dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px;}
+  .card{background:var(--element-white);border:1px solid var(--element-border);border-radius:12px;padding:13px 15px;}
+  .card .k{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--element-muted);}
+  .card .v{font-size:24px;font-weight:700;color:var(--element-teal);margin-top:3px;line-height:1.1;}
+  .card .v.small{font-size:18px;}
+  .card .v.g{color:var(--green);} .card .v.y{color:var(--yellow);} .card .v.r{color:var(--red);}
+  .card .csub{font-size:10.5px;color:var(--element-muted);margin-top:3px;font-weight:500;line-height:1.25;}
+  .sec{margin:6px 0 22px;}
+  .sec h2{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--element-teal);margin:0 0 10px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media(max-width:860px){ .grid2{grid-template-columns:1fr;} }
+  .panel{background:var(--element-white);border:1px solid var(--element-border);border-radius:12px;padding:15px 16px;}
+  .panel h3{font-size:12.5px;font-weight:700;color:var(--element-teal);margin:0 0 12px;text-transform:uppercase;letter-spacing:.03em;}
+  table{border-collapse:collapse;width:100%;font-size:13px;}
+  thead th{background:var(--element-teal);color:#fff;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.03em;padding:8px 9px;text-align:left;white-space:nowrap;}
+  thead th.num{text-align:right;}
+  tbody td{padding:7px 9px;border-top:1px solid var(--element-border);white-space:nowrap;}
+  tbody td.num{text-align:right;font-variant-numeric:tabular-nums;}
+  tbody tr:nth-child(even){background:#FBFAF6;}
+  tfoot td{padding:8px 9px;font-weight:700;border-top:2px solid var(--element-teal);background:#F4F1E9;}
+  tfoot td.num{text-align:right;font-variant-numeric:tabular-nums;}
+  .bar-wrap{background:#ECEAE2;border-radius:5px;height:9px;overflow:hidden;min-width:60px;}
+  .bar{height:100%;border-radius:5px;background:var(--element-teal-mid);}
+  .tbl-scroll{overflow-x:auto;border:1px solid var(--element-border);border-radius:12px;background:var(--element-white);}
+  .tbl-scroll table{min-width:680px;}
+  .tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;}
+  .tag.g{background:var(--green-bg);color:var(--green);} .tag.y{background:var(--yellow-bg);color:var(--yellow);} .tag.r{background:var(--red-bg);color:var(--red);} .tag.n{background:#ECEAE2;color:var(--element-muted);}
+  .vt-pos{color:var(--green);font-weight:600;} .vt-neg{color:var(--red);font-weight:600;}
+  .chart-box{position:relative;height:260px;}
+  .note{font-size:12px;color:var(--element-muted);margin:14px 2px;line-height:1.5;}
+  .empty{padding:40px;text-align:center;color:var(--element-muted);}
+  @media(max-width:640px){ header .title{font-size:17px;} .wrap{padding:14px 12px 50px;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="/assets/element-lockup.svg" alt="Element Event Solutions" onerror="this.style.display='none'">
+    <div class="title">Executive Dashboard</div>
+    <div class="spacer"></div>
+    <div class="ctrl">
+      <label for="datePick">As of</label>
+      <input type="date" id="datePick">
+      <a class="btn ghost" href="/tracker.html" title="Open the Daily Truck Tracker">Tracker</a>
+      <a class="btn ghost" href="/" title="Back to the delivery map">&larr; Map</a>
+    </div>
+  </header>
+
+  <div id="content">
+    <div class="empty" id="loadingMsg">Loading dispatch data&hellip;</div>
+  </div>
+
+  <p class="note" id="footNote" style="display:none;">
+    Revenue, stops and Delivery/Pickup split come from the same dispatch data as the live map (sum of stop revenue per
+    truck, by stop class). Actual labour hours come from the Payworks timesheet matched to each truck's driver; projected
+    hours and history come from the shared tracker store (Cloudflare D1). Rev/hr productivity vs the
+    <strong>$<span id="tgtNote">200</span>/lab-hr</strong> target:
+    <span style="color:var(--green);font-weight:600;">green &ge; target</span>,
+    <span style="color:var(--yellow);font-weight:600;">yellow within 12.5%</span>,
+    <span style="color:var(--red);font-weight:600;">red below</span>.
+    Payworks posts a day or two behind, so the most recent days may show fewer hours.
+  </p>
+</div>
+
+<script>
+"use strict";
+const TARGET = 200;
+const TREND_DAYS = 28;
+const fmt0 = n => (n==null||isNaN(n))?'':Math.round(n).toLocaleString('en-CA');
+const fmtMoney = n => (n==null||isNaN(n))?'—':'$'+Math.round(n).toLocaleString('en-CA');
+const fmt1 = n => (n==null||isNaN(n))?'—':(Math.round(n*10)/10).toLocaleString('en-CA',{minimumFractionDigits:1,maximumFractionDigits:1});
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+let DATA=null, PW=null, PW_FULL=null, PW_INIT=null;
+let curDate=null;
+let PROJ_BY_DATE={};   // date -> truck -> {proj, actual} from D1
+const charts={};
+
+// ---- Business unit (mirrors the map / tracker) ----
+const HS_TO_CO = {'001':'GTA','002':'GTA','003':'East','004':'GTA Tents','005':'West','006':'GTA','007':'West','008':'GTA','009':'GTA'};
+function buOf(hs){ return HS_TO_CO[hs] || 'Other'; }
+const BU_ORDER = ['GTA','GTA Tents','East','West','Other'];
+
+// ---- Payworks matching (same approach as the tracker) ----
+const PW_ALIASES = { 'JOEY SARMIENTO': 'HUSEP SARMIENTO' };
+function normToks(s){ return String(s||'').replace(/\([^)]*\)/g,'').toUpperCase().replace(/[^A-Z ]/g,' ').split(/\s+/).filter(Boolean); }
+function buildPwIndex(){
+  PW_FULL=new Map(); PW_INIT=new Map();
+  if(!PW||!PW.drivers) return;
+  for(const rec of PW.drivers){
+    const fn=normToks(rec.f).join(' '), ln=normToks(rec.l).join(' ');
+    if(!fn) continue;
+    const full=(fn+' '+ln).trim();
+    if(!PW_FULL.has(full)) PW_FULL.set(full, rec);
+    if(ln && !PW_INIT.has(fn+'|'+ln[0])) PW_INIT.set(fn+'|'+ln[0], rec);
+  }
+}
+function pwMatch(driver){
+  if(!PW_FULL) return null;
+  const t=normToks(driver); if(!t.length) return null;
+  const alias=PW_ALIASES[t.join(' ')]; if(alias){ const ar=PW_FULL.get(alias); if(ar) return ar; }
+  const fn=t[0], ln=t.slice(1).join(' ');
+  let r=PW_FULL.get((fn+' '+ln).trim()); if(r) return r;
+  if(t.length>=2){ r=PW_FULL.get(fn+' '+t[t.length-1]); if(r) return r; }
+  if(t.length>=2){ r=PW_INIT.get(fn+'|'+t[1][0]); if(r) return r; }
+  return null;
+}
+function pwHoursFor(driver, isoDate){
+  const r=pwMatch(driver); if(!r||!r.d) return null;
+  const h=r.d[isoDate]; return (typeof h==='number')?h:null;
+}
+
+// ---- aggregate routes -> per-truck rows for a date (rev split by stop class) ----
+function aggregate(d){
+  const rts=(DATA.routes&&DATA.routes[d])?DATA.routes[d]:[];
+  const byTruck={};
+  for(const r of rts){
+    const t=(r.tnum||r.truck||'').toString().replace(/^#/,'').trim();
+    if(!t) continue;
+    if(!byTruck[t]) byTruck[t]={truck:t, driver:'', rev:0, revD:0, revP:0, stops:0, hs:'', bu:'Other'};
+    const o=byTruck[t];
+    o.stops += (r.stps||0);
+    o.rev   += (r.stops||[]).reduce((s,x)=>s+(x.rev||0),0);
+    for(const s of (r.stops||[])){ const rv=s.rev||0; if(s.cls==='D') o.revD+=rv; else if(s.cls==='P') o.revP+=rv; }
+    if(!o.driver && r.drv) o.driver=r.drv;
+    if((!o.hs||o.bu==='Other') && r.hs!=null && String(r.hs).trim()){ o.hs=String(r.hs).trim(); o.bu=buOf(o.hs); }
+  }
+  return Object.values(byTruck);
+}
+
+function ragOf(rph){ if(rph==null||isNaN(rph)) return 'n'; if(rph>=TARGET) return 'g'; if(rph>=TARGET*0.875) return 'y'; return 'r'; }
+
+// hours for a truck on a date: Payworks actual, else D1 actual; proj from D1
+function hoursFor(truck, driver, date){
+  const pw=pwHoursFor(driver, date);
+  const d1=(PROJ_BY_DATE[date]||{})[truck]||{};
+  const actual=(pw!=null)?pw:(d1.actual!=null?d1.actual:null);
+  const proj=(d1.proj!=null)?d1.proj:null;
+  return {actual, proj, fromPW:(pw!=null)};
+}
+
+// ---- date helpers ----
+function addDays(iso, n){ const p=iso.split('-').map(Number); const dt=new Date(p[0],p[1]-1,p[2]+n); return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'); }
+function localToday(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function mdLabel(iso){ const p=iso.split('-'); return p[1]+'/'+p[2]; }
+
+// ---- D1 history fetch (projected + actual hours over a range) ----
+async function pullRange(from, to){
+  PROJ_BY_DATE={};
+  try{
+    const r=await fetch('/api/projhours?from='+from+'&to='+to, {cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    (j.rows||[]).forEach(row=>{
+      const d=row.date, t=String(row.truck);
+      (PROJ_BY_DATE[d]=PROJ_BY_DATE[d]||{})[t]={proj:row.proj_hrs, actual:row.actual_hrs};
+    });
+  }catch(e){ console.warn('proj-hours history unavailable:', e.message); }
+}
+
+function card(k,v,cls,sub){ return '<div class="card"><div class="k">'+k+'</div><div class="v'+(cls?' '+cls:'')+'">'+v+'</div>'+(sub?'<div class="csub">'+sub+'</div>':'')+'</div>'; }
+
+// ---- main render ----
+function render(){
+  const content=document.getElementById('content');
+  const trucks=aggregate(curDate);
+  if(!trucks.length){
+    content.innerHTML='<div class="empty">No routes found for '+curDate+'.<br>Pick another date above.</div>';
+    document.getElementById('footNote').style.display='none';
+    Object.values(charts).forEach(c=>c&&c.destroy());
+    return;
+  }
+  document.getElementById('footNote').style.display='';
+
+  // per-truck metrics for the selected day
+  trucks.forEach(t=>{ const h=hoursFor(t.truck, t.driver, curDate); t.actual=h.actual; t.proj=h.proj; t.fromPW=h.fromPW;
+    t.rph=(t.actual>0)?t.rev/t.actual:null; t.rag=ragOf(t.rph); });
+
+  // ---- fleet KPIs ----
+  let fRev=0,fRevD=0,fRevP=0,fHrs=0,revWithHrs=0,nHrs=0,nOnTgt=0;
+  trucks.forEach(t=>{ fRev+=t.rev; fRevD+=t.revD; fRevP+=t.revP;
+    if(t.actual>0){ fHrs+=t.actual; revWithHrs+=t.rev; nHrs++; if(t.rph>=TARGET) nOnTgt++; } });
+  const fleetRph=(fHrs>0)?revWithHrs/fHrs:null;
+  const pctOnTgt=nHrs>0?Math.round(100*nOnTgt/nHrs):0;
+  const cov=trucks.length?Math.round(100*nHrs/trucks.length):0;
+
+  // ---- by business unit ----
+  const buMap={};
+  trucks.forEach(t=>{ const b=(buMap[t.bu]=buMap[t.bu]||{bu:t.bu,rev:0,revD:0,revP:0,hrs:0,revWithHrs:0,n:0,nHrs:0});
+    b.rev+=t.rev; b.revD+=t.revD; b.revP+=t.revP; b.n++; if(t.actual>0){ b.hrs+=t.actual; b.revWithHrs+=t.rev; b.nHrs++; } });
+  const buRows=BU_ORDER.filter(b=>buMap[b]).map(b=>buMap[b]);
+  buRows.forEach(b=> b.rph=(b.hrs>0)?b.revWithHrs/b.hrs:null);
+  const maxBuRev=Math.max(1,...buRows.map(b=>b.rev));
+
+  // ---- projected vs actual (trucks with a projection or actual) ----
+  const pva=trucks.filter(t=>t.proj>0||t.actual>0)
+    .map(t=>({truck:t.truck, driver:t.driver, proj:t.proj, actual:t.actual, varr:((t.actual||0)-(t.proj||0))}))
+    .sort((a,b)=>Math.abs(b.varr)-Math.abs(a.varr));
+  let pProj=0,pAct=0; pva.forEach(p=>{ if(p.proj>0)pProj+=p.proj; if(p.actual>0)pAct+=p.actual; });
+
+  // ---- top / bottom by rev/hr ----
+  const ranked=trucks.filter(t=>t.rph!=null).sort((a,b)=>b.rph-a.rph);
+  const top=ranked.slice(0,5), bottom=ranked.slice(-5).reverse();
+
+  content.innerHTML=
+    '<div class="dash">'+
+      card('Fleet Revenue', fmtMoney(fRev), '', trucks.length+' trucks active')+
+      card('Actual Lab Hours', fmt1(fHrs), '', nHrs+' of '+trucks.length+' trucks')+
+      card('Rev / Lab Hr', fmtMoney(fleetRph), (fleetRph==null?'':fleetRph>=TARGET?'g':fleetRph>=TARGET*0.875?'y':'r'),
+           'target '+fmtMoney(TARGET)+' · '+(fleetRph!=null?(fleetRph>=TARGET?'+':'')+Math.round((fleetRph-TARGET)/TARGET*100)+'% vs target':'enter hours'))+
+      card('% On Target', pctOnTgt+'%', (pctOnTgt>=60?'g':pctOnTgt>=40?'y':'r'), 'of '+nHrs+' w/ hours')+
+      card('Coverage', cov+'%', '', nHrs+' of '+trucks.length+' trucks w/ hours')+
+      card('Delivery / Pickup', '<span class="small">'+fmtMoney(fRevD)+' / '+fmtMoney(fRevP)+'</span>', 'small',
+           (fRev>0?Math.round(100*fRevD/fRev)+'% del · '+Math.round(100*fRevP/fRev)+'% pick':'—'))+
+    '</div>'+
+
+    '<div class="sec"><div class="grid2">'+
+      '<div class="panel"><h3>Rev / Lab Hr — last '+TREND_DAYS+' days</h3><div class="chart-box"><canvas id="trendChart"></canvas></div></div>'+
+      '<div class="panel"><h3>By Business Unit</h3>'+
+        '<table><thead><tr><th>BU</th><th class="num">Trucks</th><th class="num">Revenue</th><th class="num">Hours</th><th class="num">Rev/Hr</th><th>Mix</th></tr></thead><tbody>'+
+        buRows.map(b=>'<tr><td><strong>'+esc(b.bu)+'</strong></td><td class="num">'+b.n+'</td><td class="num">'+fmtMoney(b.rev)+'</td><td class="num">'+fmt1(b.hrs)+'</td><td class="num"><span class="tag '+ragOf(b.rph)+'">'+fmtMoney(b.rph)+'</span></td>'+
+          '<td><div class="bar-wrap"><div class="bar" style="width:'+Math.round(100*b.rev/maxBuRev)+'%"></div></div></td></tr>').join('')+
+        '</tbody><tfoot><tr><td>FLEET</td><td class="num">'+trucks.length+'</td><td class="num">'+fmtMoney(fRev)+'</td><td class="num">'+fmt1(fHrs)+'</td><td class="num">'+fmtMoney(fleetRph)+'</td><td></td></tr></tfoot></table>'+
+      '</div>'+
+    '</div></div>'+
+
+    '<div class="sec"><div class="grid2">'+
+      '<div class="panel"><h3>Delivery vs Pickup revenue</h3><div class="chart-box"><canvas id="dpChart"></canvas></div></div>'+
+      '<div class="panel"><h3>Delivery vs Pickup by BU</h3>'+
+        '<table><thead><tr><th>BU</th><th class="num">Delivery</th><th class="num">Pickup</th><th class="num">Del %</th></tr></thead><tbody>'+
+        buRows.map(b=>'<tr><td><strong>'+esc(b.bu)+'</strong></td><td class="num">'+fmtMoney(b.revD)+'</td><td class="num">'+fmtMoney(b.revP)+'</td><td class="num">'+((b.revD+b.revP)>0?Math.round(100*b.revD/(b.revD+b.revP))+'%':'—')+'</td></tr>').join('')+
+        '</tbody><tfoot><tr><td>FLEET</td><td class="num">'+fmtMoney(fRevD)+'</td><td class="num">'+fmtMoney(fRevP)+'</td><td class="num">'+((fRevD+fRevP)>0?Math.round(100*fRevD/(fRevD+fRevP))+'%':'—')+'</td></tr></tfoot></table>'+
+      '</div>'+
+    '</div></div>'+
+
+    '<div class="sec"><h2>Projected vs Actual labour hours</h2>'+
+      (pva.length? '<div class="tbl-scroll"><table><thead><tr><th>Truck</th><th>Driver</th><th class="num">Proj Hrs</th><th class="num">Actual Hrs</th><th class="num">Variance</th><th>Flag</th></tr></thead><tbody>'+
+        pva.map(p=>{ const big=Math.abs(p.varr)>=2 && (p.proj>0&&p.actual>0);
+          return '<tr><td><strong>'+esc(p.truck)+'</strong></td><td style="color:var(--element-muted)">'+esc(p.driver||'')+'</td>'+
+          '<td class="num">'+(p.proj>0?fmt1(p.proj):'—')+'</td><td class="num">'+(p.actual>0?fmt1(p.actual):'—')+'</td>'+
+          '<td class="num">'+((p.proj>0&&p.actual>0)?('<span class="'+(p.varr>=0?'vt-pos':'vt-neg')+'">'+(p.varr>=0?'+':'')+fmt1(p.varr)+'</span>'):'—')+'</td>'+
+          '<td>'+(big?'<span class="tag r">big miss</span>':((p.proj>0&&p.actual>0)?'<span class="tag g">ok</span>':'<span class="tag n">partial</span>'))+'</td></tr>'; }).join('')+
+        '</tbody><tfoot><tr><td colspan="2">TOTAL ('+pva.length+')</td><td class="num">'+fmt1(pProj)+'</td><td class="num">'+fmt1(pAct)+'</td><td class="num">'+((pProj>0&&pAct>0)?'<span class="'+((pAct-pProj)>=0?'vt-pos':'vt-neg')+'">'+((pAct-pProj)>=0?'+':'')+fmt1(pAct-pProj)+'</span>':'—')+'</td><td></td></tr></tfoot></table></div>'
+        : '<div class="panel" style="color:var(--element-muted)">No projected hours entered for '+curDate+' yet. Enter them in the <a href="/tracker.html">tracker</a>.</div>')+
+    '</div>'+
+
+    '<div class="sec"><div class="grid2">'+
+      '<div class="panel"><h3>Top trucks · Rev/Hr</h3>'+rankTable(top)+'</div>'+
+      '<div class="panel"><h3>Bottom trucks · Rev/Hr</h3>'+rankTable(bottom)+'</div>'+
+    '</div></div>';
+
+  drawTrend();
+  drawDP(fRevD, fRevP);
+  document.getElementById('tgtNote').textContent=TARGET;
+}
+
+function rankTable(list){
+  if(!list.length) return '<div style="color:var(--element-muted);font-size:13px;">No trucks with hours yet.</div>';
+  return '<table><thead><tr><th>Truck</th><th>Driver</th><th class="num">Revenue</th><th class="num">Hrs</th><th class="num">Rev/Hr</th></tr></thead><tbody>'+
+    list.map(t=>'<tr><td><strong>'+esc(t.truck)+'</strong></td><td style="color:var(--element-muted)">'+esc(t.driver||'')+'</td><td class="num">'+fmtMoney(t.rev)+'</td><td class="num">'+fmt1(t.actual)+'</td><td class="num"><span class="tag '+t.rag+'">'+fmtMoney(t.rph)+'</span></td></tr>').join('')+
+    '</tbody></table>';
+}
+
+// ---- rev/hr trend over the last TREND_DAYS (actual hrs from Payworks; projected from D1) ----
+function drawTrend(){
+  const labels=[], actualRph=[], projRph=[];
+  for(let i=TREND_DAYS-1;i>=0;i--){
+    const d=addDays(curDate, -i);
+    labels.push(mdLabel(d));
+    const ts=aggregate(d);
+    if(!ts.length){ actualRph.push(null); projRph.push(null); continue; }
+    let rev=0,aHrs=0,aRev=0,pHrs=0,pRev=0;
+    ts.forEach(t=>{ rev+=t.rev; const h=hoursFor(t.truck, t.driver, d);
+      if(h.actual>0){ aHrs+=h.actual; aRev+=t.rev; } if(h.proj>0){ pHrs+=h.proj; pRev+=t.rev; } });
+    actualRph.push(aHrs>0?Math.round(aRev/aHrs):null);
+    projRph.push(pHrs>0?Math.round(pRev/pHrs):null);
+  }
+  const ctx=document.getElementById('trendChart'); if(!ctx) return;
+  if(charts.trend) charts.trend.destroy();
+  charts.trend=new Chart(ctx,{ type:'line',
+    data:{ labels, datasets:[
+      {label:'Actual Rev/Hr', data:actualRph, borderColor:'#1C3B42', backgroundColor:'rgba(28,59,66,.08)', borderWidth:2, tension:.3, spanGaps:true, pointRadius:2, fill:true},
+      {label:'Projected Rev/Hr', data:projRph, borderColor:'#B8860B', borderWidth:1.5, borderDash:[5,4], tension:.3, spanGaps:true, pointRadius:0},
+      {label:'Target', data:labels.map(()=>TARGET), borderColor:'#B23A3A', borderWidth:1, borderDash:[2,3], pointRadius:0}
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{labels:{boxWidth:12,font:{size:11}}}, tooltip:{callbacks:{label:c=>c.dataset.label+': '+(c.parsed.y==null?'—':'$'+c.parsed.y)}} },
+      scales:{ y:{ticks:{callback:v=>'$'+v, font:{size:11}}, grid:{color:'#EEE'}}, x:{ticks:{font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:10}, grid:{display:false}} } }
+  });
+}
+
+function drawDP(d, p){
+  const ctx=document.getElementById('dpChart'); if(!ctx) return;
+  if(charts.dp) charts.dp.destroy();
+  charts.dp=new Chart(ctx,{ type:'doughnut',
+    data:{ labels:['Delivery','Pickup'], datasets:[{ data:[Math.round(d),Math.round(p)], backgroundColor:['#2A5A63','#C0DEC7'], borderColor:'#fff', borderWidth:2 }] },
+    options:{ responsive:true, maintainAspectRatio:false, cutout:'58%',
+      plugins:{ legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}, tooltip:{callbacks:{label:c=>c.label+': $'+c.parsed.toLocaleString('en-CA')}} } }
+  });
+}
+
+function setupDates(){
+  const dates=Object.keys(DATA.routes||{}).sort();
+  const dp=document.getElementById('datePick');
+  if(dates.length){ dp.min=dates[0]; dp.max=dates[dates.length-1]; }
+  const today=localToday();
+  // default to today if it has routes, else the most recent past date with routes
+  const past=dates.filter(d=>d<=today);
+  curDate=(DATA.routes&&DATA.routes[today])?today:(past.length?past[past.length-1]:(dates.length?dates[dates.length-1]:today));
+  dp.value=curDate;
+  dp.addEventListener('change', async ()=>{ curDate=dp.value; await pullRange(addDays(curDate,-(TREND_DAYS-1)), curDate); render(); });
+}
+
+// ---- boot ----
+(async function(){
+  try{
+    const res=await fetch('dispatch_data.json?v='+Date.now(), {cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    DATA=await res.json();
+  }catch(e){
+    document.getElementById('content').innerHTML='<div class="empty">Could not load dispatch data ('+e.message+').<br>If you are signed out, <a href="/">reload the map</a> and sign in, then return here.</div>';
+    return;
+  }
+  try{ const pwRes=await fetch('driver_hours.json?v='+Date.now(), {cache:'no-store'}); if(pwRes.ok){ PW=await pwRes.json(); buildPwIndex(); } }
+  catch(e){ console.warn('driver_hours.json unavailable:', e.message); }
+  setupDates();
+  await pullRange(addDays(curDate,-(TREND_DAYS-1)), curDate);
+  render();
+})();
+</script>
+</body>
+</html>

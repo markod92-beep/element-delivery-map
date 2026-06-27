@@ -49,20 +49,22 @@ export async function onRequest(context) {
       const now = new Date().toISOString();
       await db.prepare(
         `INSERT INTO proj_hours
-           (date, truck, proj_hrs, notes, driver, bu, revenue, stops, actual_hrs, entered_by, entered_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+           (date, truck, proj_hrs, notes, driver, bu, revenue, rev_d, rev_p, stops, actual_hrs, entered_by, entered_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(date, truck) DO UPDATE SET
            proj_hrs   = excluded.proj_hrs,
            notes      = excluded.notes,
            driver     = excluded.driver,
            bu         = excluded.bu,
            revenue    = excluded.revenue,
+           rev_d      = excluded.rev_d,
+           rev_p      = excluded.rev_p,
            stops      = excluded.stops,
            actual_hrs = COALESCE(excluded.actual_hrs, proj_hours.actual_hrs),
            updated_at = excluded.updated_at`
       ).bind(
         b.date, String(b.truck), num(b.proj_hrs), b.notes || null, b.driver || null, b.bu || null,
-        num(b.revenue), int(b.stops), num(b.actual_hrs), who, now, now
+        num(b.revenue), num(b.rev_d), num(b.rev_p), int(b.stops), num(b.actual_hrs), who, now, now
       ).run();
       return json({ ok: true, entered_by: who });
     }

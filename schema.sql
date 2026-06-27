@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS proj_hours (
   driver      TEXT,                       -- snapshot
   bu          TEXT,                       -- snapshot (GTA / East / West / GTA Tents)
   revenue     REAL,                       -- snapshot (truck revenue that day)
+  rev_d       REAL,                       -- snapshot (delivery-stop revenue, cls='D')
+  rev_p       REAL,                       -- snapshot (pickup-stop revenue, cls='P')
   stops       INTEGER,                    -- snapshot
   actual_hrs  REAL,                       -- Payworks actual (filled when known)
   entered_by  TEXT,                       -- Cloudflare Access email, if available

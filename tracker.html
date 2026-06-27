@@ -71,6 +71,12 @@
   .quotes-cell::-webkit-scrollbar-thumb{background:var(--element-offwhite-tint);border-radius:3px;}
   .qchip{display:inline-block;margin:0 4px 0 0;padding:2px 7px;border-radius:6px;background:var(--element-mint);color:var(--element-teal);font-size:11.5px;font-weight:600;cursor:pointer;font-variant-numeric:tabular-nums;}
   .qchip:hover{background:var(--element-teal);color:#fff;}
+  .qmore{display:inline-block;margin:0 8px 0 -2px;padding:2px 6px;border-radius:6px;background:#ECEAE2;color:var(--element-muted);font-size:10.5px;font-weight:700;cursor:pointer;vertical-align:middle;}
+  .qmore:hover{background:var(--element-teal-mid);color:#fff;}
+  .rev-split{display:flex;flex-direction:column;align-items:flex-end;line-height:1.22;gap:0;}
+  .rev-split .rev-d{font-size:12px;color:var(--element-ink);font-weight:600;}
+  .rev-split .rev-p{font-size:12px;color:var(--element-muted);font-weight:600;}
+  .rev-split .rev-tot{font-size:11px;color:var(--element-teal-mid);font-weight:700;margin-top:1px;border-top:1px solid var(--element-border);padding-top:1px;}
   .qmodal{position:fixed;inset:0;background:rgba(15,36,40,.45);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;}
   .qmodal-card{background:#fff;border-radius:14px;max-width:430px;width:100%;box-shadow:0 14px 44px rgba(15,36,40,.34);overflow:hidden;}
   .qm-head{display:flex;align-items:center;justify-content:space-between;background:var(--element-teal);color:#fff;padding:12px 16px;}
@@ -101,6 +107,7 @@
     <div class="ctrl">
       <label for="datePick">Date</label>
       <input type="date" id="datePick">
+      <a class="btn ghost" href="/dashboard.html" title="Open the Executive Dashboard">Dashboard</a>
       <a class="btn ghost" href="/" title="Back to the delivery map">&larr; Map</a>
       <button class="btn" id="dlBtn" title="Download this day as an Excel file">&#8595; Excel</button>
     </div>
@@ -138,7 +145,16 @@ let trucks = [];      // currently-shown (BU-filtered) trucks
 let allTrucks = [];   // all trucks for the date, before BU filter
 let curBU = 'All';    // active business-unit filter
 let QIDX = {};        // quote/contract number -> details, for the popup
+let ADDR_IDX = {};    // normalised address -> [con,...] (same-place drops)
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+// normalise a destination address for grouping multi-quote drops to one place
+function normAddr(s){ return String(s==null?'':s).toLowerCase().replace(/[.,#]/g,' ').replace(/\s+/g,' ').trim(); }
+// stop-class -> human label, for the per-truck / per-leg breakdown in the popup
+const CLS_LABEL = {D:'Delivery', P:'Pickup', S:'Subrent', T:'Transfer'};
+function legLabel(clsArr, typesArr){
+  const labs = [...new Set((clsArr||[]).map(c=>CLS_LABEL[c]).filter(Boolean))];
+  return labs.length ? labs.join(' / ') : ((typesArr&&typesArr[0])||'—');
+}
 
 // ---- manual-entry persistence (per date, this browser) ----
 function storeKey(d){ return 'truck-tracker:'+d; }
@@ -176,7 +192,9 @@ function pushServer(date, truck){
     proj_hrs: (rec.proj!=null ? rec.proj : null),
     notes: (rec.notes!=null ? rec.notes : null),
     driver: t.driver||null, bu: t.bu||null,
-    revenue: (t.rev!=null ? Math.round(t.rev) : null), stops: (t.stops!=null ? t.stops : null),
+    revenue: (t.rev!=null ? Math.round(t.rev) : null),
+    rev_d: (t.revD!=null ? Math.round(t.revD) : null), rev_p: (t.revP!=null ? Math.round(t.revP) : null),
+    stops: (t.stops!=null ? t.stops : null),
     actual_hrs: (t.pwActual!=null ? t.pwActual : (rec.actual!=null ? rec.actual : null))
   };
   clearTimeout(_saveTimers[date+'|'+truck]);
@@ -241,7 +259,7 @@ function aggregate(d){
   for(const r of rts){
     const t = (r.tnum || r.truck || '').toString().replace(/^#/,'').trim();
     if(!t) continue;
-    if(!byTruck[t]) byTruck[t] = {truck:t, truckLabel:String(r.truck||r.tnum||t), driver:'', rev:0, stops:0, items:0, routes:0, hs:'', bu:'Other'};
+    if(!byTruck[t]) byTruck[t] = {truck:t, truckLabel:String(r.truck||r.tnum||t), driver:'', rev:0, revD:0, revP:0, stops:0, items:0, routes:0, hs:'', bu:'Other'};
     const o = byTruck[t];
     o.routes++;
     o.stops += (r.stps||0);
@@ -251,13 +269,18 @@ function aggregate(d){
     if((!o.hs || o.bu==='Other') && r.hs!=null && String(r.hs).trim()){ o.hs=String(r.hs).trim(); o.bu=buOf(o.hs); }
     // collect the quote/contract numbers on this truck (one entry per `con`)
     for(const s of (r.stops||[])){
+      // split revenue by stop class: D=Delivery, P=Pickup (counts every stop,
+      // including those with no contract number attached)
+      const rv = s.rev||0;
+      if(s.cls==='D') o.revD += rv; else if(s.cls==='P') o.revP += rv;
       const con = (s.con==null?'':String(s.con)).trim();
       if(!con) continue;
       if(!o._q) o._q = {};
       let q = o._q[con];
-      if(!q){ q = o._q[con] = {con:con, cust:s.cust||'', store:s.store||'', rev:0, types:new Set(), addr:s.addr||'', parr:s.parr||''}; }
+      if(!q){ q = o._q[con] = {con:con, cust:s.cust||'', store:s.store||'', rev:0, types:new Set(), cls:new Set(), addr:s.addr||'', parr:s.parr||''}; }
       q.rev += (s.rev||0);
       if(s.tt) q.types.add(s.tt);
+      if(s.cls) q.cls.add(s.cls);
       if(!q.cust && s.cust) q.cust = s.cust;
       if(!q.addr && s.addr) q.addr = s.addr;
       if(!q.parr && s.parr) q.parr = s.parr;
@@ -265,7 +288,7 @@ function aggregate(d){
   }
   // finalise each truck's quote list (sorted by revenue)
   for(const o of Object.values(byTruck)){
-    o.quotes = Object.values(o._q || {}).map(q=>({con:q.con, cust:q.cust, store:q.store, rev:Math.round(q.rev), types:[...q.types], addr:q.addr, parr:q.parr}));
+    o.quotes = Object.values(o._q || {}).map(q=>({con:q.con, cust:q.cust, store:q.store, rev:Math.round(q.rev), types:[...q.types], cls:[...q.cls], addr:q.addr, parr:q.parr}));
     o.quotes.sort((a,b)=> b.rev - a.rev);
     delete o._q;
   }
@@ -304,14 +327,21 @@ function render(){
   const manual = loadManual(curDate);
   allTrucks = aggregate(curDate);
   allTrucks.forEach(t=>{ t.pwActual = pwHoursFor(t.driver, curDate); });
-  // build the quote index (merged across trucks) used by the click-to-view popup
+  // build the quote index (merged across trucks) used by the click-to-view popup.
+  // Each entry keeps a per-truck `legs` list so the popup can show how a quote
+  // that spans multiple trucks splits into delivery / pickup legs.
   QIDX = {};
   allTrucks.forEach(t=> (t.quotes||[]).forEach(q=>{
     let e = QIDX[q.con];
-    if(!e){ e = QIDX[q.con] = {con:q.con, cust:q.cust, store:q.store, rev:0, types:new Set(), addr:q.addr, parr:q.parr, trucks:new Set()}; }
-    e.rev += q.rev; (q.types||[]).forEach(x=>e.types.add(x)); e.trucks.add(t.truck);
+    if(!e){ e = QIDX[q.con] = {con:q.con, cust:q.cust, store:q.store, rev:0, types:new Set(), cls:new Set(), addr:q.addr, parr:q.parr, trucks:new Set(), legs:[]}; }
+    e.rev += q.rev; (q.types||[]).forEach(x=>e.types.add(x)); (q.cls||[]).forEach(x=>e.cls.add(x)); e.trucks.add(t.truck);
+    e.legs.push({truck:t.truck, cls:q.cls||[], types:q.types||[], rev:q.rev});
     if(!e.cust && q.cust) e.cust=q.cust; if(!e.addr && q.addr) e.addr=q.addr; if(!e.parr && q.parr) e.parr=q.parr;
   }));
+  // index quotes by normalised destination address so the popup can surface
+  // sibling quotes dropped to the same place (multi-quote drops).
+  ADDR_IDX = {};
+  Object.values(QIDX).forEach(e=>{ const k=normAddr(e.addr); if(!k) return; (ADDR_IDX[k]=ADDR_IDX[k]||[]).push(e.con); });
   // apply the business-unit filter (reset to All if the chosen BU has no trucks today)
   if(curBU!=='All' && !allTrucks.some(t=>t.bu===curBU)) curBU='All';
   trucks = (curBU==='All') ? allTrucks : allTrucks.filter(t=>t.bu===curBU);
@@ -324,11 +354,11 @@ function render(){
   }
   document.getElementById('footNote').style.display='';
 
-  let totRev=0, totProjHrs=0, totActualHrs=0, totStops=0, nActive=trucks.length, revWithActual=0, revWithProj=0;
+  let totRev=0, totRevD=0, totRevP=0, totProjHrs=0, totActualHrs=0, totStops=0, nActive=trucks.length, revWithActual=0, revWithProj=0;
   let cGreen=0,cYellow=0,cRed=0,cNotEntered=0;
   const rowsHtml = trucks.map((row,i)=>{
     const c = computeRow(row, manual, target);
-    totRev += row.rev; totStops += row.stops;
+    totRev += row.rev; totRevD += (row.revD||0); totRevP += (row.revP||0); totStops += row.stops;
     if(c.proj>0){ totProjHrs += c.proj; revWithProj += row.rev; }
     if(c.actual>0){ totActualHrs += c.actual; revWithActual += row.rev; }
     if(c.actual>0 || c.proj>0){
@@ -344,9 +374,9 @@ function render(){
         '<td class="num">'+(i+1)+'</td>'+
         '<td class="truck-cell"><span class="ragdot dot-'+c.rag+'"></span><a class="truck-link" href="/?routes_truck='+encodeURIComponent(row.truckLabel||row.truck)+'&routes_date='+curDate+'" title="Show this truck&#39;s route on the map">'+row.truck+'</a></td>'+
         '<td class="drv-cell">'+(row.driver||'')+'</td>'+
-        '<td class="num rev">'+fmtMoney(row.rev)+'</td>'+
+        '<td class="num rev">'+revSplitHtml(row)+'</td>'+
         '<td class="num">'+row.stops+'</td>'+
-        '<td class="quotes-cell">'+(row.quotes||[]).map(q=>'<span class="qchip" onclick="showQuote(\''+q.con+'\')" title="'+esc(q.cust)+'">'+q.con+'</span>').join('')+'</td>'+
+        '<td class="quotes-cell">'+quotesCellHtml(row)+'</td>'+
         '<td class="num"><input type="number" step="0.5" min="0" data-f="proj" value="'+(manual[row.truck]&&manual[row.truck].proj!=null?manual[row.truck].proj:'')+'" placeholder="—"></td>'+
         '<td class="num"><input type="number" step="0.5" min="0" data-f="actual" class="'+(actPW?'pw':'')+'" title="'+(actPW?'Auto-filled from Payworks timesheet — type to override':'')+'" value="'+actVal+'" placeholder="—"></td>'+
         '<td class="num"><input type="number" step="1" min="0" data-f="vol" value="'+(manual[row.truck]&&manual[row.truck].vol!=null?manual[row.truck].vol:'')+'" placeholder="—"></td>'+
@@ -369,6 +399,7 @@ function render(){
     '<div class="dash">'+
       card('Trucks Active', nActive, false, nEntered+' with hours')+
       card('Total Revenue', fmtMoney(totRev), true, (curBU==='All'?'all active trucks':curBU))+
+      card('Delivery / Pickup', fmtMoney(totRevD)+' <span style="color:var(--element-muted)">/</span> '+fmtMoney(totRevP), true, 'delivery vs pickup rev')+
       card('Lab Hours', (totActualHrs||totProjHrs)? fmt1(totActualHrs||totProjHrs):'—', true, nEntered+' of '+nActive+' trucks')+
       card('Rev / Lab Hr', fleetRevHr!=null? fmtMoney(fleetRevHr):'—', true, revHrSub)+
       card('Avg Stops', fmt1(avgStops), true, 'per truck')+
@@ -407,6 +438,34 @@ function render(){
 
 function card(k,v,small,sub){ return '<div class="card"><div class="k">'+k+'</div><div class="v'+(small?' small':'')+'">'+v+'</div>'+(sub?'<div class="csub">'+sub+'</div>':'')+'</div>'; }
 
+// Revenue cell: delivery / pickup split stacked over the truck total.
+function revSplitHtml(row){
+  const d=row.revD||0, p=row.revP||0;
+  return '<div class="rev-split">'+
+    '<span class="rev-d" title="Delivery revenue (cls D)">D '+fmtMoney(d)+'</span>'+
+    '<span class="rev-p" title="Pickup revenue (cls P)">P '+fmtMoney(p)+'</span>'+
+    '<span class="rev-tot" title="Total revenue">'+fmtMoney(row.rev)+'</span>'+
+  '</div>';
+}
+
+// Quotes cell: group a truck's quotes by destination address so multi-quote
+// drops to one place show as a single revenue-bearing chip + a "+N" badge.
+function quotesCellHtml(row){
+  const seen={}; const groups=[];
+  (row.quotes||[]).forEach(q=>{
+    const k=normAddr(q.addr);
+    if(k && seen[k]!==undefined){ groups[seen[k]].sibs.push(q); return; }
+    if(k) seen[k]=groups.length;
+    groups.push({primary:q, sibs:[]});
+  });
+  return groups.map(g=>{
+    const q=g.primary;
+    let h='<span class="qchip" onclick="showQuote(\''+q.con+'\')" title="'+esc(q.cust)+'">'+esc(q.con)+'</span>';
+    if(g.sibs.length) h+='<span class="qmore" onclick="showQuote(\''+q.con+'\')" title="'+g.sibs.length+' more order'+(g.sibs.length>1?'s':'')+' to the same address">+'+g.sibs.length+'</span>';
+    return h;
+  }).join('');
+}
+
 // Business-unit filter chips (counts from the full day's trucks).
 function buChipsHtml(){
   const counts={}; allTrucks.forEach(t=>{ counts[t.bu]=(counts[t.bu]||0)+1; });
@@ -430,6 +489,25 @@ function showQuote(con){
   const r = (k,v)=>'<div class="qm-row"><span class="qm-k">'+k+'</span><span class="qm-v">'+v+'</span></div>';
   const types = [...q.types].join(' / ') || '—';
   const bu = buOf((allTrucks.find(t=>t.quotes&&t.quotes.some(x=>x.con===con))||{}).hs);
+  // Per-truck / per-leg breakdown when this quote's stops span multiple trucks
+  // (e.g. Truck X runs the delivery, Truck Y runs a $0 pickup).
+  let legsRow='';
+  if(q.legs && q.legs.length>1){
+    const lh = q.legs.slice().sort((a,b)=>b.rev-a.rev)
+      .map(l=>'Truck '+esc(l.truck)+' · '+esc(legLabel(l.cls,l.types))+' · '+fmtMoney(l.rev)).join('<br>');
+    legsRow = r('Per-truck split', lh);
+  }
+  // Sibling quotes dropped to the same destination address (multi-quote drop).
+  let sibRow='';
+  const sibs=(ADDR_IDX[normAddr(q.addr)]||[]).filter(c=>c!==con).map(c=>QIDX[c]).filter(Boolean);
+  if(sibs.length){
+    const zeroN = sibs.filter(s=>!s.rev).length;
+    const note = '+'+sibs.length+' related order'+(sibs.length>1?'s':'')+
+      (zeroN===sibs.length?' ($0, same address)':' (same address)');
+    const sl = sibs.sort((a,b)=>b.rev-a.rev)
+      .map(s=>esc(s.con)+' · '+(s.rev?fmtMoney(s.rev):'$0')+(s.cust?' · '+esc(s.cust):'')).join('<br>');
+    sibRow = r('Same address', '<div style="font-weight:600;margin-bottom:3px;color:var(--element-teal);">'+note+'</div>'+sl);
+  }
   card.innerHTML =
     '<div class="qm-head"><span class="qm-title">Quote '+esc(q.con)+'</span>'+
       '<button class="qm-x" onclick="closeQuote()" aria-label="Close">&times;</button></div>'+
@@ -441,6 +519,8 @@ function showQuote(con){
       r('Address', esc(q.addr)||'—')+
       r('Planned arrival', esc(q.parr)||'—')+
       r('Truck(s)', [...q.trucks].join(', '))+
+      legsRow+
+      sibRow+
     '</div>';
   document.getElementById('quote-modal').style.display='flex';
 }
@@ -508,12 +588,13 @@ function recompute(){
   const fleetRevHr=(totActualHrs>0)?revWithActual/totActualHrs:(totProjHrs>0?revWithProj/totProjHrs:null);
   const pills=document.querySelectorAll('.rag .pill .n');
   if(pills.length===4){pills[0].textContent=cGreen;pills[1].textContent=cYellow;pills[2].textContent=cRed;pills[3].textContent=cNotEntered;}
+  // card order: 0 Trucks · 1 Total Rev · 2 Delivery/Pickup · 3 Lab Hours · 4 Rev/Lab Hr · 5 Avg Stops · 6 % On Target
   const cards=document.querySelectorAll('.dash .card .v');
-  if(cards.length>=6){
-    cards[2].textContent=(totActualHrs||totProjHrs)?fmt1(totActualHrs||totProjHrs):'—';
-    cards[3].textContent=fleetRevHr!=null?fmtMoney(fleetRevHr):'—';
+  if(cards.length>=7){
+    cards[3].textContent=(totActualHrs||totProjHrs)?fmt1(totActualHrs||totProjHrs):'—';
+    cards[4].textContent=fleetRevHr!=null?fmtMoney(fleetRevHr):'—';
     const pct=(cGreen+cYellow+cRed)>0?Math.round(100*cGreen/(cGreen+cYellow+cRed)):0;
-    cards[5].textContent=pct+'%';
+    cards[6].textContent=pct+'%';
   }
   const ft=document.querySelectorAll('tfoot td');
   if(ft.length>=9){
@@ -544,13 +625,13 @@ function exportXlsx(){
   if(!trucks.length) return;
   const target = getTarget(curDate);
   const manual = loadManual(curDate);
-  const head = ['#','Truck #','Driver','Revenue ($)','Stops','Quotes','Proj Lab Hrs','Actual Lab Hrs','Volume (lbs)','Rev / Proj Hr','Rev / Actual Hr','Vol / Actual Hr','vs Target','Hrs Source','Notes'];
+  const head = ['#','Truck #','Driver','Revenue ($)','Delivery Rev','Pickup Rev','Stops','Quotes','Proj Lab Hrs','Actual Lab Hrs','Volume (lbs)','Rev / Proj Hr','Rev / Actual Hr','Vol / Actual Hr','vs Target','Hrs Source','Notes'];
   const rows = [head];
-  let totRev=0,totProj=0,totActual=0,totStops=0,revWithActual=0;
+  let totRev=0,totRevD=0,totRevP=0,totProj=0,totActual=0,totStops=0,revWithActual=0;
   trucks.forEach((row,i)=>{
     const c=computeRow(row,manual,target);
-    totRev+=row.rev;totStops+=row.stops;if(c.proj>0)totProj+=c.proj;if(c.actual>0){totActual+=c.actual;revWithActual+=row.rev;}
-    rows.push([i+1,row.truck,row.driver||'',Math.round(row.rev*100)/100,row.stops,(row.quotes||[]).map(q=>q.con).join(', '),
+    totRev+=row.rev;totRevD+=(row.revD||0);totRevP+=(row.revP||0);totStops+=row.stops;if(c.proj>0)totProj+=c.proj;if(c.actual>0){totActual+=c.actual;revWithActual+=row.rev;}
+    rows.push([i+1,row.truck,row.driver||'',Math.round(row.rev*100)/100,Math.round((row.revD||0)*100)/100,Math.round((row.revP||0)*100)/100,row.stops,(row.quotes||[]).map(q=>q.con).join(', '),
       isNaN(c.proj)?'':c.proj, isNaN(c.actual)?'':c.actual, isNaN(c.vol)?'':c.vol,
       c.revProj!=null?Math.round(c.revProj*100)/100:'', c.revActual!=null?Math.round(c.revActual*100)/100:'',
       c.volActual!=null?Math.round(c.volActual*100)/100:'', c.vsTarget!=null?Math.round(c.vsTarget*1000)/1000:'',
@@ -559,7 +640,7 @@ function exportXlsx(){
   });
   const fleetRevHr=(totActual>0)?revWithActual/totActual:(totProj>0?totRev/totProj:'');
   rows.push([]);
-  rows.push(['','FLEET TOTAL','',Math.round(totRev*100)/100,totStops,'',totProj||'',totActual||'','',
+  rows.push(['','FLEET TOTAL','',Math.round(totRev*100)/100,Math.round(totRevD*100)/100,Math.round(totRevP*100)/100,totStops,'',totProj||'',totActual||'','',
     '', fleetRevHr!==''?Math.round(fleetRevHr*100)/100:'', '','','','']);
 
   let cG=0,cY=0,cR=0,cN=0;
@@ -568,6 +649,7 @@ function exportXlsx(){
   const dash = [
     ['DAILY TRUCK TRACKER'],['Date', curDate],['Target Rev / Lab Hr', target],[],
     ['FLEET SUMMARY'],['Trucks Active Today', trucks.length],['Total Revenue', Math.round(totRev*100)/100],
+    ['Delivery Revenue', Math.round(totRevD*100)/100],['Pickup Revenue', Math.round(totRevP*100)/100],
     ['Total Lab Hours', totActual||totProj||0],['Fleet Rev / Lab Hr', fleetRevHr!==''?Math.round(fleetRevHr*100)/100:0],
     ['Avg Stops', trucks.length?Math.round(totStops/trucks.length*10)/10:0],[],
     ['STATUS OVERVIEW'],['On Target (>= '+target+'/hr)', cG],
@@ -578,7 +660,7 @@ function exportXlsx(){
   const wb = XLSX.utils.book_new();
   const wsD = XLSX.utils.aoa_to_sheet(dash); wsD['!cols']=[{wch:26},{wch:16}];
   const wsT = XLSX.utils.aoa_to_sheet(rows);
-  wsT['!cols']=[{wch:4},{wch:9},{wch:22},{wch:12},{wch:7},{wch:7},{wch:11},{wch:12},{wch:11},{wch:11},{wch:12},{wch:12},{wch:8},{wch:10},{wch:22}];
+  wsT['!cols']=[{wch:4},{wch:9},{wch:22},{wch:12},{wch:12},{wch:12},{wch:7},{wch:7},{wch:11},{wch:12},{wch:11},{wch:11},{wch:12},{wch:12},{wch:8},{wch:10},{wch:22}];
   XLSX.utils.book_append_sheet(wb, wsD, 'Dashboard');
   XLSX.utils.book_append_sheet(wb, wsT, 'Tracker');
   XLSX.writeFile(wb, 'Daily_Truck_Tracker_'+curDate+'.xlsx');

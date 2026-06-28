@@ -126,8 +126,7 @@
     <div class="ctrl">
       <label for="datePick">Date</label>
       <input type="date" id="datePick">
-      <a class="btn ghost" href="/intelligence.html" title="Open Delivery Intelligence">Intelligence</a>
-      <a class="btn ghost" href="/dashboard.html" title="Open the Executive Dashboard">Dashboard</a>
+      <a class="btn ghost" href="/intelligence.html" title="Open the Dashboard">Dashboard</a>
       <a class="btn ghost" href="/" title="Back to the delivery map">&larr; Map</a>
       <button class="btn" id="dlBtn" title="Download this day as an Excel file">&#8595; Excel</button>
     </div>
@@ -357,6 +356,10 @@ function aggregate(d){
     o.rev   += (r.stops||[]).reduce((s,x)=>s+(x.rev||0),0);
     if(!o.driver && r.drv) o.driver = r.drv;
     if((!o.hs || o.bu==='Other') && r.hs!=null && String(r.hs).trim()){ o.hs=String(r.hs).trim(); o.bu=buOf(o.hs); }
+    // BU fallback when hs is blank (e.g. the synthetic "No truck assigned (XXX)"
+    // virtual routes): the dispatch payload stamps the bucket on r.co, so a
+    // "No truck assigned (GTA)" route lands in GTA — not Other.
+    if(o.bu==='Other' && r.co && String(r.co).trim()) o.bu=String(r.co).trim();
     // collect the quote/contract numbers on this truck (one entry per `con`)
     for(const s of (r.stops||[])){
       // split revenue by stop class: D=Delivery, P=Pickup (counts every stop,
@@ -432,8 +435,10 @@ function computeRow(row, manual, target){
   let actual = parseFloat(m.actual);
   let actualFromPW = false;
   if(isNaN(actual) && row.pwActual!=null){ actual = row.pwActual; actualFromPW = true; }
-  const revProj   = (proj>0)   ? row.rev/proj   : null;
-  const revActual = (actual>0) ? row.rev/actual : null;
+  // Convention: a solo revenue number = delivered revenue (rev_d). Rev/hr and
+  // vs-target are productivity on what was delivered that day, not D+P combined.
+  const revProj   = (proj>0)   ? row.revD/proj   : null;
+  const revActual = (actual>0) ? row.revD/actual : null;
   const ragRef = (revActual!=null)?revActual:revProj;
   const vsTarget = (ragRef!=null)? (ragRef - target)/target : null;
   return {proj,actual,actualFromPW,revProj,revActual,vsTarget,rag:ragOf(ragRef,target)};
@@ -526,8 +531,8 @@ function render(){
   const rowsHtml = trucks.map((row,i)=>{
     const c = computeRow(row, manual, target);
     totRev += row.rev; totRevD += (row.revD||0); totRevP += (row.revP||0); totStops += row.stops;
-    if(c.proj>0){ totProjHrs += c.proj; revWithProj += row.rev; }
-    if(c.actual>0){ totActualHrs += c.actual; revWithActual += row.rev; }
+    if(c.proj>0){ totProjHrs += c.proj; revWithProj += (row.revD||0); }
+    if(c.actual>0){ totActualHrs += c.actual; revWithActual += (row.revD||0); }
     if(c.actual>0 || c.proj>0){
       if(c.rag==='g')cGreen++; else if(c.rag==='y')cYellow++; else if(c.rag==='r')cRed++;
     } else cNotEntered++;
@@ -581,8 +586,8 @@ function render(){
     buChipsHtml()+
     '<div class="dash">'+
       card('Trucks Active', nActive, false, nEntered+' with hours')+
-      card('Total Revenue', fmtMoney(totRev), true, (curBU==='All'?'all active trucks':curBU))+
-      card('Delivery / Pickup', fmtMoney(totRevD)+' <span style="color:var(--element-muted)">/</span> '+fmtMoney(totRevP), true, 'delivery vs pickup rev')+
+      card('Delivered Revenue', fmtMoney(totRevD), true, (curBU==='All'?'all active trucks':curBU))+
+      card('Picked-up Revenue', fmtMoney(totRevP), true, 'returns / pickups')+
       card('Lab Hours', (totActualHrs||totProjHrs)? fmt1(totActualHrs||totProjHrs):'—', true, nEntered+' of '+nActive+' trucks')+
       card('Rev / Lab Hr', fleetRevHr!=null? fmtMoney(fleetRevHr):'—', true, revHrSub)+
       card('Avg Stops', fmt1(avgStops), true, 'per truck')+
@@ -678,8 +683,8 @@ function showQuote(con){
   let legsRow='';
   if(q.legs && q.legs.length>1){
     const lh = q.legs.slice().sort((a,b)=>b.rev-a.rev)
-      .map(l=>'Truck '+esc(l.truck)+' · '+esc(legLabel(l.cls,l.types))+' · '+fmtMoney(l.rev)).join('<br>');
-    legsRow = r('Per-truck split', lh);
+      .map(l=>'Truck '+esc(l.truck)+' · '+fmtMoney(l.rev)).join('<br>');
+    legsRow = r('Per-truck revenue', lh);
   }
   // Sibling quotes dropped to the same destination address (multi-quote drop).
   let sibRow='';
@@ -762,7 +767,7 @@ function recompute(){
     if(!tr) return;
     const c = computeRow(row, manual, target);
     totRev+=row.rev; totStops+=row.stops;
-    if(c.proj>0){totProjHrs+=c.proj;revWithProj+=row.rev;} if(c.actual>0){totActualHrs+=c.actual;revWithActual+=row.rev;}
+    if(c.proj>0){totProjHrs+=c.proj;revWithProj+=(row.revD||0);} if(c.actual>0){totActualHrs+=c.actual;revWithActual+=(row.revD||0);}
     if(c.actual>0||c.proj>0){ if(c.rag==='g')cGreen++;else if(c.rag==='y')cYellow++;else cRed++; } else cNotEntered++;
     tr.querySelector('.ragdot').className='ragdot dot-'+c.rag;
     tr.querySelector('[data-c="revActual"]').textContent = c.revActual!=null?fmtMoney(c.revActual):'';
@@ -772,7 +777,7 @@ function recompute(){
   const fleetRevHr=(totActualHrs>0)?revWithActual/totActualHrs:(totProjHrs>0?revWithProj/totProjHrs:null);
   const pills=document.querySelectorAll('.rag .pill .n');
   if(pills.length===4){pills[0].textContent=cGreen;pills[1].textContent=cYellow;pills[2].textContent=cRed;pills[3].textContent=cNotEntered;}
-  // card order: 0 Trucks · 1 Total Rev · 2 Delivery/Pickup · 3 Lab Hours · 4 Rev/Lab Hr · 5 Avg Stops · 6 % On Target
+  // card order: 0 Trucks · 1 Delivered Rev · 2 Picked-up Rev · 3 Lab Hours · 4 Rev/Lab Hr · 5 Avg Stops · 6 % On Target
   const cards=document.querySelectorAll('.dash .card .v');
   if(cards.length>=7){
     cards[3].textContent=(totActualHrs||totProjHrs)?fmt1(totActualHrs||totProjHrs):'—';

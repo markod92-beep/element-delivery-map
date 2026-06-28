@@ -391,8 +391,9 @@ function aggregate(d){
       if(!con) continue;
       if(!o._q) o._q = {};
       let q = o._q[con];
-      if(!q){ q = o._q[con] = {con:con, cust:s.cust||'', store:s.store||'', rev:0, types:new Set(), cls:new Set(), addr:s.addr||'', parr:s.parr||''}; }
+      if(!q){ q = o._q[con] = {con:con, cust:s.cust||'', store:s.store||'', rev:0, revD:0, revP:0, types:new Set(), cls:new Set(), addr:s.addr||'', parr:s.parr||''}; }
       q.rev += (s.rev||0);
+      if(s.cls==='D') q.revD += (s.rev||0); else if(s.cls==='P') q.revP += (s.rev||0);
       if(s.tt) q.types.add(s.tt);
       if(s.cls) q.cls.add(s.cls);
       if(!q.cust && s.cust) q.cust = s.cust;
@@ -402,7 +403,7 @@ function aggregate(d){
   }
   // finalise each truck's quote list (sorted by revenue) + resolve its fill BU
   for(const o of Object.values(byTruck)){
-    o.quotes = Object.values(o._q || {}).map(q=>({con:q.con, cust:q.cust, store:q.store, rev:Math.round(q.rev), types:[...q.types], cls:[...q.cls], addr:q.addr, parr:q.parr}));
+    o.quotes = Object.values(o._q || {}).map(q=>({con:q.con, cust:q.cust, store:q.store, rev:Math.round(q.rev), revD:Math.round(q.revD), revP:Math.round(q.revP), types:[...q.types], cls:[...q.cls], addr:q.addr, parr:q.parr}));
     o.quotes.sort((a,b)=> b.rev - a.rev);
     delete o._q;
     // fill BU = majority stop-store bucket (matches capacity calibration);
@@ -504,8 +505,8 @@ function render(){
   QIDX = {};
   allTrucks.forEach(t=> (t.quotes||[]).forEach(q=>{
     let e = QIDX[q.con];
-    if(!e){ e = QIDX[q.con] = {con:q.con, cust:q.cust, store:q.store, rev:0, types:new Set(), cls:new Set(), addr:q.addr, parr:q.parr, trucks:new Set(), legs:[]}; }
-    e.rev += q.rev; (q.types||[]).forEach(x=>e.types.add(x)); (q.cls||[]).forEach(x=>e.cls.add(x)); e.trucks.add(t.truck);
+    if(!e){ e = QIDX[q.con] = {con:q.con, cust:q.cust, store:q.store, rev:0, revD:0, revP:0, types:new Set(), cls:new Set(), addr:q.addr, parr:q.parr, trucks:new Set(), legs:[]}; }
+    e.rev += q.rev; e.revD += (q.revD||0); e.revP += (q.revP||0); (q.types||[]).forEach(x=>e.types.add(x)); (q.cls||[]).forEach(x=>e.cls.add(x)); e.trucks.add(t.truck);
     e.legs.push({truck:t.truck, cls:q.cls||[], types:q.types||[], rev:q.rev});
     if(!e.cust && q.cust) e.cust=q.cust; if(!e.addr && q.addr) e.addr=q.addr; if(!e.parr && q.parr) e.parr=q.parr;
   }));
@@ -678,13 +679,26 @@ function showQuote(con){
   const r = (k,v)=>'<div class="qm-row"><span class="qm-k">'+k+'</span><span class="qm-v">'+v+'</span></div>';
   const types = [...q.types].join(' / ') || '—';
   const bu = buOf((allTrucks.find(t=>t.quotes&&t.quotes.some(x=>x.con===con))||{}).hs);
-  // Per-truck / per-leg breakdown when this quote's stops span multiple trucks
-  // (e.g. Truck X runs the delivery, Truck Y runs a $0 pickup).
+  // Per-truck breakdown when this quote's stops span multiple trucks, each flagged
+  // by the leg it ran (Drop-off = delivery, Pickup = return, or both).
+  const legFlag = (cls)=>{ const d=cls&&cls.indexOf('D')>=0, p=cls&&cls.indexOf('P')>=0;
+    return (d&&p)?'Drop-off + Pickup':d?'Drop-off':p?'Pickup':'—'; };
   let legsRow='';
   if(q.legs && q.legs.length>1){
     const lh = q.legs.slice().sort((a,b)=>b.rev-a.rev)
-      .map(l=>'Truck '+esc(l.truck)+' · '+fmtMoney(l.rev)).join('<br>');
+      .map(l=>'Truck '+esc(l.truck)+' · '+legFlag(l.cls)+' · '+fmtMoney(l.rev)).join('<br>');
     legsRow = r('Per-truck revenue', lh);
+  }
+  // Item categories for this contract (from contract_load.json cats_by_con), top 6 by qty.
+  let itemsRow='';
+  const cats = LOAD && LOAD.cats_by_con && LOAD.cats_by_con[String(q.con)];
+  if(cats){
+    const arr = Object.keys(cats).map(k=>[k,cats[k]]).sort((a,b)=>b[1]-a[1]);
+    if(arr.length){
+      const top = arr.slice(0,6).map(c=>fmt0(c[1])+' '+esc(c[0]));
+      const more = arr.length-6;
+      itemsRow = r('Items', top.join(' · ')+(more>0?' · +'+more+' more':''));
+    }
   }
   // Sibling quotes dropped to the same destination address (multi-quote drop).
   let sibRow='';
@@ -704,7 +718,8 @@ function showQuote(con){
       r('Customer', esc(q.cust)||'—')+
       r('Store', (q.store||'—')+(bu&&bu!=='Other'?' · '+bu:''))+
       r('Type', types)+
-      r('Revenue', fmtMoney(q.rev))+
+      r('Revenue', fmtMoney(q.revD>0?q.revD:q.revP))+
+      itemsRow+
       r('Address', esc(q.addr)||'—')+
       r('Planned arrival', esc(q.parr)||'—')+
       r('Truck(s)', [...q.trucks].join(', '))+

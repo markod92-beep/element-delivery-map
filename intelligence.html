@@ -74,7 +74,8 @@
   /* chart */
   .chart{position:relative;height:150px;}
   .chart .bars{position:absolute;inset:0;display:flex;align-items:flex-end;gap:4px;}
-  .chart .bar{flex:1;border-radius:3px 3px 0 0;transition:opacity .12s;cursor:pointer;}
+  .chart .bar{flex:1;border-radius:3px 3px 0 0;overflow:hidden;transition:opacity .12s;cursor:pointer;}
+  .chart .seg{width:100%;}
   .chart .tgt{position:absolute;left:0;right:0;border-top:1.5px dashed var(--element-muted);opacity:.6;pointer-events:none;}
   .chart .tip{position:absolute;top:-4px;transform:translate(-50%,-100%);z-index:6;background:var(--element-teal);color:#fff;border-radius:9px;padding:9px 11px;min-width:150px;pointer-events:none;box-shadow:0 8px 22px rgba(15,36,40,.3);display:none;}
   .chart .tip .d{font-size:10px;opacity:.7;font-weight:600;}
@@ -241,13 +242,16 @@ function buildSeries(scope){
   for(let i=TREND_DAYS-1;i>=0;i--){
     const d=addDays(curDate,-i);
     const ts=aggregate(d);
-    const byBU={}; let fleetRevD=0;
-    ts.forEach(t=>{ fleetRevD+=(t.revD||0); (byBU[t.bu]=byBU[t.bu]||{revD:0,trucks:0}); byBU[t.bu].revD+=(t.revD||0); byBU[t.bu].trucks++; });
+    const byBU={}; let fleetRevD=0, fleetRevP=0;
+    ts.forEach(t=>{ fleetRevD+=(t.revD||0); fleetRevP+=(t.revP||0); const b=(byBU[t.bu]=byBU[t.bu]||{revD:0,revP:0,trucks:0}); b.revD+=(t.revD||0); b.revP+=(t.revP||0); b.trucks++; });
     const fleetTrucks=ts.length;
-    const scopeRev = scope==='All'?fleetRevD:((byBU[scope]||{}).revD||0);
+    const scopeRevD = scope==='All'?fleetRevD:((byBU[scope]||{}).revD||0);
+    const scopeRevP = scope==='All'?fleetRevP:((byBU[scope]||{}).revP||0);
     const scopeTrucks = scope==='All'?fleetTrucks:((byBU[scope]||{}).trucks||0);
-    out.push({i:TREND_DAYS-1-i, iso:d, label:dateLabel(d), fleetRev:fleetRevD, fleetTrucks, scopeRev, scopeTrucks,
-      revTd: scopeTrucks?scopeRev/scopeTrucks:0});
+    out.push({i:TREND_DAYS-1-i, iso:d, label:dateLabel(d), fleetRev:fleetRevD, fleetTrucks,
+      scopeRev:scopeRevD, scopeRevP, scopeTrucks,
+      revTd: scopeTrucks?scopeRevD/scopeTrucks:0,
+      dTd: scopeTrucks?scopeRevD/scopeTrucks:0, pTd: scopeTrucks?scopeRevP/scopeTrucks:0});
   }
   return out;
 }
@@ -314,18 +318,26 @@ function render(){
   // ---- 28-day delivered rev/truck-day chart ----
   const series=buildSeries(scope);
   OPSCTX={series,target,scopeLabel};
-  const viewMax=Math.max(target,...series.map(d=>d.revTd))*1.12||1;
+  // Stacked bars: delivery (teal) on the bottom, pickup (warm) on top. Delivery on
+  // the bottom keeps its top edge = delivered rev/truck-day, so the dashed target
+  // band line still reads cleanly against the delivery segment.
+  const COL_D='var(--element-teal-mid)', COL_P='#C68A3A';
+  const viewMax=Math.max(target,...series.map(d=>d.dTd+d.pTd))*1.12||1;
   const tb=Math.round(target/viewMax*OPS_MAXH);
   let bars='';
-  series.forEach(d=>{ const h=Math.max(4,Math.round(d.revTd/viewMax*OPS_MAXH)); const over=d.revTd>=target;
+  series.forEach(d=>{ const dH=Math.round(d.dTd/viewMax*OPS_MAXH), pH=Math.round(d.pTd/viewMax*OPS_MAXH);
     const isSel=STATE.selDay===d.i;
-    bars+='<div class="bar" data-bar="'+d.i+'" title="'+esc(d.label+' · '+money(d.revTd))+'" style="height:'+h+'px;background:'+(over?'var(--element-teal-mid)':'var(--red)')+';opacity:'+((STATE.selDay!=null&&!isSel)?0.45:1)+';'+(isSel?'outline:2px solid var(--element-teal);outline-offset:1px;':'')+'"></div>'; });
-  const chart='<div class="panel"><div class="phead"><h3>Delivered revenue per truck-day · 28d</h3>'+
+    bars+='<div class="bar" data-bar="'+d.i+'" title="'+esc(d.label+' · Delivery '+money(d.dTd)+' · Pickup '+money(d.pTd))+'" '+
+      'style="height:'+Math.max(4,dH+pH)+'px;opacity:'+((STATE.selDay!=null&&!isSel)?0.45:1)+';'+(isSel?'outline:2px solid var(--element-teal);outline-offset:1px;':'')+'">'+
+        '<div class="seg" style="height:'+pH+'px;background:'+COL_P+';"></div>'+
+        '<div class="seg" style="height:'+dH+'px;background:'+COL_D+';"></div></div>'; });
+  const chart='<div class="panel"><div class="phead"><h3>Revenue per truck-day — Delivery + Pickup · 28d</h3>'+
       '<button class="btn ghost sm" id="csvBtn" title="Download the 28-day series as CSV">&#8595; Export CSV</button></div>'+
     '<div class="chart"><div class="tip" id="trendTip"></div>'+
       '<div class="bars" id="trendBars"><div class="tgt" style="bottom:'+tb+'px;"></div>'+bars+'</div></div>'+
-    '<div class="legend"><span><span class="sw" style="background:var(--element-teal-mid);"></span>at / above band</span>'+
-      '<span><span class="sw" style="background:var(--red);"></span>below band</span>'+
+    '<div class="legend"><span><span class="sw" style="background:'+COL_D+';"></span>Delivery</span>'+
+      '<span><span class="sw" style="background:'+COL_P+';"></span>Pickup</span>'+
+      '<span><span class="sw" style="border-top:2px dashed var(--element-muted);height:0;width:14px;"></span>delivered target</span>'+
       '<span style="margin-left:auto;">hover for detail · click a day to see its trucks</span></div></div>';
 
   // ---- by business unit ----
@@ -401,13 +413,14 @@ function updateHover(){
   if(!tip) return;
   if(STATE.hoverIdx==null){ tip.style.display='none'; return; }
   const d=OPSCTX.series.find(x=>x.i===STATE.hoverIdx); if(!d){ tip.style.display='none'; return; }
-  const over=d.revTd>=OPSCTX.target;
+  const over=d.dTd>=OPSCTX.target;
   tip.style.left=Math.min(92,Math.max(8,(STATE.hoverIdx/(TREND_DAYS-1))*100))+'%';
   tip.style.display='block';
-  tip.innerHTML='<div class="d">'+esc(d.label)+'</div><div class="big">'+money(d.revTd)+'<span style="font-size:11px;opacity:.6;font-weight:500;"> /truck-day</span></div>'+
-    '<div class="row"><span style="opacity:.7;">'+OPSCTX.scopeLabel+' delivered</span><span>'+money(d.scopeRev)+'</span></div>'+
+  tip.innerHTML='<div class="d">'+esc(d.label)+'</div><div class="big">'+money(d.dTd+d.pTd)+'<span style="font-size:11px;opacity:.6;font-weight:500;"> /truck-day</span></div>'+
+    '<div class="row"><span style="opacity:.7;"><span style="color:var(--element-mint);">●</span> Delivery</span><span>'+money(d.dTd)+'</span></div>'+
+    '<div class="row" style="margin-top:2px;"><span style="opacity:.7;"><span style="color:#e0a96a;">●</span> Pickup</span><span>'+money(d.pTd)+'</span></div>'+
     '<div class="row" style="margin-top:2px;"><span style="opacity:.7;">Active trucks</span><span>'+d.scopeTrucks+'</span></div>'+
-    '<div class="row" style="margin-top:5px;font-weight:700;color:'+(over?'var(--element-mint)':'#ec9a93')+';">● '+(over?'at / above band':'below band')+'</div>';
+    '<div class="row" style="margin-top:5px;font-weight:700;color:'+(over?'var(--element-mint)':'#ec9a93')+';">● delivery '+(over?'at / above band':'below band')+'</div>';
 }
 
 function wire(){

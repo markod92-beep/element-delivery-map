@@ -671,14 +671,53 @@ function buChipsHtml(){
 }
 function setBU(b){ curBU=b; render(); }
 
+// ---- Per-contract leg index (across ALL dates) ----
+// The popup needs a contract's drop & pickup legs even when they fall on
+// different days, so scan the full dispatch payload once (on load), keyed by con.
+let CON_LEGS = {};
+function buildConLegs(){
+  CON_LEGS = {};
+  const routes = (DATA && DATA.routes) || {};
+  for(const date in routes){
+    for(const r of routes[date]){
+      const truck = String(r.tnum || r.truck || '').replace(/^#/,'').trim();
+      for(const s of (r.stops||[])){
+        const con = (s.con==null?'':String(s.con)).trim();
+        if(!con) continue;
+        const leg = (s.cls==='D') ? 'drop' : (s.cls==='P') ? 'pickup' : null;
+        if(!leg) continue;
+        const e = CON_LEGS[con] || (CON_LEGS[con] = {drop:null, pickup:null, addrD:'', addrP:''});
+        const cand = {date, time:(s.parr||''), truck, ll:(Array.isArray(s.ll)&&s.ll.length>=2)?s.ll:null};
+        const cur = e[leg];
+        // prefer a leg that has a truck; otherwise keep the earliest date
+        if(!cur) e[leg]=cand;
+        else if(cand.truck && !cur.truck) e[leg]=cand;
+        else if((!!cand.truck===!!cur.truck) && cand.date < cur.date) e[leg]=cand;
+        // capture any non-empty address for the leg (a truck-bearing stop may have
+        // a blank addr while another stop on the same leg carries one)
+        if(leg==='drop' && !e.addrD && s.addr) e.addrD = s.addr;
+        if(leg==='pickup' && !e.addrP && s.addr) e.addrP = s.addr;
+      }
+    }
+  }
+}
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function legDateMD(iso){ if(!iso) return ''; const p=iso.split('-'); return MONTHS_SHORT[(+p[1])-1]+' '+(+p[2]); }
+// "Jun 27, 11:00" — but date-only when the time is a 00:00 / 23:59 placeholder, or '—' if unknown.
+function legTimeLabel(leg){
+  if(!leg || !leg.date) return '—';
+  const d = legDateMD(leg.date), t = leg.time;
+  return (!t || t==='00:00' || t==='23:59') ? d : (d+', '+t);
+}
+function truckName(t){ return t ? (/^No truck assigned/i.test(t) ? esc(t) : ('Truck '+esc(t))) : ''; }
+
 // ---- Quote popup ----
 function showQuote(con){
   const q = QIDX[con];
   const card = document.getElementById('quote-modal-card');
   if(!q || !card) return;
   const r = (k,v)=>'<div class="qm-row"><span class="qm-k">'+k+'</span><span class="qm-v">'+v+'</span></div>';
-  const types = [...q.types].join(' / ') || '—';
-  const bu = buOf((allTrucks.find(t=>t.quotes&&t.quotes.some(x=>x.con===con))||{}).hs);
+  const legs = CON_LEGS[String(con)] || {};
   // Per-truck breakdown when this quote's stops span multiple trucks, each flagged
   // by the leg it ran (Drop-off = delivery, Pickup = return, or both).
   const legFlag = (cls)=>{ const d=cls&&cls.indexOf('D')>=0, p=cls&&cls.indexOf('P')>=0;
@@ -711,18 +750,41 @@ function showQuote(con){
       .map(s=>esc(s.con)+' · '+(s.rev?fmtMoney(s.rev):'$0')+(s.cust?' · '+esc(s.cust):'')).join('<br>');
     sibRow = r('Same address', '<div style="font-weight:600;margin-bottom:3px;color:var(--element-teal);">'+note+'</div>'+sl);
   }
+  // Drop & Pick up times — both legs from CON_LEGS (date-only when the time is a placeholder).
+  const timesVal = 'Drop: '+legTimeLabel(legs.drop)+' &middot; Pick up: '+legTimeLabel(legs.pickup);
+  // Trucks by leg.
+  const tParts=[];
+  if(legs.drop && legs.drop.truck) tParts.push('D: '+truckName(legs.drop.truck));
+  if(legs.pickup && legs.pickup.truck) tParts.push('P: '+truckName(legs.pickup.truck));
+  const trucksVal = tParts.length ? tParts.join(', ') : ([...q.trucks].map(esc).join(', ')||'—');
+  // Address — own addr → other-leg addr → Internal transfer → map link → '—'.
+  const ownAddr=(q.addr||'').trim(), addrD=(legs.addrD||'').trim(), addrP=(legs.addrP||'').trim();
+  const resolvedAddr = ownAddr || addrD || addrP;
+  let addrVal;
+  if(resolvedAddr){
+    addrVal = esc(resolvedAddr);
+  } else {
+    const cust=String(q.cust||'');
+    const isInternal = /^[Lt]/.test(String(con)) || /stop at store/i.test(cust) || /^str\s*#/i.test(cust) || /element event solutions/i.test(cust);
+    if(isInternal){
+      addrVal = '<span style="color:var(--element-muted)">Internal transfer</span>';
+    } else {
+      const llLeg = (legs.drop&&legs.drop.ll)?legs.drop:((legs.pickup&&legs.pickup.ll)?legs.pickup:null);
+      addrVal = llLeg
+        ? '<a href="/?routes_truck='+encodeURIComponent(llLeg.truck||'')+'&routes_date='+encodeURIComponent(llLeg.date)+'" target="_blank" rel="noopener" title="Open this stop&#39;s route on the map">View on map</a>'
+        : '—';
+    }
+  }
   card.innerHTML =
     '<div class="qm-head"><span class="qm-title">Quote '+esc(q.con)+'</span>'+
       '<button class="qm-x" onclick="closeQuote()" aria-label="Close">&times;</button></div>'+
     '<div class="qm-body">'+
       r('Customer', esc(q.cust)||'—')+
-      r('Store', (q.store||'—')+(bu&&bu!=='Other'?' · '+bu:''))+
-      r('Type', types)+
       r('Revenue', fmtMoney(q.revD>0?q.revD:q.revP))+
       itemsRow+
-      r('Address', esc(q.addr)||'—')+
-      r('Planned arrival', esc(q.parr)||'—')+
-      r('Truck(s)', [...q.trucks].join(', '))+
+      r('Address', addrVal)+
+      r('Drop &amp; Pick up Times', timesVal)+
+      r('Trucks', trucksVal)+
       legsRow+
       sibRow+
     '</div>';
@@ -896,6 +958,7 @@ function exportXlsx(){
     const clRes = await fetch('contract_load.json?v='+Date.now(), {cache:'no-store'});
     if(clRes.ok){ LOAD = await clRes.json(); }
   }catch(e){ console.warn('contract_load.json unavailable — truck-fill icons hidden:', e.message); }
+  buildConLegs();
   setupDates();
   document.getElementById('dlBtn').addEventListener('click', exportXlsx);
   await pullServer(curDate);   // load shared entries for the opening date

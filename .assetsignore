@@ -1,0 +1,9 @@
+# Keep Cloudflare Pages from uploading non-web / internal files as static assets.
+# Web assets stay served: *.html, *.json, *.webmanifest, functions/, assets/.
+*.md
+*.ps1
+*.cmd
+*.bak
+*.bak_*
+*.txt
+.wrangler/

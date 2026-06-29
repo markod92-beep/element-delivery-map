@@ -240,6 +240,16 @@ function legLabel(clsArr, typesArr){
 function isUnassigned(row){ return /^No truck assigned/i.test(String((row&&(row.truckLabel||row.truck))||'')); }
 // Leading numeric part of a truck id (so 9 < 23 < 100); null if none.
 function truckNum(row){ const m=String((row&&row.truck)||'').match(/\d+/); return m?parseInt(m[0],10):null; }
+// Truck pill label from parsed number/type: "#<tno> · <ttype>", "<ttype>",
+// "#<tno>", or the raw truck string for synthetic/blank cases.
+function truckPill(row){
+  const no = (row&&row.tno!=null) ? String(row.tno).trim() : '';
+  const ty = (row&&row.ttype!=null) ? String(row.ttype).trim() : '';
+  if(no && ty) return '#'+esc(no)+' · '+esc(ty);
+  if(ty) return esc(ty);
+  if(no) return '#'+esc(no);
+  return esc((row&&row.truck)||'');
+}
 
 // ---- manual-entry persistence (per date, this browser) ----
 function storeKey(d){ return 'truck-tracker:'+d; }
@@ -404,13 +414,16 @@ function aggregate(d){
   for(const r of rts){
     const t = (r.tnum || r.truck || '').toString().replace(/^#/,'').trim();
     if(!t) continue;
-    if(!byTruck[t]) byTruck[t] = {truck:t, truckLabel:String(r.truck||r.tnum||t), driver:'', rev:0, revD:0, revP:0, stops:0, items:0, routes:0, hs:'', bu:'Other',
+    if(!byTruck[t]) byTruck[t] = {truck:t, truckLabel:String(r.truck||r.tnum||t), tno:'', ttype:'', driver:'', rev:0, revD:0, revP:0, stops:0, items:0, routes:0, hs:'', bu:'Other',
       dCube:0, pCube:0, dCatAgg:{}, pCatAgg:{}, _storeVotes:{}, _locs:new Set(), fillBU:null};
     const o = byTruck[t];
     o.routes++;
     o.items += (r.load>0 ? r.load : 0);
     o.rev   += (r.stops||[]).reduce((s,x)=>s+(x.rev||0),0);
     if(!o.driver && r.drv) o.driver = r.drv;
+    // parsed truck number/type (from process_dispatch.parse_truck) — first non-blank wins
+    if(!o.tno && r.tno) o.tno = String(r.tno);
+    if(!o.ttype && r.ttype) o.ttype = String(r.ttype);
     if((!o.hs || o.bu==='Other') && r.hs!=null && String(r.hs).trim()){ o.hs=String(r.hs).trim(); o.bu=buOf(o.hs); }
     // BU fallback when hs is blank (e.g. the synthetic "No truck assigned (XXX)"
     // virtual routes): the dispatch payload stamps the bucket on r.co, so a
@@ -600,7 +613,7 @@ function render(){
     const actPW = (mActual==null && row.pwActual!=null);
     return ''+
       '<tr data-truck="'+row.truck+'">'+
-        '<td class="truck-cell"><span class="ragdot dot-'+c.rag+'"></span><a class="truck-link" href="/?routes_truck='+encodeURIComponent(row.truckLabel||row.truck)+'&routes_date='+curDate+'" title="Show this truck&#39;s route on the map">'+row.truck+'</a></td>'+
+        '<td class="truck-cell"><span class="ragdot dot-'+c.rag+'"></span><a class="truck-link" href="/?routes_truck='+encodeURIComponent(row.truckLabel||row.truck)+'&routes_date='+curDate+'" title="Show this truck&#39;s route on the map">'+truckPill(row)+'</a></td>'+
         '<td class="drv-cell">'+(row.driver||'')+'</td>'+
         '<td class="num rev" data-label="Revenue">'+revSplitHtml(row)+'</td>'+
         '<td class="fill-td" data-label="Truck Fill">'+fillCellHtml(row)+'</td>'+

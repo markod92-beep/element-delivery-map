@@ -245,9 +245,16 @@ function truckNum(row){ const m=String((row&&row.truck)||'').match(/\d+/); retur
 function truckPill(row){
   const no = (row&&row.tno!=null) ? String(row.tno).trim() : '';
   const ty = (row&&row.ttype!=null) ? String(row.ttype).trim() : '';
-  if(no && ty) return '#'+esc(no)+' · '+esc(ty);
+  // POR Truck_Number (the number shown on the POR order screen). The tracker
+  // groups rows by it (row.truck) but historically displayed only the
+  // name-derived number (tno) — e.g. "#179 · Ryder Cube" when the order screen
+  // says truck 209. Show it in brackets when it differs so the pill reconciles
+  // with POR. Only appended for real numbered trucks (when `no` is present).
+  const por = (row&&row.truck!=null) ? String(row.truck).trim().replace(/^#/,'') : '';
+  const porTag = (no && por && por!==no) ? ' ('+esc(por)+')' : '';
+  if(no && ty) return '#'+esc(no)+' · '+esc(ty)+porTag;
   if(ty) return esc(ty);
-  if(no) return '#'+esc(no);
+  if(no) return '#'+esc(no)+porTag;
   return esc((row&&row.truck)||'');
 }
 

@@ -2409,6 +2409,27 @@ revLayerGroup.addTo(map);
 let dispatchData = null;
 let dispatchLoading = false;
 let dispatchVisible = false;
+
+// ===== CUBE / TRUCK-FILL STATE =====
+// Populated by contract_load.json (built by process_truckload.py). Gives the
+// per-contract "cube" (truck-space units) + top category contributors, plus the
+// per-business-unit truck capacity so the contract card can show cube used and
+// the fill % it represents against a full truck. Loaded eagerly, non-fatal.
+let cubeData = null;
+let cubeLoading = false;
+function ensureCubeData() {
+  if (cubeData) return Promise.resolve(cubeData);
+  if (cubeLoading) return cubeLoading;
+  cubeLoading = fetch('contract_load.json?v=' + Date.now(), { cache: 'no-store' })
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(data) { cubeData = data; return data; })
+    .catch(function(err) {
+      console.warn('contract_load.json unavailable:', err.message);
+      cubeLoading = false;
+      throw err;
+    });
+  return cubeLoading;
+}
 let dispatchDate = null;                              // ISO YYYY-MM-DD
 
 // Contract-level lookup built when dispatchData lands.
@@ -2419,6 +2440,23 @@ let dispatchDate = null;                              // ISO YYYY-MM-DD
 // Dispatch window is rolling 90d back / 30d forward, so contracts outside
 // that window simply won't have an entry — UI shows an em-dash.
 const dispatchByContract = {};
+// Truck NAME -> dispatch number (POR Truck_Number / "tnum" — the number shown on
+// the order screen in POR). Populated from the dispatch payload. Used to render
+// "Name (Number)" so the tracker label reconciles with POR's order detail.
+// We only surface the number when it differs from the number already embedded in
+// the name (tno), so "CMM-896" stays clean but "Ryder Cube 179" shows "(209)".
+const truckNumByName = {};
+// Format a truck name with its dispatch number in brackets when it adds info.
+function fmtTruckLabel(name) {
+  const n = name || '';
+  const meta = truckNumByName[n];
+  if (!meta) return n;
+  const tnum = (meta.tnum || '').toString().trim();
+  const tno  = (meta.tno  || '').toString().trim();
+  if (!tnum || tnum === '0') return n;      // no real dispatch number
+  if (tnum === tno) return n;               // already visible in the name
+  return n + ' (' + tnum + ')';
+}
 // Truck filter. Empty set = "no trucks" (hide all). Reset to
 // "all trucks matching current date + company filter" on date/company change.
 // Click-to-solo semantics (matches company chips): clicking a truck selects
@@ -3866,6 +3904,8 @@ fetch('delivery_data.json?v=' + Date.now(), { cache: 'no-store' })
     // user clicks a contract. Non-blocking — failure is logged but never
     // breaks the main map.
     try { ensureDispatchData().catch(function(){}); } catch(e) {}
+    // Same for contract_load.json — powers the "Cube used" row in the card.
+    try { ensureCubeData().catch(function(){}); } catch(e) {}
   })
   .catch(function(err){
     console.error('Failed to load delivery_data.json:', err);
@@ -4449,9 +4489,9 @@ window.showContractDetail = function(contractNum, detailId) {
     ct.forEach(function(t) {
       h += '<div class="mt-truck">' +
            '<span class="mt-date">' + _fmtShort(t[0]) + '</span>' +
-           '<span class="mt-tname">' + (t[1] || '\u2014') + '</span>' +
+           '<span class="mt-tname">' + (t[1] ? _esc(fmtTruckLabel(t[1])) : '\u2014') + '</span>' +
            '<span class="mt-meta">(' + _clsLabel(t[3]) +
-             (t[2] ? ' \u00B7 #' + t[2] : '') + ')</span>' +
+             (t[2] ? ' \u00B7 route #' + t[2] : '') + ')</span>' +
            '</div>';
     });
     // Linked-contract trucks — trucks at the event that aren't on this
@@ -4461,12 +4501,68 @@ window.showContractDetail = function(contractNum, detailId) {
     linked.forEach(function(n) {
       h += '<div class="mt-truck">' +
            '<span class="mt-date">' + (firstDel ? _fmtShort(firstDel.date) : '') + '</span>' +
-           '<span class="mt-tname">' + n + '</span>' +
+           '<span class="mt-tname">' + _esc(fmtTruckLabel(n)) + '</span>' +
            '<span class="mt-meta">(delivery \u00B7 linked contract)</span>' +
            '</div>';
     });
     h += '</div>';
     h += '</div>';
+  })();
+
+  // --- Cube used (truck-space) — from contract_load.json ---
+  // Shows the contract's cube (Σ item qty × cube factor), the top category
+  // contributors, and the fill % that cube represents against a full truck for
+  // the contract's business unit. "Cube" is a deliberately rough truck-space
+  // proxy (not real volume): a full standard truck ≈ ~1,000+ cube units.
+  (function renderCube() {
+    // Still loading? Show a placeholder and re-open once the data lands.
+    if (!cubeData && cubeLoading) {
+      h += '<div class="cd-row"><span class="cd-label">Cube used</span>' +
+           '<span class="cd-value" style="color:#9aa;font-weight:400;">loading…</span></div>';
+      Promise.resolve(cubeLoading).then(function() {
+        const el2 = document.getElementById(detailId);
+        if (el2 && el2.classList.contains('cd-open')) {
+          el2.classList.remove('cd-open');
+          window.showContractDetail(contractNum, detailId);
+        }
+      }).catch(function(){});
+      return;
+    }
+    if (!cubeData) return;  // unavailable — omit the row entirely
+    const cube = (cubeData.cube_by_con || {})[contractNum];
+    if (cube === undefined || cube === null) return;  // no cube for this contract
+
+    // Business unit → full-truck capacity, via the contract's dispatch store.
+    const disp = dispatchByContract[contractNum];
+    let store = '';
+    if (disp) {
+      if (disp.deliveries && disp.deliveries[0]) store = disp.deliveries[0].store || '';
+      else if (disp.pickups && disp.pickups[0]) store = disp.pickups[0].store || '';
+    }
+    const s2b = (cubeData.meta && cubeData.meta.store_to_bu) || {};
+    const bu = s2b[store] || '';
+    const cap = bu && cubeData.capacity_by_bu ? cubeData.capacity_by_bu[bu] : null;
+
+    let valStr = cube.toLocaleString(undefined, { maximumFractionDigits: 1 }) + ' cube';
+    if (cap && cap > 0) {
+      const pct = 100 * cube / cap;
+      const pctStr = pct < 1 ? '<1%' : Math.round(pct) + '%';
+      valStr += ' <span style="color:#6B7A7E;font-weight:400;">· ≈' + pctStr +
+                ' of a full ' + _esc(bu) + ' truck</span>';
+    }
+    h += '<div class="cd-row"><span class="cd-label">Cube used</span>' +
+         '<span class="cd-value">' + valStr + '</span></div>';
+
+    // Top contributing categories (what drives the cube).
+    const tops = (cubeData.top_cats_by_con || {})[contractNum];
+    if (tops && tops.length) {
+      const parts = tops.slice(0, 3).map(function(tc) {
+        return _esc(tc[0]) + ' ' + Number(tc[1]).toLocaleString(undefined, { maximumFractionDigits: 1 });
+      });
+      h += '<div class="cd-row"><span class="cd-label" style="font-size:10px;">Cube drivers</span>' +
+           '<span class="cd-value" style="font-size:10px;color:#6B7A7E;font-weight:400;">' +
+           parts.join(' · ') + '</span></div>';
+    }
   })();
 
   // What's on the contract — rough category-level quantities from POR's
@@ -4894,10 +4990,16 @@ function _syncTimelinePanelVisibility() {
 function _buildDispatchByContract(data) {
   // Clear existing keys (in case of re-fetch)
   for (const k in dispatchByContract) delete dispatchByContract[k];
+  for (const k in truckNumByName) delete truckNumByName[k];
   const routesByDate = (data && data.routes) || {};
   for (const date in routesByDate) {
     const routes = routesByDate[date] || [];
     for (const rt of routes) {
+      // Remember each truck name's dispatch number (tnum) + name-embedded
+      // number (tno) so labels can show "Name (Number)" where they diverge.
+      if (rt.truck && !truckNumByName[rt.truck]) {
+        truckNumByName[rt.truck] = { tnum: rt.tnum, tno: rt.tno };
+      }
       const stops = rt.stops || [];
       for (const s of stops) {
         if (!s || !s.con) continue;
@@ -5043,7 +5145,7 @@ function updateDispatchTruckOptions(preserveSelection) {
            'onclick="soloDispatchTruck(this.getAttribute(\'data-truck\'))" ' +
            'title="' + tipTitle + '">' +
       '<span class="dp-truck-swatch" style="background:' + truckColor[t] + ';"></span>' +
-      '<span class="dp-truck-name">' + _esc(t) + '</span>' +
+      '<span class="dp-truck-name">' + _esc(fmtTruckLabel(t)) + '</span>' +
       '<span class="dp-truck-rev" aria-label="Delivery / Pickup revenue">' +
         '<span class="dp-rev-d" title="Delivery revenue">D ' + fmtMoney(dRev) + '</span>' +
         '<span class="dp-rev-sep">\u00b7</span>' +
@@ -5282,7 +5384,7 @@ function buildDispatchLayer(fitBounds) {
         lineJoin: 'round',
       });
       line.bindTooltip(
-        '<b>' + r.truck + '</b><br>' +
+        '<b>' + _esc(fmtTruckLabel(r.truck)) + '</b><br>' +
         (r.drv || '—') + '<br>' +
         (r.stops || []).length + ' stops · ' + r.dist + ' km · ' + r.time + ' min',
         { sticky: true, direction: 'top' }
@@ -5303,7 +5405,7 @@ function buildDispatchLayer(fitBounds) {
         }),
         zIndexOffset: -100,  // sit under stop pins so clicks on stops still win
       })
-        .bindTooltip('<b>' + _esc(r.truck) + '</b><br>Route start · ' + _esc(depotLabel),
+        .bindTooltip('<b>' + _esc(fmtTruckLabel(r.truck)) + '</b><br>Route start · ' + _esc(depotLabel),
                      { direction: 'top' })
         .addTo(dispatchLayerGroup);
       bounds.push(startCoord);
@@ -5321,7 +5423,7 @@ function buildDispatchLayer(fitBounds) {
           }),
           zIndexOffset: -100,
         })
-          .bindTooltip('<b>' + _esc(r.truck) + '</b><br>Route end · ' + _esc(depotLabel),
+          .bindTooltip('<b>' + _esc(fmtTruckLabel(r.truck)) + '</b><br>Route end · ' + _esc(depotLabel),
                        { direction: 'top' })
           .addTo(dispatchLayerGroup);
         bounds.push(stopCoord);
@@ -5552,7 +5654,7 @@ function _renderBucketPopup(b, color) {
   });
   let rowsHtml = '';
   byTruck.forEach(function(list, truck) {
-    rowsHtml += '<div style="margin-top:6px;font-size:11px;color:var(--element-teal);font-weight:700;">' + _esc(truck) + '</div>';
+    rowsHtml += '<div style="margin-top:6px;font-size:11px;color:var(--element-teal);font-weight:700;">' + _esc(fmtTruckLabel(truck)) + '</div>';
     list.sort(function(a, b) { return a.stopNum - b.stopNum; });
     list.forEach(function(x) {
       const s = x.s;

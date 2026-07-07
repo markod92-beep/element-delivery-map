@@ -7,3 +7,6 @@
 *.bak_*
 *.txt
 .wrangler/
+
+*.py
+pipeline-audit-*/

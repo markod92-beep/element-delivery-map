@@ -48,7 +48,10 @@ for n, d in hols.items():
 if name is None and today.weekday() >= 5:
     name = "Weekend"
 
-skip = "true" if name else "false"
+# Run every day — Mark wants the map to refresh daily. On weekends/holidays the
+# source data hasn't changed, so publish.py simply no-ops (nothing new to commit).
+# `name` is kept for informative logging only.
+skip = "false"
 out = os.environ.get("GITHUB_OUTPUT")
 if out:
     with open(out, "a") as fh: fh.write(f"skip={skip}\n")

@@ -1,7 +1,7 @@
 name: Daily Delivery Map Refresh
 on:
   schedule:
-    - cron: "0 14 * * 1-5"   # 14:00 UTC = 10:00 ET (EDT). Winter = 09:00 ET.
+    - cron: "0 14 * * *"     # daily; 14:00 UTC = 10:00 ET (EDT), 09:00 ET winter
   workflow_dispatch: {}
 
 permissions:
@@ -57,14 +57,15 @@ jobs:
           path: pipeline/osrm_cache.json
           key: osrm-cache-v1
 
-      - name: Pull source xlsx from SharePoint
+      - name: Pull source xlsx from Google Drive
         if: steps.guard.outputs.skip == 'false'
         run: |
           set -e
           mkdir -p _src
-          rclone copy "ees:Unique Events/CMMC_UniqueEvents.xlsx"              ./_src/
-          rclone copy "ees:Dispatch/CMMC_Dispatch_Routes.xlsx"               ./_src/
-          rclone copy "ees:Payworks/Element Event Solutions - Timesheet.xlsx" ./_src/ || echo "WARN: Payworks missing"
+          # Files are staged into this Drive folder daily by a Power Automate flow
+          # (SharePoint -> Google Drive). One folder copy grabs all three xlsx.
+          rclone copy "gdrive:Element Delivery Map Source" ./_src/
+          ls -la _src/
 
       - name: Freshness check
         if: steps.guard.outputs.skip == 'false'

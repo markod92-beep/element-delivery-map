@@ -970,10 +970,13 @@ function exportXlsx(){
   const manual = loadManual(curDate);
   const head = ['#','Truck #','Driver','Revenue ($)','Delivery Rev','Pickup Rev','Stops','Quotes','Proj Lab Hrs','Actual Lab Hrs','Rev / Proj Hr','Rev / Actual Hr','vs Target','Hrs Source','Notes','BU','Delivery Fill %','Pickup Fill %'];
   const rows = [head];
-  let totRev=0,totRevD=0,totRevP=0,totProj=0,totActual=0,totStops=0,revWithActual=0;
+  let totRev=0,totRevD=0,totRevP=0,totProj=0,totActual=0,totStops=0,revWithActual=0,revWithProj=0;
   trucks.forEach((row,i)=>{
     const c=computeRow(row,manual,target);
-    totRev+=row.rev;totRevD+=(row.revD||0);totRevP+=(row.revP||0);totStops+=row.stops;if(c.proj>0)totProj+=c.proj;if(c.actual>0){totActual+=c.actual;revWithActual+=row.rev;}
+    // revWithActual/revWithProj use revD (delivered revenue) so the exported
+    // Fleet Rev / Lab Hr matches the on-screen card — the export previously
+    // summed row.rev (D+P) and disagreed with the screen on pickup days.
+    totRev+=row.rev;totRevD+=(row.revD||0);totRevP+=(row.revP||0);totStops+=row.stops;if(c.proj>0){totProj+=c.proj;revWithProj+=(row.revD||0);}if(c.actual>0){totActual+=c.actual;revWithActual+=(row.revD||0);}
     const unas = isUnassigned(row);
     rows.push([i+1,row.truck,row.driver||'',Math.round(row.rev*100)/100,Math.round((row.revD||0)*100)/100,Math.round((row.revP||0)*100)/100,row.stops,(row.quotes||[]).map(q=>q.con).join(', '),
       isNaN(c.proj)?'':c.proj, isNaN(c.actual)?'':c.actual,
@@ -985,7 +988,7 @@ function exportXlsx(){
       (!unas&&capOf(row.fillBU))? Math.round(100*(row.dCube||0)/capOf(row.fillBU)) : '',
       (!unas&&capOf(row.fillBU))? Math.round(100*(row.pCube||0)/capOf(row.fillBU)) : '']);
   });
-  const fleetRevHr=(totActual>0)?revWithActual/totActual:(totProj>0?totRev/totProj:'');
+  const fleetRevHr=(totActual>0)?revWithActual/totActual:(totProj>0?revWithProj/totProj:'');
   rows.push([]);
   rows.push(['','FLEET TOTAL','',Math.round(totRev*100)/100,Math.round(totRevD*100)/100,Math.round(totRevP*100)/100,totStops,'',totProj||'',totActual||'',
     '', fleetRevHr!==''?Math.round(fleetRevHr*100)/100:'', '','','','','','']);

@@ -43,6 +43,7 @@ ws = wb[sheet_name]
 C_TSID, C_EMPID, C_FIRST, C_LAST, C_OCC, C_EARN, C_START, C_HOURS = 0, 2, 3, 4, 6, 7, 8, 13
 
 emps = {}            # emp_id -> {first,last,occ:set, dates:{date:{tsid:hours}}}
+tsid_conflicts = 0   # same Timesheet_Id seen twice with DIFFERENT hours (would silently drop hours)
 for i, r in enumerate(ws.iter_rows(values_only=True)):
     if i == 0:
         continue
@@ -61,8 +62,16 @@ for i, r in enumerate(ws.iter_rows(values_only=True)):
                               "occ": set(), "dates": {}})
     if r[C_OCC]:
         e["occ"].add(str(r[C_OCC]))
-    # dedupe by Timesheet_Id within a date, then sum across earning rows
-    e["dates"].setdefault(d, {})[r[C_TSID]] = hrs
+    # dedupe by Timesheet_Id within a date, then sum across earning rows.
+    # AUDIT GUARD (2026-07-07): keying by tsid means a repeated Timesheet_Id
+    # OVERWRITES — correct for accidental exact-duplicate rows, but it would
+    # silently drop hours if Payworks ever exported Regular+OT under one
+    # tsid (verified not the case today: 0 repeated tsids in 37k rows).
+    # Warn loudly if that assumption ever breaks.
+    day = e["dates"].setdefault(d, {})
+    if r[C_TSID] in day and day[r[C_TSID]] != hrs:
+        tsid_conflicts += 1
+    day[r[C_TSID]] = hrs
 
 def is_driver(occ):
     return any("DRIVER" in o.upper() for o in occ)
@@ -89,6 +98,10 @@ out = {
 with open(OUT, "w", encoding="utf-8") as f:
     json.dump(out, f, separators=(",", ":"))
 
+if tsid_conflicts:
+    print(f"WARNING: {tsid_conflicts} Timesheet_Id rows repeated with DIFFERENT hours - "
+          "the dedupe kept only the last row per tsid, so hours may be UNDERCOUNTED. "
+          "Check the Payworks export (Regular+OT under one Timesheet_Id?).", file=sys.stderr)
 print(f"Source sheet: {sheet_name}")
 print(f"Driver employees written: {len(drivers)}")
 print(f"Output: {OUT}  ({os.path.getsize(OUT)/1024:.0f} KB)")

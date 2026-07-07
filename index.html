@@ -5308,6 +5308,11 @@ function buildDispatchLayer(fitBounds) {
   routes = routes.filter(function(r) { return dispatchTrucks.has(r.truck); });
 
   let totalStops = 0, totalRev = 0, totalDist = 0;
+  // stop.rev repeats the contract's FULL rental on every leg (delivery AND
+  // pickup carry the same amount), so the day Revenue stat must count each
+  // contract once. Per-stop summing overstated it ~8% on average
+  // (audit 2026-07-07), up to ~1.5x on heavy same-day D+P days.
+  const seenRevCons = new Set();
   const bounds = [];
   // Bucket = one marker on the map. Key depends on dispatchView:
   //   'address' -> "CUST|ADDR" (upper, trimmed) — groups multi-contract pickups
@@ -5471,7 +5476,14 @@ function buildDispatchLayer(fitBounds) {
       b.count += 1;
 
       totalStops += 1;
-      totalRev += (s.rev || 0);
+      if (s.con) {
+        if (!seenRevCons.has(s.con)) {
+          seenRevCons.add(s.con);
+          totalRev += (s.rev || 0);
+        }
+      } else {
+        totalRev += (s.rev || 0);
+      }
     });
 
     totalDist += (r.dist || 0);
@@ -5642,9 +5654,19 @@ function _renderBucketPopup(b, color) {
         : (isCA && bucketCust)
           ? b.count + ' stops · ' + _esc(bucketCust)
           : b.count + ' stops at this address';
-  // Rev total + dominant address (for city view address rollup)
+  // Rev total + dominant address (for city view address rollup).
+  // Dedup by contract — stop.rev repeats the full rental on every leg, so a
+  // same-address delivery+pickup pair would otherwise double the bucket total.
   let revSum = 0;
-  b.stops.forEach(function(x) { revSum += (x.s.rev || 0); });
+  const _seenRevCon = new Set();
+  b.stops.forEach(function(x) {
+    const _c = x.s.con;
+    if (_c) {
+      if (_seenRevCon.has(_c)) return;
+      _seenRevCon.add(_c);
+    }
+    revSum += (x.s.rev || 0);
+  });
   // Group rows by truck for readability, ordered by first appearance
   const byTruck = new Map();
   b.stops.forEach(function(x) {

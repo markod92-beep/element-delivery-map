@@ -10,3 +10,8 @@
 
 *.py
 pipeline-audit-*/
+
+# Cloud-refresh pipeline: never upload the vendored scripts or the raw
+# SharePoint xlsx pulls as static assets.
+pipeline/
+_src/

@@ -1,3 +1,9 @@
 .wrangler/
 *.bak
 *.bak_*
+_src/
+pipeline/osrm_cache.json
+pipeline/health_log/
+pipeline/logs/
+pipeline/_ref_only.json
+pipeline/__pycache__/

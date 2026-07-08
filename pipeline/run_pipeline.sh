@@ -40,7 +40,16 @@ python $P/publish.py --repo-dir . \
   $PUB_DH $PUB_CL
 
 echo "[9/9] deploy to Cloudflare + smoke test"
+# Cloudflare Pages uploads every file in the deploy dir and rejects any file >25 MiB.
+# `.assetsignore` is NOT honored by `wrangler pages deploy`, so keep the large non-web
+# inputs out of the tree at deploy time (the laptop's repo never contains them):
+# remove the source xlsx (not needed post-processing) and stash the OSRM cache,
+# restoring it afterward so the workflow's actions/cache save step still finds it.
+rm -rf "$SRC"
+CACHE_STASH=""
+if [ -f "$OSRM_CACHE_PATH" ]; then CACHE_STASH="$(mktemp)"; mv "$OSRM_CACHE_PATH" "$CACHE_STASH"; fi
 npx wrangler pages deploy . --project-name=element-delivery-map --branch=main --commit-dirty=true
+if [ -n "$CACHE_STASH" ]; then mv "$CACHE_STASH" "$OSRM_CACHE_PATH"; fi
 sleep 20
 python $P/smoke_test.py
 echo "--- done ---"

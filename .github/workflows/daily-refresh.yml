@@ -46,9 +46,11 @@ jobs:
 
       - name: Write rclone config
         if: steps.guard.outputs.skip == 'false'
+        env:
+          RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
         run: |
           mkdir -p ~/.config/rclone
-          printf '%s' "${{ secrets.RCLONE_CONF }}" > ~/.config/rclone/rclone.conf
+          printf '%s' "$RCLONE_CONF" > ~/.config/rclone/rclone.conf
 
       - name: Restore OSRM cache
         if: steps.guard.outputs.skip == 'false'

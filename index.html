@@ -2231,6 +2231,12 @@ const newWeekLabels = {};
 
 // Contract detail lookup for drill-down
 const contractInfo = {};
+// Lookup for interned category names. contractInfo[*].cats holds [nameIdx, qty]
+// pairs; the names live once in delivery_data.json's top-level "catNames" array.
+// This keeps delivery_data.json under Cloudflare Pages' hard 25 MiB file limit
+// (the old inline-name shape crossed it and broke every deploy). Populated on load;
+// stays empty for older payloads that stored names inline — the renderer handles both.
+let catNames = [];
 let contractFilter = 'all'; // 'all', 'closed', 'open'
 
 // Revenue map view: 'address' = current behavior (per-FSA in Toronto, zone-level
@@ -3894,6 +3900,7 @@ fetch('delivery_data.json?v=' + Date.now(), { cache: 'no-store' })
     Object.assign(contractCityRef, data.contractCityRef);
     Object.assign(contractEvents, data.contractEvents);
     Object.assign(contractInfo, data.contractInfo);
+    catNames = data.catNames || [];
     // Resolve orphan FSAs via city-tag fallback BEFORE the first render, so
     // the heatmap on initial load already includes the previously-dropped
     // bubbles. Only fills gaps; never overwrites authoritative refs.
@@ -4571,8 +4578,14 @@ window.showContractDetail = function(contractNum, detailId) {
   if (info.cats && info.cats.length) {
     h += '<div class="cd-cats-label">What\u2019s on it</div>';
     h += '<div class="cd-cats">';
-    for (const [name, qty] of info.cats) {
-      h += '<span class="cd-cat-chip">' + name +
+    for (const [c, qty] of info.cats) {
+      // Category names are interned: cats holds [nameIdx, qty] and the names live
+      // in the top-level catNames lookup (saves ~2.8 MiB of repeated strings, which
+      // kept delivery_data.json under Cloudflare Pages' hard 25 MiB file limit).
+      // Older payloads stored the name inline, so accept a string too.
+      const name = (typeof c === 'number') ? (catNames[c] || '') : c;
+      if (!name) continue;
+      h += '<span class="cd-cat-chip">' + _esc(name) +
            '<span class="ccq">' + qty.toLocaleString() + '</span></span>';
     }
     h += '</div>';

@@ -922,12 +922,30 @@ def process(xlsx_path: Path, ref_path: Path | None) -> dict:
     # Fold category quantities into contract_info. Sorted by qty desc so the UI
     # can just render top-N without re-sorting each click. Round to ints — all
     # POR category columns are unit counts, not partial units.
+    # Category names are INTERNED: there are only ~25 distinct names, but they were
+    # previously written out in full for every contract (305k+ times, ~2.8 MiB of
+    # repeated strings). We now emit a top-level "catNames" lookup and store the
+    # index instead: [[nameIdx, qty], ...]. This cut delivery_data.json from
+    # 25.05 MiB to 22.03 MiB — Cloudflare Pages hard-rejects any file over 25 MiB,
+    # and the old shape had just crossed it, breaking every deploy.
+    # The UI (index.html) accepts BOTH shapes, so an older payload still renders.
+    cat_names: list[str] = []
+    cat_index: dict[str, int] = {}
+
+    def _cat_id(name: str) -> int:
+        i = cat_index.get(name)
+        if i is None:
+            i = len(cat_names)
+            cat_index[name] = i
+            cat_names.append(name)
+        return i
+
     for c, cats in contract_cats.items():
         if c not in contract_info:
             continue
-        # List form: [[name, qty], ...] keeps JSON small vs nested dicts.
+        # List form: [[nameIdx, qty], ...] keeps JSON small vs nested dicts.
         sorted_cats = sorted(
-            ([name, int(round(q))] for name, q in cats.items() if q >= 1),
+            ([_cat_id(name), int(round(q))] for name, q in cats.items() if q >= 1),
             key=lambda x: -x[1],
         )
         if sorted_cats:
@@ -1040,6 +1058,7 @@ def process(xlsx_path: Path, ref_path: Path | None) -> dict:
     }
 
     return {
+        "catNames": cat_names,   # lookup for contractInfo[*].cats [[nameIdx, qty], ...]
         "weekKeys": week_keys,
         "weekLabels": week_labels,
         "contractWeekly": contract_weekly,

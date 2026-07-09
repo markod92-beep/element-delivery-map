@@ -18,34 +18,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Skip on weekends / Ontario stat holidays
-        id: guard
-        run: python pipeline/ci_skip_guard.py
-
       - name: Setup Python
-        if: steps.guard.outputs.skip == 'false'
         uses: actions/setup-python@v5
         with: { python-version: "3.12" }
 
       - name: Install Python deps
-        if: steps.guard.outputs.skip == 'false'
         run: |
           pip install -r pipeline/requirements.txt
           python -m playwright install --with-deps chromium
 
       - name: Setup Node
-        if: steps.guard.outputs.skip == 'false'
         uses: actions/setup-node@v4
         with: { node-version: "20" }
 
       - name: Install wrangler + rclone
-        if: steps.guard.outputs.skip == 'false'
         run: |
           npm install -g wrangler
           curl -fsSL https://rclone.org/install.sh | sudo bash
 
       - name: Write rclone config
-        if: steps.guard.outputs.skip == 'false'
         env:
           RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
         run: |
@@ -53,14 +44,12 @@ jobs:
           printf '%s' "$RCLONE_CONF" > ~/.config/rclone/rclone.conf
 
       - name: Restore OSRM cache
-        if: steps.guard.outputs.skip == 'false'
         uses: actions/cache@v4
         with:
           path: pipeline/osrm_cache.json
           key: osrm-cache-v1
 
       - name: Pull source xlsx from Google Drive
-        if: steps.guard.outputs.skip == 'false'
         run: |
           set -e
           mkdir -p _src
@@ -70,11 +59,9 @@ jobs:
           ls -la _src/
 
       - name: Freshness check
-        if: steps.guard.outputs.skip == 'false'
         run: python pipeline/ci_freshness_check.py _src
 
       - name: Run pipeline
-        if: steps.guard.outputs.skip == 'false'
         env:
           MAP_PASSWORD: ${{ secrets.MAP_PASSWORD }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -83,7 +70,7 @@ jobs:
         run: bash pipeline/run_pipeline.sh
 
       - name: Save OSRM cache
-        if: always() && steps.guard.outputs.skip == 'false'
+        if: always()
         uses: actions/cache/save@v4
         with:
           path: pipeline/osrm_cache.json

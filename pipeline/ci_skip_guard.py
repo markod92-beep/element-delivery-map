@@ -49,10 +49,42 @@ if name is None and today.weekday() >= 5:
     name = "Weekend"
 
 # Run every day — Mark wants the map to refresh daily. On weekends/holidays the
-# source data hasn't changed, so publish.py simply no-ops (nothing new to commit).
-# `name` is kept for informative logging only.
+# source data hasn't changed; `name` is kept for informative logging only and does
+# NOT cause a skip.
+#
+# Idempotency guard: GitHub's `schedule` trigger is best-effort — runs are often
+# delayed and sometimes dropped entirely. We therefore schedule the job twice
+# (08:17 + a 09:17 catch-up). To keep the catch-up cheap, a SCHEDULED run exits
+# immediately if today's data was already published (the tip of main is a
+# delivery-map-bot "data: refresh <today>" commit). A manual workflow_dispatch
+# NEVER skips, so Mark can always force a rebuild.
+import subprocess
+
+def already_published_today() -> bool:
+    """True if the CURRENT tip of origin/main is today's bot data commit.
+
+    Fetches rather than trusting the checked-out SHA: if the 08:17 run is still
+    finishing when the 09:17 catch-up dispatches, the catch-up's checkout SHA can
+    predate the bot's push. Fetching origin/main avoids a double publish.
+    """
+    try:
+        subprocess.run(["git", "fetch", "--quiet", "--depth=1", "origin", "main"],
+                       check=True, capture_output=True)
+        out = subprocess.run(["git", "log", "-1", "--format=%an|%s", "FETCH_HEAD"],
+                             capture_output=True, text=True, check=True).stdout.strip()
+    except Exception:
+        return False  # can't tell -> run rather than silently skip a day
+    author, _, subject = out.partition("|")
+    return author.strip() == "delivery-map-bot" and today.isoformat() in subject
+
+event = os.environ.get("GITHUB_EVENT_NAME", "")
+reason = name  # weekend / holiday name, informational only
 skip = "false"
+if event == "schedule" and already_published_today():
+    skip = "true"
+    reason = f"already published {today.isoformat()}"
+
 out = os.environ.get("GITHUB_OUTPUT")
 if out:
     with open(out, "a") as fh: fh.write(f"skip={skip}\n")
-print(f"skip={skip}" + (f" ({name})" if name else ""))
+print(f"skip={skip}" + (f" ({reason})" if reason else "") + f" [event={event or 'n/a'}]")

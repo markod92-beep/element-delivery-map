@@ -87,8 +87,19 @@ import openpyxl
 try:
     from pypostalcode import PostalCodeDatabase
     _PC_DB = PostalCodeDatabase()
-except Exception:
+except Exception as _pc_err:  # pragma: no cover
+    # DO NOT let this fail silently. When pypostalcode is missing, BOTH the
+    # coord sanity-check and the FSA-centroid fallback become no-ops: bad POR
+    # coords sail through (see the 172 stops parked on the Ontario province
+    # centroid, 2026-07-09) and coord-less stops get dropped from the map.
+    # It was omitted from requirements.txt during the cloud migration and this
+    # try/except hid it for days. Shout about it.
     _PC_DB = None
+    print("CRITICAL: pypostalcode unavailable (%s) -- geocode validation and "
+          "FSA fallback are DISABLED. Add it to pipeline/requirements.txt."
+          % _pc_err, file=sys.stderr)
+    print("::error title=Geocode guard disabled::pypostalcode missing; "
+          "bad coordinates will not be corrected", file=sys.stderr)
 
 
 # ============================================================
@@ -96,6 +107,22 @@ except Exception:
 # copy-pasted _VENUE_OVERRIDES / _load_venue_overrides pattern).
 # ============================================================
 from venue_utils import load_venue_overrides, match_venue_override_for_stop
+
+
+# POR writes the ONTARIO PROVINCE CENTROID when its own geocoder fails, rather
+# than leaving the coord blank. Left alone it parks stops ~864 km north of their
+# real address (2026-07-09: 172 stops, incl. contract 704636 "550 Bayview Ave,
+# Toronto"). Treat it as "no coordinate" so the venue-override / FSA-centroid
+# fallback chain can rescue the stop.
+_SENTINEL_COORDS = (
+    (50.074657, -85.828735),   # centroid of Ontario
+)
+
+
+def _is_sentinel_coord(lat: float, lng: float, tol: float = 0.01) -> bool:
+    """True if (lat,lng) is one of POR's 'could not geocode' placeholder coords.
+    tol=0.01 deg is roughly 1 km, tight enough to never match a real address."""
+    return any(abs(lat - a) < tol and abs(lng - b) < tol for a, b in _SENTINEL_COORDS)
 
 
 def _extract_fsa(zip_str: str) -> str | None:
@@ -826,6 +853,7 @@ def process(src_path: str, out_path: str, days_back: int = 90, days_forward: int
     D_ACT_ARRIVAL   = _D["ACT_ARRIVAL"]
     s_total = s_attached = s_no_route = s_no_geo = s_venue_backfill = 0
     s_fsa_fallback = 0
+    s_sentinel = 0
     s_skip_transfer = 0
     s_skip_doc_transfer = s_skip_internal = 0
     for row in ws.iter_rows(min_row=2, values_only=True):
@@ -837,6 +865,12 @@ def process(src_path: str, out_path: str, days_back: int = 90, days_forward: int
 
         lat = num(row[D_LATITUDE])
         lng = num(row[D_LONGITUDE])
+
+        # POR's "couldn't geocode" placeholder -> treat as missing so the
+        # venue-override / FSA-centroid fallback below can rescue the stop.
+        if lat and lng and _is_sentinel_coord(lat, lng):
+            s_sentinel += 1
+            lat = lng = 0.0
 
         # Pre-read the stop identity fields so we can classify the stop and,
         # if it survives, try a venue-override backfill when POR didn't geocode.
@@ -941,6 +975,7 @@ def process(src_path: str, out_path: str, days_back: int = 90, days_forward: int
     wb.close()
     print(f"[dispatch] Map_Route_Details: total={s_total:,} attached={s_attached:,} "
           f"skip_no_route={s_no_route:,} skip_no_geo={s_no_geo:,} "
+          f"sentinel_coords={s_sentinel:,} "
           f"skip_doc_transfer={s_skip_doc_transfer:,} skip_internal_leg={s_skip_internal:,} "
           f"skip_transfer_leg(cls=T)={s_skip_transfer:,} "
           f"venue_backfill={s_venue_backfill:,} fsa_fallback={s_fsa_fallback:,}", file=sys.stderr)

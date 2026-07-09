@@ -1,3 +1,4 @@
 openpyxl
 requests
 playwright
+pypostalcode   # postal-code centroids: powers the geocode sanity-check in process_dispatch.py

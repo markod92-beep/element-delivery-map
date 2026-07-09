@@ -70,6 +70,7 @@ FAIL_FLAG = SCRIPT_DIR / "LAST_RUN_FAILED.flag"
 
 PAGE_LOAD_TIMEOUT_MS = 60_000   # 60s for full page + JSON fetches
 DATA_READY_TIMEOUT_MS = 45_000  # contractInfo populated + map painted
+TILE_WAIT_MS = 10_000           # tiles are third-party + async; waited for, never fatal
 ACTION_SETTLE_MS = 800          # short wait after toggling a layer
 
 # Pages-Function password gate (refresh-v2/functions/_middleware.js).
@@ -376,6 +377,19 @@ def check_map_initialized(page) -> list[CheckResult]:
     DOM once it paints: the container gets `.leaflet-container`, panes are
     created, and tile images load.
     """
+    # Tiles are fetched from a third-party tile CDN, load asynchronously, and that
+    # CDN routinely rate-limits cloud/CI IP ranges. Previously this check snapshotted
+    # tiles with no wait and hard-failed on 0, turning a perfectly healthy deploy red
+    # (and emailing a false alarm). Wait for them, report the count, but never fail on
+    # them: container + panes are the signals we actually control.
+    try:
+        page.wait_for_function(
+            "() => document.querySelectorAll('#map .leaflet-tile-loaded').length > 0",
+            timeout=TILE_WAIT_MS,
+        )
+    except PlaywrightError:
+        pass  # no tiles yet; reported (not failed) below
+
     try:
         info = page.evaluate("""() => {
             const el = document.querySelector('#map');
@@ -384,15 +398,16 @@ def check_map_initialized(page) -> list[CheckResult]:
             const panes = document.querySelectorAll('#map .leaflet-pane').length;
             const tiles = document.querySelectorAll('#map .leaflet-tile-loaded').length;
             return {
-                ok: isContainer && panes > 0 && tiles > 0,
+                ok: isContainer && panes > 0,
                 isContainer, panes, tiles,
             };
         }""")
         if info.get("ok"):
-            return [CheckResult(
-                "map_initialized", True,
-                f"leaflet-container={info['isContainer']} panes={info['panes']} tiles={info['tiles']}",
-            )]
+            detail = (f"leaflet-container={info['isContainer']} "
+                      f"panes={info['panes']} tiles={info['tiles']}")
+            if not info.get("tiles"):
+                detail += "  [WARN] 0 tiles loaded — tile CDN likely blocked from CI; map bootstrapped OK"
+            return [CheckResult("map_initialized", True, detail)]
         return [CheckResult("map_initialized", False, json.dumps(info))]
     except PlaywrightError as e:
         return [CheckResult("map_initialized", False, f"JS error: {e}")]

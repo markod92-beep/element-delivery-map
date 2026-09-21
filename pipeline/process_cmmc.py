@@ -50,11 +50,28 @@ from venue_utils import (
 # ============================================================
 
 # Date window on Reservation_Start_Date (inclusive).
-# 2025-01-01 is the floor — pre-2025 FSA capture in POR is too spotty (57-68%
-# mappable for 2019-2021, stepping up to ~89% in 2025) to be useful for the
-# delivery map. Rebuild the window here if address-capture quality improves
-# or the use case shifts from ops to long-horizon YoY analysis.
-DATE_FLOOR = dt.date(2025, 1, 1)
+# The floor is ROLLING: the 1st of the month, DATE_FLOOR_MONTHS_BACK months ago
+# (e.g. run in Sep 2026 -> 2025-08-01). 13 months guarantees every week on the
+# map still has its same-week-last-year comparison, while keeping
+# delivery_data.json self-stabilizing (~17-19 MiB) instead of growing ~100 KB/day
+# into Cloudflare Pages' hard 25 MiB per-file cap (hit 2026-07-09; 261 KB from
+# it again on 2026-09-18 -- see CLAUDE_CODE_JSON_SIZE_FIX.md).
+# Never set the floor before 2025-01-01: pre-2025 FSA capture in POR is too
+# spotty (57-68% mappable for 2019-2021, ~89% in 2025) to be useful.
+DATE_FLOOR_MONTHS_BACK = 13
+DATE_FLOOR_ABSOLUTE_MIN = dt.date(2025, 1, 1)
+
+
+def rolling_floor(months_back: int, today: dt.date | None = None) -> dt.date:
+    """First day of the month `months_back` months before `today` (never before the absolute min)."""
+    today = today or dt.date.today()
+    m = today.month - months_back
+    y = today.year + (m - 1) // 12
+    m = (m - 1) % 12 + 1
+    return max(dt.date(y, m, 1), DATE_FLOOR_ABSOLUTE_MIN)
+
+
+DATE_FLOOR = rolling_floor(DATE_FLOOR_MONTHS_BACK)
 DATE_CEILING_MODE = "EOY"   # "EOY" = end of current calendar year; "ROLLING" = today + N months
 DATE_CEILING_MONTHS_AHEAD = 12   # only used when DATE_CEILING_MODE = "ROLLING"
 
